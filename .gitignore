@@ -12,3 +12,5 @@ SoVITS_weights
 TEMP
 .vscode/settings.json
 sample
+gweight.txt
+sweight.txt
