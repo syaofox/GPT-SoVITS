@@ -279,7 +279,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     gr.Markdown(i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
 
         wavs_dropdown.change(change_wav, [wavs_dropdown], [inp_ref, prompt_text])
-        
+
         with gr.Column():
             gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
             text = gr.Textbox(label=i18n("需要合成的文本"), value="", lines=16, max_lines=16)
@@ -304,7 +304,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 how_to_cut = gr.Radio(
                     label=i18n("怎么切"),
                     choices=[i18n("不切"), i18n("凑四句一切"), i18n("凑50字一切"), i18n("按中文句号。切"), i18n("按英文句号.切"), i18n("按标点符号切"), ],
-                    value=i18n("凑四句一切"),
+                    value=i18n("按中文句号。切"),
                     interactive=True,
                 )
                 with gr.Row():
