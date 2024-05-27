@@ -21,7 +21,7 @@ logging.getLogger("charset_normalizer").setLevel(logging.ERROR)
 logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
-
+from gen_sample import gen_sample
 
 infer_ttswebui = os.environ.get("infer_ttswebui", 9872)
 infer_ttswebui = int(infer_ttswebui)
@@ -133,6 +133,72 @@ def change_choices():
     SoVITS_names, GPT_names = get_weights_names()
     return {"choices": sorted(SoVITS_names, key=custom_sort_key), "__type__": "update"}, {"choices": sorted(GPT_names, key=custom_sort_key), "__type__": "update"}
 
+def replace_chinese(text):
+    pattern = r"([\u4e00-\u9fa5]{5}).*"
+    result = re.sub(pattern, r"\1...", text)
+    return result
+
+
+def init_wav_list(sovits_path):
+    wav_path = ""
+
+    match = re.search(r"(.+)_e\d+_s\d+\.pth", sovits_path)
+    if match:
+        result = match.group(1).replace("SoVITS_weights/", "")
+        wav_path = f"./sample/{result}/"
+
+    else:
+        return [], {}
+
+    if not os.path.exists(wav_path):
+        return [], {}
+
+    res_wavs = {}
+
+    res_text = ["请选择参考音频"]
+
+    # 读取文本
+
+    # 遍历目录
+    for file_path in os.listdir(wav_path)[:200]:
+        wfile_path = os.path.join(wav_path, file_path)
+        if os.path.isfile(wfile_path):
+            match = re.search(r"(_\d+秒).wav$", file_path)
+            if match:
+                # 提取主文本和后缀
+                suffix = match.group(1)
+                main_text = file_path[: match.start()]
+            else:
+                continue
+
+            key = f"{main_text}{suffix}"
+
+            res_text.append(key)
+
+            # 情绪
+            match2 = re.search(r"^【.+?】(.+)$", main_text)
+            if match2:
+                main_text = match2.group(1)
+
+            res_wavs[key] = (
+                wfile_path,
+                main_text,
+            )
+
+    return res_text, res_wavs
+
+
+# 切换参考音频
+
+
+def change_wav(audio_name):
+    first_key = list(reference_dict.keys())[0]
+
+    try:
+        value = reference_dict[audio_name]
+        return value[0], value[1]
+    except Exception as e:
+        return reference_dict[first_key][0], reference_dict[first_key][1]
 
 pretrained_sovits_name = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 pretrained_gpt_name = "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
@@ -154,6 +220,30 @@ def get_weights_names():
 
 SoVITS_names, GPT_names = get_weights_names()
 
+def create_audio():
+    sovits_path = tts_config.vits_weights_path
+    sovits_path = sovits_path.replace("SoVITS_weights/", "")
+
+    gen_sample(sovits_path)
+
+    global reference_wavs, reference_dict, max_textboxes
+    reference_wavs, reference_dict = init_wav_list(sovits_path)
+    max_textboxes = len(reference_wavs)
+    return gr.update(choices=reference_wavs)
+
+def change_sovits_weights(sovits_path_in):
+    sovits_path_in = sovits_path_in.replace("SoVITS_weights/", "")
+
+    print(sovits_path_in)
+
+    global reference_wavs, reference_dict, max_textboxes
+    reference_wavs, reference_dict = init_wav_list(sovits_path_in)
+    max_textboxes = len(reference_wavs)
+
+    return gr.update(choices=reference_wavs)
+
+reference_wavs, reference_dict = init_wav_list(sovits_path)
+
 with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     gr.Markdown(
         value=i18n("本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>LICENSE</b>.")
@@ -165,10 +255,15 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
         with gr.Row():
             GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True)
             SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True)
+            wavs_dropdown = gr.Dropdown(label=i18n("参考音频列表"),choices=reference_wavs, value="请选择参考音频", interactive=True,
+                )
             refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
+            create_button = gr.Button("生成参考音频", variant="primary")
             refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
-            SoVITS_dropdown.change(tts_pipeline.init_vits_weights, [SoVITS_dropdown], [])
+            # SoVITS_dropdown.change(tts_pipeline.init_vits_weights, [SoVITS_dropdown], [])
+            SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [wavs_dropdown]).then(tts_pipeline.init_vits_weights, [SoVITS_dropdown], [])
             GPT_dropdown.change(tts_pipeline.init_t2s_weights, [GPT_dropdown], [])
+            create_button.click(fn=create_audio, inputs=[], outputs=[wavs_dropdown])
     
     with gr.Row():
         with gr.Column():
@@ -182,7 +277,9 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 with gr.Column():
                     ref_text_free = gr.Checkbox(label=i18n("开启无参考文本模式。不填参考文本亦相当于开启。"), value=False, interactive=True, show_label=True)
                     gr.Markdown(i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
-    
+
+        wavs_dropdown.change(change_wav, [wavs_dropdown], [inp_ref, prompt_text])
+        
         with gr.Column():
             gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
             text = gr.Textbox(label=i18n("需要合成的文本"), value="", lines=16, max_lines=16)
