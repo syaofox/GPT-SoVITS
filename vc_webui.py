@@ -56,8 +56,8 @@ def get_pretrain_model_path(env_name, log_file, def_path):
     return pretrain_path
 
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-device = 'cpu'
+device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = 'cpu'
 
 gpt_path = get_pretrain_model_path('gpt_path', "./gweight.txt", 
                                    "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt")
@@ -100,7 +100,11 @@ def get_bert_feature(text, word2ph):
         for i in inputs:
             inputs[i] = inputs[i].to(device)
         res = bert_model(**inputs, output_hidden_states=True)
-        res = torch.cat(res["hidden_states"][-3:-2], -1)[0].cpu()[1:-1]
+        res = torch.cat(res["hidden_states"][-3:-2], -1)[0][1:-1]
+
+        # 将结果移动到目标设备
+        res = res.to(device)
+
     assert len(word2ph) == len(text)
     phone_level_feature = []
     for i in range(len(word2ph)):
@@ -147,7 +151,7 @@ else:
 
 def change_sovits_weights(sovits_path):
     global vq_model, hps
-    dict_s2 = torch.load(sovits_path, map_location="cpu")
+    dict_s2 = torch.load(sovits_path, map_location=device)
     hps = dict_s2["config"]
     hps = DictToAttrRecursive(hps)
     hps.model.semantic_frame_rate = "25hz"
@@ -175,7 +179,7 @@ change_sovits_weights(sovits_path)
 def change_gpt_weights(gpt_path):
     global hz, max_sec, t2s_model, config
     hz = 50
-    dict_s1 = torch.load(gpt_path, map_location="cpu")
+    dict_s1 = torch.load(gpt_path, map_location=device)
     config = dict_s1["config"]
     max_sec = config["data"]["max_sec"]
     t2s_model = Text2SemanticLightningModule(config, "****", is_train=False)
@@ -432,25 +436,35 @@ def vc_main(wav_path, text, language, prompt_wav, noise_scale=0.5):
 
     phones, word2ph, norm_text = get_cleaned_text_final(text, language)
 
-    spec = get_spepc(hps, prompt_wav) 
-    codes = get_code_from_wav(wav_path)[None, None]  # 必须是 3D, [n_q, B, T]
-    ge = vq_model.ref_enc(spec)  # [B, D, T/1] 
+    spec = get_spepc(hps, prompt_wav).to(device)  # 将 spec 移动到 device
+    codes = get_code_from_wav(wav_path)[None, None].to(device)  # 必须是 3D, [n_q, B, T]
+    
+    ge = vq_model.ref_enc(spec)  # [B, D, T/1]
     quantized = vq_model.quantizer.decode(codes)  # [B, D, T]
+    
     if hps.model.semantic_frame_rate == "25hz":
         quantized = F.interpolate(
             quantized, size=int(quantized.shape[-1] * 2), mode="nearest"
         )
+    
     _, m_p, logs_p, y_mask = vq_model.enc_p(
-        quantized, torch.LongTensor([quantized.shape[-1]]), 
-        torch.LongTensor(phones)[None], torch.LongTensor([len(phones)]), ge
+        quantized, 
+        torch.LongTensor([quantized.shape[-1]]).to(device), 
+        torch.LongTensor(phones)[None].to(device), 
+        torch.LongTensor([len(phones)]).to(device), 
+        ge
     )
+    
     z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale
     z = vq_model.flow(z_p, y_mask, g=ge, reverse=True)
     o = vq_model.dec((z * y_mask)[:, :, :], g=ge)  # [B, D=1, T], torch.float32 (-1, 1)
+    
     audio = o.detach().cpu().numpy()[0, 0]    
     max_audio = np.abs(audio).max()  # 简单防止16bit爆音
+    
     if max_audio > 1:
         audio /= max_audio
+    
     yield hps.data.sampling_rate, (audio * 32768).astype(np.int16)
 
 
