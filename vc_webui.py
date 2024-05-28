@@ -563,6 +563,14 @@ def change_wav(audio_name):
     except Exception as e:
         return reference_dict[first_key][0]
 
+def process_audio(audio_file_path):
+    # 从文件路径中提取文件名
+
+    main_text = os.path.basename(audio_file_path)
+
+
+    main_text = re.sub(r"^【.+?】|_\d+秒|\.wav", '', main_text)
+    return main_text.strip()
 
 def main():
     
@@ -601,6 +609,8 @@ def main():
 
                 inference_button = gr.Button(i18n("合成语音"), variant="primary")
                 output = gr.Audio(label=i18n("变声后"),show_download_button=True)
+
+                src_audio.upload(process_audio, inputs=[src_audio], outputs=[text])
 
             inference_button.click(
                 vc_main,
