@@ -626,13 +626,33 @@ def change_audio(asr_list, text_language, inp_ref, output_path):
 
     for src_audio, text in tqdm(read_asr_list(asr_list)):        
         for sampling_rate, audio_data in vc_main(src_audio, text, text_language, inp_ref):
-            print(text)
+            tqdm.write(text)
             temp_path = Path(output_path) / Path(src_audio).name
             sf.write(temp_path, audio_data, sampling_rate)
             
     combined_audio =  merge_wav_files(output_path)
 
     combined_tempfile = os.path.join('.\TEMP', f"{Path(asr_list).stem}_combined_output.wav")
+    combined_audio.export(combined_tempfile, format="wav")
+    return combined_tempfile
+
+def change_audio2(in_path, text_language, inp_ref, output_path):
+    in_path=Path(my_utils.clean_path(in_path))
+    output_path = my_utils.clean_path(output_path)
+
+    for wav_file in tqdm(in_path.glob("*.wav")):
+        text = wav_file.stem
+        text = re.sub(r"^【.+?】|_\d+秒|\.wav", '', text)
+        src_audio = str(wav_file)
+    
+        for sampling_rate, audio_data in vc_main(src_audio, text, text_language, inp_ref):
+            tqdm.write(text)
+            temp_path = Path(output_path) / Path(src_audio).name
+            sf.write(temp_path, audio_data, sampling_rate)
+            
+    combined_audio =  merge_wav_files(output_path)
+
+    combined_tempfile = os.path.join('.\TEMP', f"{in_path.stem}_combined_output.wav")
     combined_audio.export(combined_tempfile, format="wav")
     return combined_tempfile
 
@@ -695,6 +715,22 @@ def main():
                 change_audio,
                 [asr_list, text_language, inp_ref,out_wav_dir],
                 [combined_audio],
+            )
+
+
+            gr.Markdown(value=i18n("* 输入文件夹批量变声"))
+            with gr.Row():
+                
+                in_wav_dir2 = gr.Textbox(label=i18n("*原始音频保存位置"), value=r"D:\aisound\GPT-SoVITS\sample\阿醋", interactive=True)
+                out_wav_dir2 = gr.Textbox(label=i18n("*生成音频保存位置"), value=r"D:\aisound\temp", interactive=True)
+                batch_inference2_button = gr.Button(i18n("批量合成语音"), variant="primary")
+            
+            combined_audio2 = gr.Audio(label=i18n("变声后合并"),show_download_button=True)
+
+            batch_inference2_button.click(
+                change_audio2,
+                [in_wav_dir2, text_language, inp_ref,out_wav_dir2],
+                [combined_audio2],
             )
 
     app.queue(max_size=1022).launch(
