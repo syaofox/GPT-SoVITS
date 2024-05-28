@@ -42,6 +42,7 @@ from text import cleaned_text_to_sequence
 from text.cleaner import clean_text
 from my_utils import load_audio
 from tools.i18n.i18n import I18nAuto
+from gen_sample import gen_sample
 
 
 def get_pretrain_model_path(env_name, log_file, def_path):
@@ -149,6 +150,61 @@ else:
     ssl_model = ssl_model.to(device)
 
 
+def replace_chinese(text):
+    pattern = r"([\u4e00-\u9fa5]{5}).*"
+    result = re.sub(pattern, r"\1...", text)
+    return result
+
+
+def init_wav_list(sovits_path):
+    wav_path = ""
+
+    match = re.search(r"(.+)_e\d+_s\d+\.pth", sovits_path)
+    if match:
+        result = match.group(1).replace("SoVITS_weights/", "")
+        wav_path = f"./sample/{result}/"
+
+    else:
+        return [], {}
+
+    if not os.path.exists(wav_path):
+        return [], {}
+
+    res_wavs = {}
+
+    res_text = ["请选择参考音频"]
+
+    # 读取文本
+
+    # 遍历目录
+    for file_path in os.listdir(wav_path)[:200]:
+        wfile_path = os.path.join(wav_path, file_path)
+        if os.path.isfile(wfile_path):
+            match = re.search(r"(_\d+秒).wav$", file_path)
+            if match:
+                # 提取主文本和后缀
+                suffix = match.group(1)
+                main_text = file_path[: match.start()]
+            else:
+                continue
+
+            key = f"{main_text}{suffix}"
+
+            res_text.append(key)
+
+            # 情绪
+            match2 = re.search(r"^【.+?】(.+)$", main_text)
+            if match2:
+                main_text = match2.group(1)
+
+            res_wavs[key] = (
+                wfile_path,
+                main_text,
+            )
+
+    return res_text, res_wavs
+
+
 def change_sovits_weights(sovits_path):
     global vq_model, hps
     dict_s2 = torch.load(sovits_path, map_location=device)
@@ -172,6 +228,15 @@ def change_sovits_weights(sovits_path):
     with open("./sweight.txt", "w", encoding="utf-8") as f:
         f.write(sovits_path)
 
+    sovits_path_in = sovits_path.replace("SoVITS_weights/", "")
+
+    print(sovits_path_in)
+
+    global reference_wavs, reference_dict, max_textboxes
+    reference_wavs, reference_dict = init_wav_list(sovits_path_in)
+    max_textboxes = len(reference_wavs)
+
+    return gr.update(choices=reference_wavs)
 
 change_sovits_weights(sovits_path)
 
@@ -468,6 +533,37 @@ def vc_main(wav_path, text, language, prompt_wav, noise_scale=0.5):
     yield hps.data.sampling_rate, (audio * 32768).astype(np.int16)
 
 
+
+
+
+# 切换参考音频
+
+
+
+# def change_sovits_weights(sovits_path_in):
+#     sovits_path_in = sovits_path_in.replace("SoVITS_weights/", "")
+
+#     print(sovits_path_in)
+
+#     global reference_wavs, reference_dict, max_textboxes
+#     reference_wavs, reference_dict = init_wav_list(sovits_path_in)
+#     max_textboxes = len(reference_wavs)
+
+#     return gr.update(choices=reference_wavs)
+
+reference_wavs, reference_dict = init_wav_list(sovits_path)
+
+
+def change_wav(audio_name):
+    first_key = list(reference_dict.keys())[0]
+
+    try:
+        value = reference_dict[audio_name]
+        return value[0]
+    except Exception as e:
+        return reference_dict[first_key][0]
+
+
 def main():
     
 
@@ -483,14 +579,17 @@ def main():
             with gr.Row():
                 GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True)
                 SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True)
+                wavs_dropdown = gr.Dropdown(label=i18n("参考音频列表"),choices=reference_wavs, value="请选择参考音频", interactive=True)
                 refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
                 refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
-                SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [])
+                SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [wavs_dropdown])
                 GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
             
             gr.Markdown(value=i18n("* 请上传目标音色音频，要求说话人单一，声音干净"))
             with gr.Row():
                 inp_ref = gr.Audio(label=i18n("请上传 3~10 秒内参考音频，超过会报警！"), type="filepath")
+            
+            wavs_dropdown.change(change_wav, [wavs_dropdown], [inp_ref])
 
             gr.Markdown(value=i18n("* 请填写需要变声/转换的源音频，以及对应文本"))
             with gr.Row():
