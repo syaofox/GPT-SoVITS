@@ -4,7 +4,7 @@ custom:
   device: cuda
   is_half: true
   t2s_weights_path: "GPT_weights/_\u4E07\u80FD-e15.ckpt"
-  vits_weights_path: "SoVITS_weights/_\u4E07\u80FD_e20_s540.pth"
+  vits_weights_path: SoVITS_weights/jingjing2m_e20_s280.pth
 default:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
