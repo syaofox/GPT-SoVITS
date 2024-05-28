@@ -10,7 +10,7 @@ import re
 import logging
 from time import time as ttime
 from warnings import warn
-
+from pathlib import Path
 import sys
 
 now_dir = os.getcwd()
@@ -34,6 +34,9 @@ import LangSegment
 import gradio as gr
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from feature_extractor import cnhubert
+import soundfile as sf
+from pydub import AudioSegment
+from tqdm import tqdm
 
 from module.models import SynthesizerTrn
 from module.mel_processing import spectrogram_torch
@@ -42,8 +45,7 @@ from text import cleaned_text_to_sequence
 from text.cleaner import clean_text
 from my_utils import load_audio
 from tools.i18n.i18n import I18nAuto
-from gen_sample import gen_sample
-
+from tools import my_utils
 
 def get_pretrain_model_path(env_name, log_file, def_path):
     """ 获取预训练模型路径
@@ -572,6 +574,69 @@ def process_audio(audio_file_path):
     main_text = re.sub(r"^【.+?】|_\d+秒|\.wav", '', main_text)
     return main_text.strip()
 
+
+def merge_wav_files(input_dir):
+    """
+    Merge multiple WAV files located in the specified input directory into a single WAV file.
+
+    Args:
+        input_dir (str): The directory containing the input WAV files.
+        output_file (str): The path to the output merged WAV file.
+    """
+    # Get a list of all WAV files in the input directory
+    wav_files = [f for f in os.listdir(input_dir) if f.endswith(".wav")]
+
+    # Check if there are any WAV files in the directory
+    if not wav_files:
+        print("No WAV files found in the input directory.")
+        return
+
+    # Load each WAV file and concatenate them
+    combined_audio = AudioSegment.empty()
+    for wav_file in wav_files:
+        wav_path = os.path.join(input_dir, wav_file)
+        audio_segment = AudioSegment.from_file(wav_path, format="wav")
+        combined_audio += audio_segment
+
+   
+    # Export the combined audio to a WAV file
+    return combined_audio
+
+
+def read_asr_list(src):
+    with open(src, "r", encoding="utf-8") as file:
+        # 逐行读取文件内容
+        for line in file:
+            # 去除行尾的换行符
+            if line == "":
+                continue
+            line = line.strip()
+
+            # 按 '|' 符号进行拆分
+            parts = line.split("|")
+            # 打印每一行的内容
+            src_audio = parts[0]
+            text = parts[3]
+
+            yield src_audio, text
+
+def change_audio(asr_list, text_language, inp_ref, output_path):
+    asr_list=my_utils.clean_path(asr_list)
+    output_path = my_utils.clean_path(output_path)
+
+    for src_audio, text in tqdm(read_asr_list(asr_list)):        
+        for sampling_rate, audio_data in vc_main(src_audio, text, text_language, inp_ref):
+            print(text)
+            temp_path = Path(output_path) / Path(src_audio).name
+            sf.write(temp_path, audio_data, sampling_rate)
+            
+    combined_audio =  merge_wav_files(output_path)
+
+    combined_tempfile = os.path.join('.\TEMP', f"{Path(asr_list).stem}_combined_output.wav")
+    combined_audio.export(combined_tempfile, format="wav")
+    return combined_tempfile
+
+
 def main():
     
 
@@ -616,6 +681,20 @@ def main():
                 vc_main,
                 [src_audio, text, text_language, inp_ref],
                 [output],
+            )
+
+            gr.Markdown(value=i18n("* 根据标注文件批量变声"))
+            with gr.Row():
+                asr_list = gr.Textbox(label=i18n("*文本标注文件"),value=r"D:\aisound\sound_data\晓辰60\xiaochen60.list",interactive=True)
+                out_wav_dir = gr.Textbox(label=i18n("*生成音频保存位置"), value=r"D:\aisound\temp", interactive=True)
+                batch_inference_button = gr.Button(i18n("批量合成语音"), variant="primary")
+            
+            combined_audio = gr.Audio(label=i18n("变声后合并"),show_download_button=True)
+
+            batch_inference_button.click(
+                change_audio,
+                [asr_list, text_language, inp_ref,out_wav_dir],
+                [combined_audio],
             )
 
     app.queue(max_size=1022).launch(
