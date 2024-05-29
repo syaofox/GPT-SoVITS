@@ -23,6 +23,8 @@ import pdb
 import torch
 from gen_sample import gen_sample
 
+os.environ['GRADIO_TEMP_DIR'] = f'{now_dir}/TEMP'
+
 infer_ttswebui = os.environ.get("infer_ttswebui", 9872)
 infer_ttswebui = int(infer_ttswebui)
 is_share = os.environ.get("is_share", "False")

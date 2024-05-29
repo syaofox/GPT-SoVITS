@@ -10,6 +10,11 @@ from scipy.io.wavfile import write
 
 from resemble_enhance.enhancer.inference import denoise, enhance
 
+import os
+now_dir = os.getcwd()
+# sys.path.append(now_dir)
+os.environ['GRADIO_TEMP_DIR'] = f'{now_dir}/TEMP'
+
 if torch.cuda.is_available():
     device = "cuda"
 else:

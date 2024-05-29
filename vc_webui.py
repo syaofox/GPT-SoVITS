@@ -16,6 +16,7 @@ import sys
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 sys.path.append("%s/GPT_SoVITS" % (now_dir))
+os.environ['GRADIO_TEMP_DIR'] = f'{now_dir}/TEMP'
 
 logging.getLogger("markdown_it").setLevel(logging.ERROR)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
