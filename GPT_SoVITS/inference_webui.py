@@ -7,7 +7,7 @@
 全部按日文识别
 '''
 import random
-import os, sys
+import os, sys, shutil
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 
@@ -22,6 +22,11 @@ logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
 from gen_sample import gen_sample
+import soundfile as sf
+from pydub import AudioSegment
+from scipy.io.wavfile import write
+import tempfile
+import numpy as np
 
 os.environ['GRADIO_TEMP_DIR'] = f'{now_dir}/TEMP'
 
@@ -246,6 +251,99 @@ def change_sovits_weights(sovits_path_in):
 
 reference_wavs, reference_dict = init_wav_list(sovits_path)
 
+
+def merge_wav_files(input_dir):
+    """
+    Merge multiple WAV files located in the specified input directory into a single WAV file.
+
+    Args:
+        input_dir (str): The directory containing the input WAV files.
+        output_file (str): The path to the output merged WAV file.
+    """
+    # Get a list of all WAV files in the input directory
+    wav_files = [f for f in os.listdir(input_dir) if f.endswith(".wav")]
+
+    # Check if there are any WAV files in the directory
+    if not wav_files:
+        print("No WAV files found in the input directory.")
+        return
+
+    # Load each WAV file and concatenate them
+    combined_audio = AudioSegment.empty()
+    for wav_file in wav_files:
+        wav_path = os.path.join(input_dir, wav_file)
+        audio_segment = AudioSegment.from_file(wav_path, format="wav")
+        combined_audio += audio_segment
+
+   
+    # Export the combined audio to a WAV file
+    return combined_audio
+
+def save_wav(texts, text_lang, 
+              ref_audio_path, prompt_text, 
+              prompt_lang, top_k, 
+              top_p, temperature, 
+              text_split_method, batch_size, 
+              speed_factor, ref_text_free,
+              split_bucket,fragment_interval,
+              seed, keep_random, parallel_infer,
+              repetition_penalty
+              ):
+    
+    text_split_method = '不切'
+    split_bucket =False
+    parallel_infer =False
+    save_file_path = os.path.join(os.getcwd(),'TEMP',f'{texts.strip()[:9]}.wav')
+    if os.path.exists(save_file_path):
+        os.remove(save_file_path)
+
+    temp_dir = os.path.join(os.getcwd(),'TEMP',f'{texts.strip()[:9]}')
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir)
+    os.makedirs(temp_dir,exist_ok=True)
+
+    
+    for i,text in  enumerate(texts.splitlines()):
+        if not text:
+            continue
+
+
+        seed = -1 if keep_random else seed
+        actual_seed = seed if seed not in [-1, "", None] else random.randrange(1 << 32)
+        inputs={
+            "text": text,
+            "text_lang": dict_language[text_lang],
+            "ref_audio_path": ref_audio_path,
+            "prompt_text": prompt_text if not ref_text_free else "",
+            "prompt_lang": dict_language[prompt_lang],
+            "top_k": top_k,
+            "top_p": top_p,
+            "temperature": temperature,
+            "text_split_method": cut_method[text_split_method],
+            "batch_size":int(batch_size),
+            "speed_factor":float(speed_factor),
+            "split_bucket":split_bucket,
+            "return_fragment":False,
+            "fragment_interval":fragment_interval,
+            "seed":actual_seed,
+            "parallel_infer": parallel_infer,
+            "repetition_penalty": repetition_penalty,
+        }
+        for sr, audio in tts_pipeline.run(inputs):    
+            audio_file= os.path.join(temp_dir,f'{i:010d}.wav')
+            write(audio_file , sr, audio)
+
+    
+
+    combined_audio =  merge_wav_files(temp_dir)    
+    # combined_audio.export(save_file_path, format="wav")
+    sample_rate = combined_audio.frame_rate
+
+    # 将 AudioSegment 转换为 NumPy 数组
+    samples = np.array(combined_audio.get_array_of_samples())
+
+    return sample_rate, samples
+
 with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     gr.Markdown(
         value=i18n("本软件以MIT协议开源, 作者不对软件具备任何控制力, 使用软件者、传播软件导出的声音者自负全责. <br>如不认可该条款, 则不能使用或引用软件包内任何代码和文件. 详见根目录<b>LICENSE</b>.")
@@ -337,6 +435,31 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             [output, seed],
         )
         stop_infer.click(tts_pipeline.stop, [], [])
+
+    with gr.Group():
+        gr.Markdown(value=i18n("单句推理模式"))
+        output_st = gr.Audio(label=i18n("输出的语音"))
+        with gr.Row():
+            text_st = gr.Textbox(label=i18n("需要推理的文本，一行一次"), value="", lines=4)
+            st_run= gr.Button(i18n("推理"), variant="primary")
+
+        
+        st_run.click(
+            save_wav,
+            [
+                text_st,text_language, inp_ref, 
+                prompt_text, prompt_language, 
+                top_k, top_p, temperature, 
+                how_to_cut, batch_size, 
+                speed_factor, ref_text_free,
+                split_bucket,fragment_interval,
+                seed, keep_random, parallel_infer,
+                repetition_penalty
+                ],
+            [output_st],
+        )
+ 
+
 
     with gr.Group():
         gr.Markdown(value=i18n("文本切分工具。太长的文本合成出来效果不一定好，所以太长建议先切。合成会根据文本的换行分开合成再拼起来。"))
