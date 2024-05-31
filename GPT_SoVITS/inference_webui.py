@@ -293,16 +293,12 @@ def save_wav(texts, text_lang,
     text_split_method = '不切'
     split_bucket =False
     parallel_infer =False
-    save_file_path = os.path.join(os.getcwd(),'TEMP',f'{texts.strip()[:9]}.wav')
-    if os.path.exists(save_file_path):
-        os.remove(save_file_path)
 
-    temp_dir = os.path.join(os.getcwd(),'TEMP',f'{texts.strip()[:9]}')
-    if os.path.exists(temp_dir):
-        shutil.rmtree(temp_dir)
-    os.makedirs(temp_dir,exist_ok=True)
 
-    
+   
+    combined_audio = np.array([], dtype=np.int16)
+    target_sample_rate = None
+
     for i,text in  enumerate(texts.splitlines()):
         if not text:
             continue
@@ -329,20 +325,13 @@ def save_wav(texts, text_lang,
             "parallel_infer": parallel_infer,
             "repetition_penalty": repetition_penalty,
         }
-        for sr, audio in tts_pipeline.run(inputs):    
-            audio_file= os.path.join(temp_dir,f'{i:010d}.wav')
-            write(audio_file , sr, audio)
+        for sr, audio in tts_pipeline.run(inputs):  
+            if target_sample_rate is None:
+                target_sample_rate = sr
+            combined_audio = np.concatenate((combined_audio, audio))
 
-    
 
-    combined_audio =  merge_wav_files(temp_dir)    
-    # combined_audio.export(save_file_path, format="wav")
-    sample_rate = combined_audio.frame_rate
-
-    # 将 AudioSegment 转换为 NumPy 数组
-    samples = np.array(combined_audio.get_array_of_samples())
-
-    return sample_rate, samples
+    return (target_sample_rate, combined_audio), '推理'
 
 with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     gr.Markdown(
@@ -439,9 +428,9 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     with gr.Group():
         gr.Markdown(value=i18n("单句推理模式"))
         output_st = gr.Audio(label=i18n("输出的语音"))
-        with gr.Row():
-            text_st = gr.Textbox(label=i18n("需要推理的文本，一行一次"), value="", lines=4)
+        with gr.Column():
             st_run= gr.Button(i18n("推理"), variant="primary")
+            text_st = gr.Textbox(label=i18n("需要推理的文本，一行一次"), value="", lines=4)            
 
         
         st_run.click(
@@ -456,7 +445,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 seed, keep_random, parallel_infer,
                 repetition_penalty
                 ],
-            [output_st],
+            [output_st, st_run],
         )
  
 
