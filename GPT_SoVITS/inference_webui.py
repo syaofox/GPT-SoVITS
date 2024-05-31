@@ -22,10 +22,7 @@ logging.getLogger("torchaudio._extension").setLevel(logging.ERROR)
 import pdb
 import torch
 from gen_sample import gen_sample
-import soundfile as sf
 from pydub import AudioSegment
-from scipy.io.wavfile import write
-import tempfile
 import numpy as np
 
 os.environ['GRADIO_TEMP_DIR'] = f'{now_dir}/TEMP'

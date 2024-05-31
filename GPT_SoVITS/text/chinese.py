@@ -9,6 +9,8 @@ from text.symbols import punctuation
 from text.tone_sandhi import ToneSandhi
 from text.zh_normalization.text_normlization import TextNormalizer
 from text.additional_chinese import additional_pinyin
+from text.additional_chinese import change_pos_pinyin,test_need_change_pos_pinyin
+
 normalizer = lambda x: cn2an.transform(x, "an2cn")
 
 current_file_path = os.path.dirname(__file__)
@@ -65,10 +67,7 @@ def _get_initials_finals(word):
     initials = []
     finals = []
 
-    print(word)
-
     if word in additional_pinyin:
-        print('-----------match:', word)
         initials = additional_pinyin[word][0]
         finals = additional_pinyin[word][1]
         return initials, finals
@@ -88,6 +87,7 @@ def _g2p(segments):
     word2ph = []
     for seg in segments:
         pinyins = []
+        results = test_need_change_pos_pinyin(seg)
         # Replace all English words in the sentence
         seg = re.sub("[a-zA-Z]+", "", seg)
         seg_cut = psg.lcut(seg)
@@ -105,6 +105,11 @@ def _g2p(segments):
             # assert len(sub_initials) == len(sub_finals) == len(word)
         initials = sum(initials, [])
         finals = sum(finals, [])
+
+        if results:
+            initials, finals = change_pos_pinyin(initials, finals, results)
+
+
         for c, v in zip(initials, finals):
             raw_pinyin = c + v
             # NOTE: post process for pypinyin outputs
