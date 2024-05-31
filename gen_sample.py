@@ -87,7 +87,7 @@ def gen_sample(sovits_path: str):
                 duration = librosa.get_duration(y=audio_data, sr=sample_rate)
                 duration = int(duration)
 
-                if duration > 2 and duration < 6:
+                if duration > 2 and duration < 11:
                     destination_file_path = os.path.join(
                         wdir_path,
                         f"{replace_punctuation(match.group(4))}_{duration}秒.wav",

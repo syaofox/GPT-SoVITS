@@ -327,13 +327,14 @@ def save_wav(texts, text_lang,
    
     combined_audio = np.array([], dtype=np.int16)
     target_sample_rate = None
+    if if_motion:
+        print(i18n("自动选取情绪文本已开启\n"), text)
 
     for text in texts.splitlines():
         if not text:
             continue
         
-        if if_motion:
-            print(i18n("自动选取情绪文本已开启"), text)
+        if if_motion:            
             _ref_audio_path, _prompt_text = find_reference_file(text)
             if _ref_audio_path and _prompt_text:
                 ref_audio_path = _ref_audio_path
