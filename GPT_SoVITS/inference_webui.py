@@ -279,20 +279,33 @@ def merge_wav_files(input_dir):
     # Export the combined audio to a WAV file
     return combined_audio
 
-def find_reference_file(dot_count):
+def find_reference_file(text):
     # 列出指定目录中的所有文件
 
     main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+    is_question = text.endswith('？') or text.endswith('?')
+
+
+    dot_count = text.count('，')+ text.count(',')
     
     for k, v in reference_dict.items():
+        ref_audio_path = os.path.join(main_path, v[0])
+        prompt_text = v[1]
 
-        _dot_count = v[1].count('，') + v[1].count(',')
+        _dot_count = prompt_text.count('，') + prompt_text.count(',')
+        _is_question = prompt_text.endswith('？') or prompt_text.endswith('?')
 
-        if _dot_count == dot_count:
+        if is_question :
+            if _is_question and _dot_count == dot_count:
+                if re.search(r'【疑问\d*】', k):
+                    return ref_audio_path, prompt_text
+
+        elif _dot_count == dot_count:            
             if re.search(r'【叙述\d*】', k):
-                return os.path.join(main_path, v[0]),v[1]
+                return ref_audio_path, prompt_text
     
+    return None, None
     
 
 def save_wav(texts, text_lang, 
@@ -319,8 +332,8 @@ def save_wav(texts, text_lang,
         if not text:
             continue
         
-        dot_count = text.count('，')+ text.count(',')
-        _ref_audio_path, _prompt_text = find_reference_file(dot_count)
+
+        _ref_audio_path, _prompt_text = find_reference_file(text)
         if _ref_audio_path and _prompt_text:
             ref_audio_path = _ref_audio_path
             prompt_text = _prompt_text
