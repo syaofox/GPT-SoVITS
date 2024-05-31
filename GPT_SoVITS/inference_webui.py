@@ -279,6 +279,22 @@ def merge_wav_files(input_dir):
     # Export the combined audio to a WAV file
     return combined_audio
 
+def find_reference_file(dot_count):
+    # 列出指定目录中的所有文件
+
+    main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    
+    for k, v in reference_dict.items():
+
+        _dot_count = v[1].count('，') + v[1].count(',')
+
+        if _dot_count == dot_count:
+            if re.search(r'【叙述\d*】', k):
+                return os.path.join(main_path, v[0]),v[1]
+    
+    
+
 def save_wav(texts, text_lang, 
               ref_audio_path, prompt_text, 
               prompt_lang, top_k, 
@@ -299,9 +315,15 @@ def save_wav(texts, text_lang,
     combined_audio = np.array([], dtype=np.int16)
     target_sample_rate = None
 
-    for i,text in  enumerate(texts.splitlines()):
+    for text in texts.splitlines():
         if not text:
             continue
+        
+        dot_count = text.count('，')+ text.count(',')
+        _ref_audio_path, _prompt_text = find_reference_file(dot_count)
+        if _ref_audio_path and _prompt_text:
+            ref_audio_path = _ref_audio_path
+            prompt_text = _prompt_text
 
 
         seed = -1 if keep_random else seed
