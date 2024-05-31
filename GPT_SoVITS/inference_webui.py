@@ -328,7 +328,7 @@ def save_wav(texts, text_lang,
     combined_audio = np.array([], dtype=np.int16)
     target_sample_rate = None
     if if_motion:
-        print(i18n("自动选取情绪文本已开启\n"), text)
+        print(i18n("自动选取情绪文本已开启\n"))
 
     for text in texts.splitlines():
         if not text:
@@ -464,13 +464,14 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
 
     with gr.Group():
         gr.Markdown(value=i18n("单句推理模式"))
-        output_st = gr.Audio(label=i18n("输出的语音"))
+        with gr.Row():
+            output_st = gr.Audio(label=i18n("输出的语音"),scale=5)
         
-        with gr.Column():
-            with gr.Row():
+            with gr.Column(scale=1, min_width=1):                
                 if_motion = gr.Checkbox(label=i18n("是否自动更换情绪参考文本"), show_label=True, value=True)
                 st_run= gr.Button(i18n("推理"), variant="primary")
-            text_st = gr.Textbox(label=i18n("需要推理的文本，一行一次"), value="", lines=4)            
+
+        text_st = gr.Textbox(label=i18n("需要推理的文本，一行一次"), value="", lines=4)            
 
         
         st_run.click(
