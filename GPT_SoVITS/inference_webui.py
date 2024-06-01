@@ -246,6 +246,7 @@ def change_sovits_weights(sovits_path_in):
 
     return gr.update(choices=reference_wavs)
 
+
 reference_wavs, reference_dict = init_wav_list(sovits_path)
 
 
@@ -276,33 +277,42 @@ def merge_wav_files(input_dir):
     # Export the combined audio to a WAV file
     return combined_audio
 
-def find_reference_file(text):
+def find_reference_file(ref_audio_path, prompt_text, text, if_motion):
     # 列出指定目录中的所有文件
 
+    _match = re.search("(^【.+】)(.+)", text)
+    if not _match:
+        return ref_audio_path, prompt_text, text
+
+    if not if_motion:
+        return ref_audio_path, prompt_text, _match.group(2)
+
+
     main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # is_question = text.endswith('？') or text.endswith('?')
+    # dot_count = text.count('，')+ text.count(',')    
+    for prompt_tip, v in reference_dict.items():
+        _ref_audio_path = os.path.join(main_path, v[0])
+        _prompt_text = v[1]
 
-    is_question = text.endswith('？') or text.endswith('?')
+       
+        if prompt_tip.startswith(_match.group(1)):
+            return _ref_audio_path, _prompt_text, _match.group(2), 
 
 
-    dot_count = text.count('，')+ text.count(',')
+        # _dot_count = prompt_text.count('，') + prompt_text.count(',')
+        # _is_question = prompt_text.endswith('？') or prompt_text.endswith('?')
+
+        # if is_question :
+        #     if _is_question and _dot_count == dot_count:
+        #         if re.search(r'【疑问\d*】', k):
+        #             return ref_audio_path, prompt_text, text, 
+
+        # elif _dot_count == dot_count:            
+        #     if re.search(r'【叙述\d*】', k):
+        #         return ref_audio_path, prompt_text, text
     
-    for k, v in reference_dict.items():
-        ref_audio_path = os.path.join(main_path, v[0])
-        prompt_text = v[1]
-
-        _dot_count = prompt_text.count('，') + prompt_text.count(',')
-        _is_question = prompt_text.endswith('？') or prompt_text.endswith('?')
-
-        if is_question :
-            if _is_question and _dot_count == dot_count:
-                if re.search(r'【疑问\d*】', k):
-                    return ref_audio_path, prompt_text
-
-        elif _dot_count == dot_count:            
-            if re.search(r'【叙述\d*】', k):
-                return ref_audio_path, prompt_text
-    
-    return None, None
+    return ref_audio_path, prompt_text, _match.group(2)
     
 
 def save_wav(texts, text_lang, 
@@ -331,20 +341,21 @@ def save_wav(texts, text_lang,
         if not text:
             continue
         
-        if if_motion:            
-            _ref_audio_path, _prompt_text = find_reference_file(text)
-            if _ref_audio_path and _prompt_text:
-                ref_audio_path = _ref_audio_path
-                prompt_text = _prompt_text
+             
+        _ref_audio_path, _prompt_text, _text = find_reference_file(ref_audio_path, prompt_text, text,if_motion)
+        # if _ref_audio_path and _prompt_text and  _text:
+        #     ref_audio_path = _ref_audio_path
+        #     prompt_text = _prompt_text
+        #     text =  _text
 
 
         seed = -1 if keep_random else seed
         actual_seed = seed if seed not in [-1, "", None] else random.randrange(1 << 32)
         inputs={
-            "text": text,
+            "text": _text,
             "text_lang": dict_language[text_lang],
-            "ref_audio_path": ref_audio_path,
-            "prompt_text": prompt_text if not ref_text_free else "",
+            "ref_audio_path": _ref_audio_path,
+            "prompt_text": _prompt_text if not ref_text_free else "",
             "prompt_lang": dict_language[prompt_lang],
             "top_k": top_k,
             "top_p": top_p,
@@ -375,18 +386,21 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     with gr.Column():
         # with gr.Group():
         gr.Markdown(value=i18n("模型切换"))
-        with gr.Row():
-            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True)
-            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True)
-            wavs_dropdown = gr.Dropdown(label=i18n("参考音频列表"),choices=reference_wavs, value="请选择参考音频", interactive=True,
+        with gr.Row():            
+            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True,scale=4)
+            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True,scale=4)
+            wavs_dropdown = gr.Dropdown(label=i18n("参考音频列表"),choices=reference_wavs, value="请选择参考音频", interactive=True,scale=8,
                 )
-            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
-            create_button = gr.Button("生成参考音频", variant="primary")
+            
+            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary",scale=1)
+            refresh_ref_button = gr.Button(i18n("刷新参考音频"), variant="primary",scale=1)
+            create_button = gr.Button("生成参考音频", variant="primary",scale=1)
             refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
             # SoVITS_dropdown.change(tts_pipeline.init_vits_weights, [SoVITS_dropdown], [])
             SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [wavs_dropdown]).then(tts_pipeline.init_vits_weights, [SoVITS_dropdown], [])
             GPT_dropdown.change(tts_pipeline.init_t2s_weights, [GPT_dropdown], [])
             create_button.click(fn=create_audio, inputs=[], outputs=[wavs_dropdown])
+            
     
     with gr.Row():
         with gr.Column():
@@ -402,6 +416,10 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                     gr.Markdown(i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
 
         wavs_dropdown.change(change_wav, [wavs_dropdown], [inp_ref, prompt_text])
+
+        refresh_ref_button.click(change_sovits_weights, [SoVITS_dropdown], [wavs_dropdown]).then(change_wav, [wavs_dropdown], [inp_ref, prompt_text])
+
+        
 
         with gr.Column():
             gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
