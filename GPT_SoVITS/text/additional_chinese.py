@@ -35,6 +35,7 @@ pos_pinyin = {
     "它得":[["t", "d"],["a1", "ei3"]],
     "得劲":[["d", "j"],["ei3", "in4"]],
     "得让":[["d", "r"],["ei3", "ang4"]],
+    "得以":[["d", ""],["e2", "i3"]],
     "瞄上":[["m", "sh"],["iao1", "ang4"]],
     "瞄一":[["m", ""],["iao1", "i4"]],
     "逮住":[["d", "zh"],["ei1", "u4"]],
@@ -46,18 +47,27 @@ pos_pinyin = {
     "背黑锅":[["b", "h", "g"],["ei1", "ei1", "uo1"]], 
     "背锅":[["b",  "g"],["ei1", "uo1"]], 
     "嗷嗷":[["",  ""],["ao1", "ao1"]], 
+    "怂":[["s"],["ong2"]], 
+    "好好":[["h", "h"],["ao3", "ao1"]],    
+    "嗲嗲":[["d","d"],["ia2", "ia3"]],
+    "嗲":[["d"],["ia3"]],
 }
 
 def test_need_change_pos_pinyin(seg:str):
     start_pos = -1
     end_pos = -1
     results = []
+    
     for sub_text, pinyins in pos_pinyin.items():
-        start_pos = seg.find(sub_text)
-        if start_pos != -1:
-            # 计算子字符串的结束位置
+        start_pos = 0
+        while True:
+            start_pos = seg.find(sub_text, start_pos)
+            if start_pos == -1:
+                break
+                # 计算子字符串的结束位置
             end_pos = start_pos + len(sub_text)
             results.append([start_pos, end_pos, pinyins])
+            start_pos += len(sub_text)
 
     return results
 
