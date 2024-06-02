@@ -8,7 +8,6 @@ from pypinyin import lazy_pinyin, Style
 from text.symbols import punctuation
 from text.tone_sandhi import ToneSandhi
 from text.zh_normalization.text_normlization import TextNormalizer
-from text.additional_chinese import additional_pinyin
 from text.additional_chinese import change_pos_pinyin,test_need_change_pos_pinyin
 
 normalizer = lambda x: cn2an.transform(x, "an2cn")
@@ -67,19 +66,15 @@ def _get_initials_finals(word):
     initials = []
     finals = []
 
-    if word in additional_pinyin:
-        initials = additional_pinyin[word][0]
-        finals = additional_pinyin[word][1]
-        return initials, finals
-    else:
-        orig_initials = lazy_pinyin(word, neutral_tone_with_five=True, style=Style.INITIALS)
-        orig_finals = lazy_pinyin(
-            word, neutral_tone_with_five=True, style=Style.FINALS_TONE3
-        )
-        for c, v in zip(orig_initials, orig_finals):
-            initials.append(c)
-            finals.append(v)
-        return initials, finals
+
+    orig_initials = lazy_pinyin(word, neutral_tone_with_five=True, style=Style.INITIALS)
+    orig_finals = lazy_pinyin(
+        word, neutral_tone_with_five=True, style=Style.FINALS_TONE3
+    )
+    for c, v in zip(orig_initials, orig_finals):
+        initials.append(c)
+        finals.append(v)
+    return initials, finals
 
 
 def _g2p(segments):
