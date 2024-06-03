@@ -103,6 +103,7 @@ def _g2p(segments):
 
         if results:
             initials, finals = change_pos_pinyin(initials, finals, results)
+            
 
 
         for c, v in zip(initials, finals):

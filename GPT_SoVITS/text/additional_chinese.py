@@ -1,62 +1,60 @@
+from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 
-pos_pinyin = {
-    "锝":[["d"],["ei3"]],# 得 dei3
-    "笊":[["zh"],["ao2"]], # 着 zhao2
-    "觉也不睡":[["j", "", "b", "sh"],["iao4", "ie3","u2","ui4"]],
-    "嘚瑟":[["d", "s"],["e4", "e5"]],
-    "载歌载舞":[["z", "g", "z", "w"],["ai3", "e1", "ai2", "u3"]],  
-    "这么着":[["zh", "m", "zh"],["e4", "e4", "ao1"]], 
-    "着急":[["zh", "j"],["ao1", "i2"]],
-    "正着":[["zh", "zh"],["eng4", "ao2"]],
-    "萎缩":[["w", "s"],["ei3", "uo1"]],
-    "想找找":[["x", "zh", "zh"],["iang3", "ao2", "ao3"]],
-    "珍妮":[["zh", "n"],["en1", "i2"]],
-    "安妮":[["", "n"],["an1", "i2"]],
-    "鸡巴":[["j", "b"],["i1", "a5"]],
-    "我得":[["w", "d"],["o2", "ei3"]],
-    "你得":[["n", "d"],["i2", "ei3"]],
-    "他得":[["t", "d"],["a1", "ei3"]],
-    "她得":[["t", "d"],["a1", "ei3"]],
-    "它得":[["t", "d"],["a1", "ei3"]],
-    "得劲":[["d", "j"],["ei3", "in4"]],
-    "得让":[["d", "r"],["ei3", "ang4"]],
-    "得以":[["d", ""],["e2", "i3"]],
-    "瞄上":[["m", "sh"],["iao1", "ang4"]],
-    "瞄一":[["m", ""],["iao1", "i4"]],
-    "逮住":[["d", "zh"],["ei1", "u4"]],
-    "逮个":[["d", "g"],["ei1", "e4"]],
-    "絮叨":[["x", "d"],["u4", "ao1"]],
-    "慢慢":[["m", "m"],["an4", "an1"]],
-    "一溜烟":[["", "l", ""],["i2", "iu4", 'ian1']],
-    "背着黑锅":[["b", "zh","h", "g"],["ei1", "e5", "ei1", "uo1"]], 
-    "背黑锅":[["b", "h", "g"],["ei1", "ei1", "uo1"]], 
-    "背锅":[["b",  "g"],["ei1", "uo1"]], 
-    "嗷嗷":[["",  ""],["ao1", "ao1"]], 
-    "怂":[["s"],["ong2"]], 
-    "好好":[["h", "h"],["ao3", "ao1"]],    
-    "嗲嗲":[["d","d"],["ia2", "ia3"]],
-    "嗲":[["d"],["ia3"]],
-    "发牌":[["f","p"],["a1", "ai2"]],
-    "噼里啪啦":[["p", "l","p", "l"],["i1", "i1", "a1", "a1"]], 
-    "长大":[["zh","d"],["ang3", "a4"]],
-    "薄薄":[["b","b"],["ao2", "ao2"]],
-    "一行":[["","h"],["i1", "ang2"]],
-    "强迫":[["q","p"],["iang2", "o4"]],
-    "大汗淋漓":[["d", "h","l", "l"],["a4", "an4", "in2", "i2"]], 
-    "靓":[["l"],["iang4"]],
-    "懵":[["m"],["eng1"]],
-    "吐槽":[["t","c"],["u3","ao2"]],
-    "肏":[["c"],["ao4"]],
-    "很冲":[["h","c"],["en3","hong4"]],
-    "揶揄":[["y","y"],["e2","u2"]],
-    "州长":[["zh","zh"],["ou1","ang3"]],
-    "帧":[["zh"],["en1"]],
-    "搭档":[["d","d"],["a1","ang4"]],
-    "刹车":[["sh","ch"],["a1","e1"]],
-    "急刹":[["j","sh"],["i2","a1"]],
-    "调换":[["d","h"],["iao4","uan4"]],
-    "勒死":[["l","s"],["ei1","i3"]],  
-
+additional_pinyin_dict = {
+    "觉也不睡": ["jiao4", "ie3", "bu2", "shui4"],
+    "嘚瑟": ["de4", "se5"],
+    "载歌载舞": ["zai3", "ge1", "zai2", "wu3"],
+    "这么着": ["zhe4", "me4", "zhao1"],
+    "着急": ["zhao1", "ji2"],
+    "正着": ["zheng4", "zhao2"],
+    "萎缩": ["wei3", "suo1"],
+    "想找找": ["xiang3", "zhao2", "zhao3"],
+    "珍妮": ["zhen1", "ni2"],
+    "安妮": ["an1", "ni2"],
+    "鸡巴": ["ji1", "ba5"],
+    "我得": ["wo2", "dei3"],
+    "你得": ["ni2", "dei3"],
+    "他得": ["ta1", "dei3"],
+    "她得": ["ta1", "dei3"],
+    "它得": ["ta1", "dei3"],
+    "得劲": ["dei3", "jin4"],
+    "得让": ["dei3", "rang4"],
+    "得以": ["de2", "yi3"],
+    "瞄上": ["miao1", "shang4"],
+    "瞄一": ["miao1", "yi4"],
+    "逮住": ["dei1", "zhu4"],
+    "逮个": ["dei1", "ge4"],
+    "絮叨": ["xu4", "dao1"],
+    "慢慢": ["man4", "man1"],
+    "一溜烟": ["yi2", "liu4", "yan1"],
+    "背着黑锅": ["bei1", "zhe5", "hei1", "guo1"],
+    "背黑锅": ["bei1", "hei1", "guo1"],
+    "背锅": ["bei1", "guo1"],
+    "嗷嗷": ["ao1", "ao1"],
+    "怂": ["song2"],
+    "好好": ["hao3", "hao1"],
+    "嗲嗲": ["dia2", "dia3"],
+    "嗲": ["dia3"],
+    "发牌": ["fa1", "pai2"],
+    "噼里啪啦": ["pi1", "li1", "pa1", "la1"],
+    "长大": ["zhang3", "da4"],
+    "薄薄": ["bao2", "bao2"],
+    # "一行": ["yi1", "hang2"],
+    "强迫": ["qiang2", "po4"],
+    "大汗淋漓": ["da4", "han4", "lin2", "li2"],
+    "靓": ["liang4"],
+    "懵": ["meng1"],
+    "吐槽": ["tu3", "cao2"],
+    "肏": ["cao4"],
+    "很冲": ["hen3", "chong4"],
+    "揶揄": ["ye2", "yu2"],
+    "州长": ["zhou1", "zhang3"],
+    "帧": ["zhen1"],
+    "搭档": ["da1", "dang4"],
+    "刹车": ["sha1", "che1"],
+    "急刹": ["ji2", "sha1"],
+    "调换": ["diao4", "huan4"],
+    "勒死": ["lei1", "si3"]
 }
 
 
@@ -65,7 +63,7 @@ def test_need_change_pos_pinyin(seg:str):
     end_pos = -1
     results = []
     
-    for sub_text, pinyins in pos_pinyin.items():
+    for sub_text, pinyins in additional_pinyin_dict.items():
         start_pos = 0
         while True:
             start_pos = seg.find(sub_text, start_pos)
@@ -80,6 +78,19 @@ def test_need_change_pos_pinyin(seg:str):
 
 def change_pos_pinyin(initials, finals,results):
     for  start_pos, end_pos, pinyins in results:
-        initials[start_pos:end_pos] = pinyins[0] 
-        finals[start_pos:end_pos] = pinyins[1] 
+
+        sub_initials = []
+        sub_finals = []
+        for pinyin in pinyins:   
+            if pinyin[0].isalpha():
+                sub_initials.append(to_initials(pinyin))
+                sub_finals.append(to_finals_tone3(pinyin,neutral_tone_with_five=True))
+            else:
+                sub_initials.append(pinyin)
+                sub_finals.append(pinyin)
+
+        initials[start_pos:end_pos] = sub_initials
+        finals[start_pos:end_pos] = sub_finals
+
+    print(f'命中多音字{[x + y for x, y in zip(initials, finals)]}')
     return initials, finals
