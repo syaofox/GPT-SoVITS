@@ -12,6 +12,9 @@ from time import time as ttime
 from warnings import warn
 from pathlib import Path
 import sys
+import pysrt
+from pydub import AudioSegment
+import tempfile
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
@@ -658,6 +661,110 @@ def change_audio2(in_path, text_language, inp_ref, output_path):
     return combined_tempfile
 
 
+def hz_data_to_audiosegment(hz, data, sample_width=2, channels=1):
+    """
+    将频率和数据格式的音频数据转换为 AudioSegment 对象
+
+    :param hz: 采样率（例如 44100）
+    :param data: 音频数据的 numpy 数组
+    :param sample_width: 每个样本的字节数，默认是 2（对应16位 PCM）
+    :param channels: 声道数，默认是 1（单声道）
+    :return: AudioSegment 对象
+    """
+    # 确保数据是 numpy 数组
+    audio_data = np.array(data, dtype=np.int16)
+    
+    # 将 numpy 数组转换为字节数据
+    byte_data = audio_data.tobytes()
+    
+    # 创建 AudioSegment 对象
+    audio_segment = AudioSegment(
+        data=byte_data,
+        sample_width=sample_width,
+        frame_rate=hz,
+        channels=channels
+    )
+    
+    return audio_segment
+
+def audiosegment_to_hz_data(audio_segment):
+    """
+    将 AudioSegment 对象转换为频率和数据格式
+
+    :param audio_segment: AudioSegment 对象
+    :return: 频率（hz），数据（numpy 数组）
+    """
+    # 将音频数据转换为字节字符串
+    raw_data = audio_segment.raw_data
+    
+    # 获取样本宽度和声道数
+    sample_width = audio_segment.sample_width
+    channels = audio_segment.channels
+    
+    # 根据样本宽度和声道数将字节字符串转换为 numpy 数组
+    if sample_width == 1:
+        dtype = np.uint8  # 8-bit audio
+    elif sample_width == 2:
+        dtype = np.int16  # 16-bit audio
+    else:
+        raise ValueError("Unsupported sample width")
+    
+    # 将字节字符串转换为 numpy 数组，并 reshape 为正确的形状
+    audio_data = np.frombuffer(raw_data, dtype=dtype)
+    
+    if channels > 1:
+        audio_data = audio_data.reshape((-1, channels))
+    
+    # 获取采样率（hz）
+    hz = audio_segment.frame_rate
+    
+    return hz, audio_data
+
+def change_long_audio(wav_path, prompt_wav,srt, language, noise_scale=0.5):
+    subs = pysrt.open(srt)
+    main_audio = AudioSegment.from_wav(wav_path)
+    main_audio = main_audio.set_channels(1)
+
+    # 获取原始音频文件的属性
+    duration = len(main_audio)  # 时长，单位为毫秒
+    sample_width = main_audio.sample_width  # 采样宽度
+    frame_rate = main_audio.frame_rate  # 采样率
+    # channels = main_audio.channels  # 声道数
+
+
+    # 创建一个空白音频文件（静音）
+    silent_audio = AudioSegment.silent(duration=duration, frame_rate=frame_rate)
+    silent_audio = silent_audio.set_sample_width(sample_width)
+    silent_audio = silent_audio.set_frame_rate(frame_rate)
+    silent_audio = silent_audio.set_channels(1)
+
+    temp_dir = tempfile.mkdtemp(dir='TEMP')
+    # temp_dir2 = tempfile.mkdtemp(dir='TEMP')
+    for i,sub in enumerate(subs):
+        start = sub.start.ordinal  # 字幕开始时间，单位为毫秒
+        end = sub.end.ordinal       # 字幕结束时间，单位为毫秒   
+        # 从音频中提取对应的片段
+        src_wav = main_audio[start:end]
+        src_file = os.path.join(temp_dir,f"audio_segment_{i+1}.wav")
+        
+
+        src_wav.export(src_file, format="wav")
+        text = sub.text    
+
+        for sr ,data in vc_main(src_file,text,language,prompt_wav,noise_scale=noise_scale):
+            print(f'转换>>{text}')
+            sub_audio = hz_data_to_audiosegment(sr,data)
+            silent_audio = silent_audio.overlay(sub_audio, position=start)
+            
+            # temp_path = Path(temp_dir2) / Path(src_file).name
+            # sf.write(temp_path, data, sr)
+
+    # main_audio.export(r'D:\temp\x.wav', format="wav")
+
+
+    return audiosegment_to_hz_data(silent_audio)
+
+
 def main():
     
 
@@ -733,6 +840,16 @@ def main():
                 [in_wav_dir2, text_language, inp_ref,out_wav_dir2],
                 [combined_audio2],
             )
+
+            gr.Markdown('* 长音频变声(无背景音乐，干音)')
+            long_audio_result = gr.Audio(label=i18n("变声后音频"),show_download_button=True)
+            with gr.Row():
+                long_audio = gr.Audio(label=i18n('源音频'), type='filepath')
+                srt = gr.File(label='srt文件')
+                run_button = gr.Button(i18n("变声"), variant="primary")
+
+            run_button.click(change_long_audio, [long_audio, inp_ref, srt, text_language], [long_audio_result])
+
 
     app.queue(max_size=1022).launch(
         server_name="0.0.0.0",
