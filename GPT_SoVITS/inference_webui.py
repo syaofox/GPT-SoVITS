@@ -277,42 +277,74 @@ def merge_wav_files(input_dir):
     # Export the combined audio to a WAV file
     return combined_audio
 
+def get_gpt_vist_path(pattern,dir_name):
+    regex = re.compile(pattern)   
+
+    files = os.listdir(dir_name)
+
+    matching_files = [f for f in files if regex.match(f)]
+    if matching_files:
+        return matching_files[0]
+
+
 def find_reference_file(ref_audio_path, prompt_text, text, if_motion):
-    # 列出指定目录中的所有文件
+    new_char_gpt =''
+    new_char_vits = ''
+
+    if not if_motion:
+        return ref_audio_path, prompt_text, _text_main, new_char_gpt, new_char_vits
+
+
+    # old_char_gpt = tts_config.t2s_weights_path
+    # old_char_vits = tts_config.vits_weights_path
+    # _old_name = re.search(r'GPT_weights/(.+?)-e\d+?\.ckpt',old_char_gpt).group(1)
+
+    
+
+    _tts_match = re.search(r'(.*)\[(.+)\](.+)',text)
+    if _tts_match:
+        _tts_name = _tts_match.group(2)
+        # if _tts_name != _old_name:
+        new_char_gpt = get_gpt_vist_path(rf'{_tts_name}-e\d+?\.ckpt','GPT_weights')
+        new_char_vits = get_gpt_vist_path(rf'{_tts_name}_e\d+_s\d+?\.pth','SoVITS_weights')
+        if new_char_gpt and new_char_vits:
+            new_char_gpt = f'GPT_weights/{new_char_gpt}'
+            new_char_vits = f'SoVITS_weights/{new_char_vits}'
+
+            
+            global reference_wavs, reference_dict, max_textboxes
+            reference_wavs, reference_dict = init_wav_list(new_char_vits)
+            max_textboxes = len(reference_wavs)
+            # ref_data = reference_dict.get(next(iter(reference_dict)))
+            # ref_audio_path = ref_data[0]
+            # prompt_text= ref_data[1]
+
+        text = _tts_match.group(1)+_tts_match.group(3)
+               
+    
+
 
     _match = re.search("(^【.+】)(.+)", text)
     if not _match:
-        return ref_audio_path, prompt_text, text
+        return ref_audio_path, prompt_text, text,new_char_gpt, new_char_vits
+    
+    _text_main = _match.group(2)
+    _text_prefix = _match.group(1)
 
-    if not if_motion:
-        return ref_audio_path, prompt_text, _match.group(2)
+    
 
+    
 
     main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # is_question = text.endswith('？') or text.endswith('?')
-    # dot_count = text.count('，')+ text.count(',')    
+
     for prompt_tip, v in reference_dict.items():
         _ref_audio_path = os.path.join(main_path, v[0])
         _prompt_text = v[1]
-
        
-        if prompt_tip.startswith(_match.group(1)):
-            return _ref_audio_path, _prompt_text, _match.group(2), 
-
-
-        # _dot_count = prompt_text.count('，') + prompt_text.count(',')
-        # _is_question = prompt_text.endswith('？') or prompt_text.endswith('?')
-
-        # if is_question :
-        #     if _is_question and _dot_count == dot_count:
-        #         if re.search(r'【疑问\d*】', k):
-        #             return ref_audio_path, prompt_text, text, 
-
-        # elif _dot_count == dot_count:            
-        #     if re.search(r'【叙述\d*】', k):
-        #         return ref_audio_path, prompt_text, text
+        if prompt_tip.startswith(_text_prefix):
+            return _ref_audio_path, _prompt_text, _text_main, new_char_gpt, new_char_vits
     
-    return ref_audio_path, prompt_text, _match.group(2)
+    return ref_audio_path, prompt_text, _text_main, new_char_gpt, new_char_vits
     
 
 def save_wav(texts, text_lang, 
@@ -342,7 +374,7 @@ def save_wav(texts, text_lang,
             continue
         
              
-        _ref_audio_path, _prompt_text, _text = find_reference_file(ref_audio_path, prompt_text, text,if_motion)
+        _ref_audio_path, _prompt_text, _text ,new_char_gpt, new_char_vits = find_reference_file(ref_audio_path, prompt_text, text,if_motion)
         # if _ref_audio_path and _prompt_text and  _text:
         #     ref_audio_path = _ref_audio_path
         #     prompt_text = _prompt_text
@@ -370,11 +402,34 @@ def save_wav(texts, text_lang,
             "parallel_infer": parallel_infer,
             "repetition_penalty": repetition_penalty,
         }
+
+        old_gpt = tts_config.t2s_weights_path
+        old_vits = tts_config.vits_weights_path
+        need_gpt =False
+        need_vits = False
+
+        if new_char_gpt and new_char_gpt != tts_config.t2s_weights_path :
+            tts_pipeline.init_t2s_weights(new_char_gpt)
+            need_gpt = True
+           
+        if new_char_vits and new_char_vits != tts_config.vits_weights_path:
+            tts_pipeline.init_vits_weights(new_char_vits)
+            need_vits = True
+
         for sr, audio in tts_pipeline.run(inputs):  
             if target_sample_rate is None:
                 target_sample_rate = sr
             combined_audio = np.concatenate((combined_audio, audio))
 
+        if need_gpt :
+            tts_pipeline.init_t2s_weights(old_gpt)
+
+        if need_vits :
+            tts_pipeline.init_vits_weights(old_vits)
+
+        if need_gpt or need_vits:
+            global reference_wavs, reference_dict, max_textboxes
+            reference_wavs, reference_dict = init_wav_list(old_vits)
 
     return (target_sample_rate, combined_audio), '推理'
 
