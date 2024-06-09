@@ -43,7 +43,7 @@ additional_pinyin_dict = {
     "薄薄": ["bao2", "bao2"],
     # "一行": ["yi1", "hang2"],
     "强迫": ["qiang2", "po4"],
-    "大汗淋漓": ["da4", "han4"],
+    "大汗": ["da4", "han4"],
     "靓": ["liang4"],
     "懵": ["meng1"],
     "吐槽": ["tu3", "cao2"],
@@ -60,7 +60,12 @@ additional_pinyin_dict = {
     "好好吃": ["hao2", "hao3", "chi1"],
     "够呛": ["gou4", "qiang4"],
     "抗揍": ["kang2", "zou4"],
-    "勾搭": ["gou1", "da5"]
+    "勾搭": ["gou1", "da5"],
+    "锝": ["dei3"],
+    "笊": ["zhao2"],
+    "阴森森": ["yin1", "sen1", "sen1"],
+    "警长": ["jing2", "zhang3"],
+
 }
 
 

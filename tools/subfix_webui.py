@@ -366,6 +366,14 @@ if __name__ == "__main__":
             btn_theme_dark = gr.Button("Light Theme", link="?__theme=light", scale=1)
             btn_theme_light = gr.Button("Dark Theme", link="?__theme=dark", scale=1)
         
+        with gr.Row():
+            btn_change_index2 = gr.Button("Change Index")
+            btn_submit_change2 = gr.Button("Submit Text")
+            btn_merge_audio2 = gr.Button("Merge Audio")
+            btn_delete_audio2 = gr.Button("Delete Audio")
+            btn_previous_index2 = gr.Button("Previous Index")
+            btn_next_index2 = gr.Button("Next Index")
+            
         btn_change_index.click(
             b_change_index,
             inputs=[
@@ -488,6 +496,90 @@ if __name__ == "__main__":
                 *g_checkbox_list
             ],
         )
+
+        btn_change_index2.click(
+            b_change_index,
+            inputs=[
+                index_slider,
+                batchsize_slider,
+            ],
+            outputs=[
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ],
+        )
+
+        
+        btn_submit_change2.click(
+            b_submit_change,
+            inputs=[
+                *g_text_list,
+            ],
+            outputs=[
+                index_slider,
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ],
+        )
+
+        btn_previous_index2.click(
+            b_previous_index,
+            inputs=[
+                index_slider,
+                batchsize_slider,
+            ],
+            outputs=[
+                index_slider,
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ],
+        )
+        
+        btn_next_index2.click(
+            b_next_index,
+            inputs=[
+                index_slider,
+                batchsize_slider,
+            ],
+            outputs=[
+                index_slider,
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ],
+        )
+
+        btn_delete_audio2.click(
+            b_delete_audio,
+            inputs=[
+                *g_checkbox_list
+            ],
+            outputs=[
+                index_slider,
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ]
+        )
+
+        btn_merge_audio2.click(
+            b_merge_audio,
+            inputs=[
+                interval_slider,
+                *g_checkbox_list
+            ],
+            outputs=[
+                index_slider,
+                *g_text_list,
+                *g_audio_list,
+                *g_checkbox_list
+            ]
+        )
+
+        
         
     demo.launch(
         server_name="0.0.0.0",

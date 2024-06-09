@@ -62,7 +62,12 @@ def change_label(if_label,path_list):
 
 def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir,languate='ZH'):  
     # temp_path = Path(tempfile.mkdtemp(dir='TEMP'))
-    main_audio = AudioSegment.from_wav(raw_audio)
+    raw_audio=my_utils.clean_path(raw_audio)
+    input_srt=my_utils.clean_path(input_srt)
+    output_dir=my_utils.clean_path(output_dir)
+
+    main_audio = AudioSegment.from_file(raw_audio)
+    main_audio = main_audio.set_channels(1)
     subs = pysrt.open(input_srt)
     
     output_path = Path(output_dir)
@@ -72,20 +77,21 @@ def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir,languate=
 
     asr_list = []
 
+    prefix_text = Path(raw_audio).stem
+
     for i,sub in tqdm(enumerate(subs)):
         start = sub.start.ordinal  # 字幕开始时间，单位为毫秒
         end = sub.end.ordinal       # 字幕结束时间，单位为毫秒   
         text = sub.text
         # 从音频中提取对应的片段
         if end - start < min_seconds * 1000 or end - start > max_seconds * 1000:
-            print(f'skip:{text}')
+            tqdm.write(f'skip:{text}')
             continue
 
 
             
         sub_wav = main_audio[start:end]
-        sub_wav_fname =raw_cut_path / f"{i:09d}_{text}.wav"  
-        print(f'>>>{text}')  
+        sub_wav_fname =raw_cut_path / f"{prefix_text}_{i:09d}.wav"  
 
         asr_list.append(f"{sub_wav_fname}|{raw_cut_path.stem}|{languate.upper()}|{text}")
 
@@ -103,8 +109,8 @@ def main():
     with gr.Blocks(title="字幕切分工具") as app:
         gr.Markdown(value="根据srt字幕进行音频切分，过滤指定长度")
         with gr.Row():
-            raw_audio = gr.Audio(label='音频', type='filepath')
-            input_srt = gr.File(label='srt文件')
+            raw_audio = gr.Textbox(label='音频')
+            input_srt = gr.Textbox(label='srt文件')
 
             
         with gr.Row():
