@@ -14,9 +14,14 @@ from text.cleaner import clean_text
 from text import cleaned_text_to_sequence
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from TTS_infer_pack.text_segmentation_method import split_big_text, splits, get_method as get_seg_method
-
+from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 from tools.i18n.i18n import I18nAuto
 
+
+pinyin_to_symbol_map = {
+    line.split("\t")[0]: line.strip().split("\t")[1]
+    for line in open(r"D:\aisound\GPT-SoVITS\GPT_SoVITS\text\opencpop-strict.txt").readlines()
+}
 i18n = I18nAuto()
 punctuation = set(['!', '?', '…', ',', '.', '-'," "])
 
@@ -192,33 +197,109 @@ class TextPreprocessor:
         phone_level_feature = torch.cat(phone_level_feature, dim=0)
         return phone_level_feature.T
     
-    def find_custom_tone(self, text):
+    def parse_special_string(self, s):
+        result = []
+        i = 0
+        while i < len(s):
+            if s[i] == '{':
+                # 找到花括号的闭合部分
+                j = i
+                while j < len(s) and s[j] != '}':
+                    j += 1
+                if j < len(s):
+                    result[-1] += s[i:j+1]  # 将花括号部分合并到前一个字符上
+                    i = j + 1
+                else:
+                    # 如果没有闭合花括号，按普通字符处理
+                    result.append(s[i])
+                    i += 1
+            else:
+                result.append(s[i])
+                i += 1
+        return result
+    
+    def find_custom_tone(self, text, language):
         text = text.replace(" ", "") # 去除空格
-        tone_list = []
-        matches = list(re.finditer(r"{(.*?)}", text))
-        offset = 0
-        for match in matches:
-            pos = match.start() - offset
-            content = match.group(1)
-            offset += (2 + len(content))
-            data = [content, pos]
-            tone_list.append(data)
+        tone_list = []       
+
+        texts = self.parse_special_string(text)
+
+        pos = 0
+        for i, sub_text in enumerate(texts):
+            _, _, norm_text = clean_text(sub_text, language)
+            if i > 0:
+                if norm_text  in punctuation:
+                    pos += 1
+                else:
+                    pos += 2
+            _match = re.search(r"(.*?){(.*?)}",sub_text)
+            if _match:
+                seg = _match.group(1)
+                content = _match.group(2)
+                if content[0].isalpha():
+                    sub_initials = to_initials(content)
+                    sub_finals = to_finals_tone3(content,neutral_tone_with_five=True)
+                else:
+                    sub_initials = content
+                    sub_finals = content
+
+                raw_pinyin = sub_initials + sub_finals                
+                v_without_tone = sub_finals[:-1]
+                tone = sub_finals[-1]
+                pinyin = sub_initials + v_without_tone
+                assert tone in "12345"
+                
+                if sub_initials:
+                    # 多音节
+                    v_rep_map = {
+                        "uei": "ui",
+                        "iou": "iu",
+                        "uen": "un",
+                    }
+                    if v_without_tone in v_rep_map.keys():
+                        pinyin = sub_initials + v_rep_map[v_without_tone]
+                else:
+                    # 单音节
+                    pinyin_rep_map = {
+                        "ing": "ying",
+                        "i": "yi",
+                        "in": "yin",
+                        "u": "wu",
+                    }
+                    if pinyin in pinyin_rep_map.keys():
+                        pinyin = pinyin_rep_map[pinyin]
+                    else:
+                        single_rep_map = {
+                            "v": "yu",
+                            "e": "e",
+                            "i": "y",
+                            "u": "w",
+                        }
+                        if pinyin[0] in single_rep_map.keys():
+                            pinyin = single_rep_map[pinyin[0]] + pinyin[1:]
+
+                assert pinyin in pinyin_to_symbol_map.keys(), (pinyin, seg, raw_pinyin)
+                new_c, new_v = pinyin_to_symbol_map[pinyin].split(" ")
+                new_v = new_v + tone
+                data = [pos, new_c,new_v]
+                tone_list.append(data)           
+        
         return re.sub(r"{.*?}", "", text), tone_list
 
     def clean_text_inf(self, text:str, language:str):
-        text, tone_data_list = self.find_custom_tone(text)
+        text, tone_data_list = self.find_custom_tone(text,language)
         phones, word2ph, norm_text = clean_text(text, language)
         print(phones)
         for tone_data in tone_data_list:
-            tone = tone_data[0]
-            pos = tone_data[1]
-            wd_pos = 0
-            for i in range(0, pos):
-                wd_pos += word2ph[i]
-            wd_pos -= 1 # 因為遞加的值是數量 所以需要-1
-            org_phones = phones[wd_pos]
-            phones[wd_pos] = str(phones[wd_pos])[:-1] + tone
-            print(f"[+]成功修改讀音: {org_phones} => {phones[wd_pos]}")
+            pos1 = tone_data[0]
+            pos2 = pos1+1
+            
+            org_phones = phones[pos1]+phones[pos2]
+            phones[pos1] = tone_data[1]
+            phones[pos2] = tone_data[2]
+
+            
+            print(f"[+]成功修改读音: {org_phones} => {phones[pos1]+phones[pos2]}")
         # phones, word2ph, norm_text = clean_text(text, language)
         phones = cleaned_text_to_sequence(phones)
         return phones, word2ph, norm_text
