@@ -14,6 +14,10 @@ import psutil
 import signal
 from tools.i18n.i18n import I18nAuto
 from config import python_exec, webui_port_subfix, is_share
+import wave
+import contextlib
+from datetime import timedelta
+
 i18n = I18nAuto()
 
 p_label=None
@@ -48,13 +52,13 @@ def kill_process(pid):
 
 def change_label(if_label,path_list):
     global p_label
-    if(if_label==True and p_label==None):
+    if(if_label is True and p_label is None):
         path_list=my_utils.clean_path(path_list)
         cmd = '"%s" tools/subfix_webui.py --load_list "%s" --webui_port %s --is_share %s'%(python_exec,path_list,webui_port_subfix,is_share)
         yield i18n("打标工具WebUI已开启")
         print(cmd)
         p_label = Popen(cmd, shell=True)
-    elif(if_label==False and p_label!=None):
+    elif(if_label is False and p_label is not None):
         kill_process(p_label.pid)
         p_label=None
         yield i18n("打标工具WebUI已关闭")
@@ -103,6 +107,75 @@ def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir,languate=
 
     return '切分'
 
+def format_timedelta(td):
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    milliseconds = td.microseconds // 1000
+    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+
+def merge_audio_with_subtitles(txt_file_path, output_dir):
+    yield gr.update(visible=True, interactive=False)
+
+    txt_file_path=my_utils.clean_path(txt_file_path)
+    output_dir=my_utils.clean_path(output_dir)
+
+    
+    # 读取txt文件内容
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    # 解析txt内容
+    files_and_texts = [line.strip().split('|') for line in lines]
+
+    name = files_and_texts[0][1]
+
+
+    output_audio_path = os.path.join(output_dir, f'{name}.wav')
+    
+    output_srt_path = os.path.join(output_dir, f'{name}.srt')
+
+    # 创建srt文件内容的列表
+    srt_content = []
+    start_time = timedelta()  # 使用timedelta来表示时间
+
+    # 创建一个空的音频对象
+    combined_audio = AudioSegment.empty()
+
+    # 静音段，500毫秒
+    silence = AudioSegment.silent(duration=500)
+
+    # 处理每个wav文件
+    for index, (file_path, speaker, language, text) in enumerate(files_and_texts):
+        # 读取当前音频文件
+        audio = AudioSegment.from_wav(file_path)
+        combined_audio += audio
+        duration = timedelta(milliseconds=len(audio))
+
+        # 计算结束时间
+        end_time = start_time + duration
+
+        # 创建srt条目
+        start_str = format_timedelta(start_time)
+        end_str = format_timedelta(end_time)
+        srt_entry = f"{index + 1}\n{start_str} --> {end_str}\n{text}\n"
+        srt_content.append(srt_entry)
+        srt_content.append('\n')
+        print(srt_entry)
+
+        # 更新起始时间：加上当前音频时长和500毫秒静音
+        start_time = end_time + timedelta(milliseconds=500)
+        combined_audio += silence
+
+    # 保存合并后的音频文件
+    combined_audio.export(output_audio_path, format="wav")
+
+    # 保存srt文件
+    with open(output_srt_path, "w", encoding="utf-8") as srt_file:
+        srt_file.writelines(srt_content)
+    
+    yield gr.update(visible=True, interactive=True)
+
 def main():
    
 
@@ -132,6 +205,14 @@ def main():
             )
             label_info = gr.Textbox(label=i18n("打标工具进程输出信息"))
         if_label.change(change_label, [if_label,path_list], [label_info])
+
+        gr.Markdown(value=i18n("合并标注文件音频，并转为srt"))
+        with gr.Row():
+            asr_file = gr.Textbox(label='srt文件',value=r'D:\aisound\sound_data\简一\raw_cut.list', scale=4)
+            asr_wavsrt_output_dir = gr.Textbox(label="*生成音频和srt保存位置", value=r"D:\aisound\temp", interactive=True, scale=4)
+            trans_button = gr.Button("切分", variant="primary", scale=1)
+
+        trans_button.click(merge_audio_with_subtitles, [asr_file, asr_wavsrt_output_dir],[trans_button])
 
     app.queue(max_size=1022).launch(
         server_name="0.0.0.0",
