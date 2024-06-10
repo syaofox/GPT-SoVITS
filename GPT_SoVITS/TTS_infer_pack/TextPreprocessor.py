@@ -56,7 +56,7 @@ class TextPreprocessor:
         
     def preprocess(self, text:str, lang:str, text_split_method:str)->List[Dict]:
         print(i18n("############ 切分文本 ############"))
-        texts = self.replace_consecutive_punctuation(texts)
+        text = self.replace_consecutive_punctuation(text)
         texts = self.pre_seg_text(text, lang, text_split_method)
         result = []
         print(i18n("############ 提取文本Bert特征 ############"))
@@ -192,8 +192,34 @@ class TextPreprocessor:
         phone_level_feature = torch.cat(phone_level_feature, dim=0)
         return phone_level_feature.T
     
+    def find_custom_tone(self, text):
+        text = text.replace(" ", "") # 去除空格
+        tone_list = []
+        matches = list(re.finditer(r"{(.*?)}", text))
+        offset = 0
+        for match in matches:
+            pos = match.start() - offset
+            content = match.group(1)
+            offset += (2 + len(content))
+            data = [content, pos]
+            tone_list.append(data)
+        return re.sub(r"{.*?}", "", text), tone_list
+
     def clean_text_inf(self, text:str, language:str):
+        text, tone_data_list = self.find_custom_tone(text)
         phones, word2ph, norm_text = clean_text(text, language)
+        print(phones)
+        for tone_data in tone_data_list:
+            tone = tone_data[0]
+            pos = tone_data[1]
+            wd_pos = 0
+            for i in range(0, pos):
+                wd_pos += word2ph[i]
+            wd_pos -= 1 # 因為遞加的值是數量 所以需要-1
+            org_phones = phones[wd_pos]
+            phones[wd_pos] = str(phones[wd_pos])[:-1] + tone
+            print(f"[+]成功修改讀音: {org_phones} => {phones[wd_pos]}")
+        # phones, word2ph, norm_text = clean_text(text, language)
         phones = cleaned_text_to_sequence(phones)
         return phones, word2ph, norm_text
 
