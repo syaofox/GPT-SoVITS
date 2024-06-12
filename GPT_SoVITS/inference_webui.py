@@ -318,6 +318,43 @@ def merge_short_text_in_array(texts, threshold):
             result[len(result) - 1] += text
     return result
 
+def find_reference_file(ref_audio_path, prompt_text, text, if_motion):
+
+    _match = re.search("(^【.+】)(.+)", text)
+    if not _match:
+        return ref_audio_path, prompt_text, text
+
+    if not if_motion:
+        return ref_audio_path, prompt_text, _match.group(2)
+
+    main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for prompt_tip, v in reference_dict.items():
+        _ref_audio_path = os.path.join(main_path, v[0])
+        _prompt_text = v[1]       
+        if prompt_tip.startswith(_match.group(1)):
+            return _ref_audio_path, _prompt_text, _match.group(2), 
+    
+    return ref_audio_path, prompt_text, _match.group(2)
+
+def get_tts_wav_sigle(ref_wav_path, prompt_text, prompt_language, texts, text_language, how_to_cut=i18n("不切"), top_k=20, top_p=0.6, temperature=0.6, ref_free = False):
+    how_to_cut=i18n("不切")
+
+    target_sample_rate = None
+    combined_audio = np.array([], dtype=np.int16)    
+
+    for text in texts.splitlines():
+        if not text:
+            continue    
+   
+        _ref_audio_path, _prompt_text, _text = find_reference_file(ref_wav_path, prompt_text, text, True)
+        for sr, audio in  get_tts_wav(_ref_audio_path, _prompt_text, prompt_language, _text, text_language, how_to_cut=how_to_cut, top_k=top_k, top_p=top_p, temperature=temperature, ref_free = ref_free):
+            if target_sample_rate is None:
+                target_sample_rate = sr
+                    
+            combined_audio = np.concatenate((combined_audio, audio))
+
+    yield target_sample_rate, combined_audio
+
 def get_tts_wav(ref_wav_path, prompt_text, prompt_language, text, text_language, how_to_cut=i18n("不切"), top_k=20, top_p=0.6, temperature=0.6, ref_free = False):
     if prompt_text is None or len(prompt_text) == 0:
         ref_free = True
@@ -668,10 +705,17 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 top_p = gr.Slider(minimum=0,maximum=1,step=0.05,label=i18n("top_p"),value=1,interactive=True)
                 temperature = gr.Slider(minimum=0,maximum=1,step=0.05,label=i18n("temperature"),value=1,interactive=True)
             inference_button = gr.Button(i18n("合成语音"), variant="primary")
-            output = gr.Audio(label=i18n("输出的语音"))
+            single_inference_button = gr.Button(i18n("单句合成"), variant="primary")
+            output = gr.Audio(label=i18n("输出的语音"))      
 
         inference_button.click(
             get_tts_wav,
+            [inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free],
+            [output],
+        )
+
+        single_inference_button.click(
+            get_tts_wav_sigle,
             [inp_ref, prompt_text, prompt_language, text, text_language, how_to_cut, top_k, top_p, temperature, ref_text_free],
             [output],
         )
