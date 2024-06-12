@@ -71,6 +71,7 @@ from time import time as ttime
 from module.mel_processing import spectrogram_torch
 from my_utils import load_audio
 from tools.i18n.i18n import I18nAuto
+from gen_refwavs import gen_sample, init_wav_list
 
 i18n = I18nAuto()
 
@@ -532,6 +533,15 @@ def change_choices():
     SoVITS_names, GPT_names = get_weights_names()
     return {"choices": sorted(SoVITS_names, key=custom_sort_key), "__type__": "update"}, {"choices": sorted(GPT_names, key=custom_sort_key), "__type__": "update"}
 
+def change_ref_wav(audio_name):
+    # first_key = list(reference_dict.keys())[0]
+
+    try:
+        value = reference_dict[audio_name]
+        return value[0], value[1]
+    except Exception as e:
+        return None, None
+
 
 pretrained_sovits_name = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 pretrained_gpt_name = "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt"
@@ -550,8 +560,28 @@ def get_weights_names():
         if name.endswith(".ckpt"): GPT_names.append("%s/%s" % (GPT_weight_root, name))
     return SoVITS_names, GPT_names
 
+def create_audio(sovits_path_in):
+    # sovits_path = tts_config.vits_weights_path
+    sovits_path = sovits_path_in.replace("SoVITS_weights/", "")
+
+    gen_sample(sovits_path)
+
+    global reference_wavs, reference_dict
+    reference_wavs, reference_dict = init_wav_list(sovits_path)
+    
+    return gr.update(choices=reference_wavs)
+
+def sovits_weights_change_ref_wav(sovits_path_in):
+    sovits_path_in = sovits_path_in.replace("SoVITS_weights/", "")
+
+    print(sovits_path_in)
+    global reference_wavs, reference_dict
+    reference_wavs, reference_dict = init_wav_list(sovits_path_in)
+
+    return gr.update(choices=reference_wavs)
 
 SoVITS_names, GPT_names = get_weights_names()
+reference_wavs, reference_dict = init_wav_list(sovits_path)
 
 with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     gr.Markdown(
@@ -560,12 +590,20 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
     with gr.Group():
         gr.Markdown(value=i18n("模型切换"))
         with gr.Row():
-            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True)
-            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True)
-            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary")
+            GPT_dropdown = gr.Dropdown(label=i18n("GPT模型列表"), choices=sorted(GPT_names, key=custom_sort_key), value=gpt_path, interactive=True, scale=2)
+            SoVITS_dropdown = gr.Dropdown(label=i18n("SoVITS模型列表"), choices=sorted(SoVITS_names, key=custom_sort_key), value=sovits_path, interactive=True, scale=2)
+            wavs_dropdown = gr.Dropdown(label=i18n("参考音频列表"),choices=reference_wavs, value="请选择参考音频", interactive=True, scale=3)
+            refresh_button = gr.Button(i18n("刷新模型路径"), variant="primary", scale=1)            
+            create_button = gr.Button("生成参考音频", variant="primary", scale=1)
+
             refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
-            SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [])
+            SoVITS_dropdown.change(sovits_weights_change_ref_wav, [SoVITS_dropdown], [wavs_dropdown]).then(change_sovits_weights, [SoVITS_dropdown], [])
             GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
+            
+            create_button.click(fn=create_audio, inputs=[SoVITS_dropdown], outputs=[wavs_dropdown])
+
+            
+
         gr.Markdown(value=i18n("*请上传并填写参考信息"))
         with gr.Row():
             inp_ref = gr.Audio(label=i18n("请上传3~10秒内参考音频，超过会报错！"), type="filepath")
@@ -573,9 +611,19 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 ref_text_free = gr.Checkbox(label=i18n("开启无参考文本模式。不填参考文本亦相当于开启。"), value=False, interactive=True, show_label=True)
                 gr.Markdown(i18n("使用无参考文本模式时建议使用微调的GPT，听不清参考音频说的啥(不晓得写啥)可以开，开启后无视填写的参考文本。"))
                 prompt_text = gr.Textbox(label=i18n("参考音频的文本"), value="")
-            prompt_language = gr.Dropdown(
-                label=i18n("参考音频的语种"), choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")], value=i18n("中文")
-            )
+
+            with gr.Row():
+                prompt_language = gr.Dropdown(
+                    label=i18n("参考音频的语种"), choices=[i18n("中文"), i18n("英文"), i18n("日文"), i18n("中英混合"), i18n("日英混合"), i18n("多语种混合")], value=i18n("中文")
+                )
+                refresh_ref_wav_button = gr.Button(i18n("刷新参考音频"), variant="primary",scale=1)
+
+            wavs_dropdown.change(change_ref_wav, [wavs_dropdown], [inp_ref, prompt_text])
+
+            refresh_ref_wav_button.click(sovits_weights_change_ref_wav, [SoVITS_dropdown], [wavs_dropdown]).then(change_ref_wav, [wavs_dropdown], [inp_ref, prompt_text])
+            
+            
+
         gr.Markdown(value=i18n("*请填写需要合成的目标文本和语种模式"))
         with gr.Row():
             text = gr.Textbox(label=i18n("需要合成的文本"), value="")
