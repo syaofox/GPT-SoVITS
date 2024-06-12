@@ -150,8 +150,7 @@ def main():
 
                     in_wav_dir = gr.Textbox(label="*待处理音频路径", value=r"D:\aisound\GPT-SoVITS\sample\阿醋", interactive=True)
                     out_wav_dir = gr.Textbox(label="*结果输出路径", value=r"D:\aisound\temp\enhance", interactive=True)
-                    inputs.append(in_wav_dir)
-                    inputs.append(out_wav_dir)
+                    
 
                     with gr.Row():
                         batch_denoise_button = gr.Button("批量降噪", variant="primary")
@@ -162,6 +161,8 @@ def main():
 
             
             batch_denoise_button.click(_batch_denoise, [in_wav_dir,out_wav_dir], [batch_denoise_button])
+            inputs.append(in_wav_dir)
+            inputs.append(out_wav_dir)
             batch_enhance_button.click(_batch_enhance, inputs, [batch_enhance_button])
 
 

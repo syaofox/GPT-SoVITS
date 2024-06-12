@@ -289,7 +289,7 @@ class TextPreprocessor:
     def clean_text_inf(self, text:str, language:str):
         text, tone_data_list = self.find_custom_tone(text,language)
         phones, word2ph, norm_text = clean_text(text, language)
-        print(phones)
+        # print(phones)
         for tone_data in tone_data_list:
             pos1 = tone_data[0]
             pos2 = pos1+1
