@@ -597,12 +597,11 @@ def change_choices():
     return {"choices": sorted(SoVITS_names, key=custom_sort_key), "__type__": "update"}, {"choices": sorted(GPT_names, key=custom_sort_key), "__type__": "update"}
 
 def change_ref_wav(audio_name):
-    # first_key = list(reference_dict.keys())[0]
+    value = reference_dict.get(audio_name, None)
 
-    try:
-        value = reference_dict[audio_name]
+    if value:
         return value[0], value[1]
-    except Exception as e:
+    else:
         return None, None
 
 
