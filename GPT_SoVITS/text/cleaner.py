@@ -1,6 +1,6 @@
+import re
 from text import chinese, japanese, cleaned_text_to_sequence, symbols, english
 from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
-import re
 
 language_module_map = {"zh": chinese, "ja": japanese, "en": english}
 special = [
@@ -14,7 +14,6 @@ pinyin_to_symbol_map = {
     line.split("\t")[0]: line.strip().split("\t")[1]
     for line in open(r"D:\aisound\GPT-SoVITS\GPT_SoVITS\text\opencpop-strict.txt").readlines()
     }
-punctuation = set(['!', '?', '…', ',', '.', '-'," "])
 
 def g2pex(sub_initials, sub_finals, seg):
     
@@ -91,7 +90,7 @@ def find_custom_tone(text, norm_text):
     pos = 0
     for i, (sub_text, norm_sub_text) in enumerate(zip(texts, norm_text)):
         if i > 0:
-            if norm_sub_text  in punctuation:
+            if ord(norm_sub_text[0]) <= 127:
                 pos += 1
             else:
                 pos += 2
