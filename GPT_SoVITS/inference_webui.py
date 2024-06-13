@@ -165,6 +165,11 @@ def change_sovits_weights(sovits_path):
     with open("./sweight.txt", "w", encoding="utf-8") as f:
         f.write(sovits_path)
 
+    sovits_path_in = sovits_path.replace("SoVITS_weights/", "")
+    global reference_wavs, reference_dict
+    reference_wavs, reference_dict = init_wav_list(sovits_path_in)
+
+    return gr.update(choices=reference_wavs)
 
 change_sovits_weights(sovits_path)
 
@@ -633,14 +638,6 @@ def create_audio(sovits_path_in):
     
     return gr.update(choices=reference_wavs)
 
-def sovits_weights_change_ref_wav(sovits_path_in):
-    sovits_path_in = sovits_path_in.replace("SoVITS_weights/", "")
-
-    print(sovits_path_in)
-    global reference_wavs, reference_dict
-    reference_wavs, reference_dict = init_wav_list(sovits_path_in)
-
-    return gr.update(choices=reference_wavs)
 
 SoVITS_names, GPT_names = get_weights_names()
 reference_wavs, reference_dict = init_wav_list(sovits_path)
@@ -659,9 +656,8 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
             create_button = gr.Button("生成参考音频", variant="primary", scale=1)
 
             refresh_button.click(fn=change_choices, inputs=[], outputs=[SoVITS_dropdown, GPT_dropdown])
-            SoVITS_dropdown.change(sovits_weights_change_ref_wav, [SoVITS_dropdown], [wavs_dropdown]).then(change_sovits_weights, [SoVITS_dropdown], [])
-            GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])
-            
+            SoVITS_dropdown.change(change_sovits_weights, [SoVITS_dropdown], [wavs_dropdown])
+            GPT_dropdown.change(change_gpt_weights, [GPT_dropdown], [])            
             create_button.click(fn=create_audio, inputs=[SoVITS_dropdown], outputs=[wavs_dropdown])
 
             
@@ -681,8 +677,7 @@ with gr.Blocks(title="GPT-SoVITS WebUI") as app:
                 refresh_ref_wav_button = gr.Button(i18n("刷新参考音频"), variant="primary",scale=1)
 
             wavs_dropdown.change(change_ref_wav, [wavs_dropdown], [inp_ref, prompt_text])
-
-            refresh_ref_wav_button.click(sovits_weights_change_ref_wav, [SoVITS_dropdown], [wavs_dropdown]).then(change_ref_wav, [wavs_dropdown], [inp_ref, prompt_text])
+            refresh_ref_wav_button.click(change_ref_wav, [wavs_dropdown], [inp_ref, prompt_text])
             
             
 
