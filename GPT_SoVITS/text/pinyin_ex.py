@@ -60,7 +60,11 @@ additional_pinyin_dict = {
     "刹车": ["sha1", "che1"],
     "急刹": ["ji2", "sha1"],
     "调换": ["diao4", "huan4"],
-    "勒死": ["lei1", "si3"]
+    "勒死": ["lei1", "si3"],
+    "泡制": ["pao2", "zhi4"],
+    "女强人": ["nv3", "qiang2", "ren2"],
+    "怼": ["dui3"],
+
 }
 
 def g2pex(sub_initials, sub_finals, seg):
