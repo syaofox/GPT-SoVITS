@@ -349,14 +349,21 @@ def get_tts_wav_sigle(ref_wav_path, prompt_text, prompt_language, texts, text_la
 
     for text in texts.splitlines():
         if not text:
-            continue    
+            continue 
+        if re.match("^【.+】$", text):
+            zero_wav = np.zeros(
+                int(hps.data.sampling_rate * 0.8),
+                dtype=np.float16 if is_half == True else np.float32,
+            )
+            combined_audio = np.concatenate((combined_audio, zero_wav))
+        else:
    
-        _ref_audio_path, _prompt_text, _text = find_reference_file(ref_wav_path, prompt_text, text, True)
-        for sr, audio in  get_tts_wav(_ref_audio_path, _prompt_text, prompt_language, _text, text_language, how_to_cut=how_to_cut, top_k=top_k, top_p=top_p, temperature=temperature, ref_free = ref_free):
-            if target_sample_rate is None:
-                target_sample_rate = sr
-                    
-            combined_audio = np.concatenate((combined_audio, audio))
+            _ref_audio_path, _prompt_text, _text = find_reference_file(ref_wav_path, prompt_text, text, True)
+            for sr, audio in  get_tts_wav(_ref_audio_path, _prompt_text, prompt_language, _text, text_language, how_to_cut=how_to_cut, top_k=top_k, top_p=top_p, temperature=temperature, ref_free = ref_free):
+                if target_sample_rate is None:
+                    target_sample_rate = sr
+                        
+                combined_audio = np.concatenate((combined_audio, audio))
 
     yield target_sample_rate, combined_audio
 
