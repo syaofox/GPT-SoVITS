@@ -22,6 +22,8 @@ replace_word_map = {
     "血": "xue3",
     "扒": "ba1",
     "怼": "dui3",
+    "懵": "meng1",
+    "怂": "song2",
 }
 
 
