@@ -3,6 +3,7 @@ from setenv import setenv
 setenv()
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -18,13 +19,11 @@ from GPT_SoVITS.text.symbols import punctuation
 
 iw.language = "zh_CN"
 
-replace_word_map = {
-    "血": "xue3",
-    "扒": "ba1",
-    "怼": "dui3",
-    "懵": "meng1",
-    "怂": "song2",
-}
+current_dir = os.path.dirname(os.path.abspath(__file__))
+json_file_path = os.path.join(current_dir, 'correct_words.json')
+with open(json_file_path, 'r', encoding='utf-8') as file:
+    correct_words_map = json.load(file)
+
 
 
 def get_phones_and_bert(text, language, version, final=False):
@@ -157,12 +156,12 @@ def replace_custom_words(text: str):
 
     # 遍历文本中的每个字符
     for i, char in enumerate(text):
-        if char in replace_word_map:
+        if char in correct_words_map:
             # 将匹配到的字符及之前的文本添加到txts
             if offset < i:
                 txts.append(text[offset:i])
             txts.append(char)
-            tone = replace_word_map[char]
+            tone = correct_words_map[char]
             pos = sum(len(s) for s in txts)
             init, final = correct_initial_final(tone)
             tone_list.append([tone, init, final, pos])
