@@ -17,7 +17,7 @@ from GPT_SoVITS import inference_webui as iw
 from GPT_SoVITS.text.chinese2 import pinyin_to_symbol_map
 from GPT_SoVITS.text.symbols import punctuation
 
-iw.language = "zh_CN"
+iw.language = 'zh_CN'
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 json_file_path = os.path.join(current_dir, 'correct_words.json')
@@ -25,66 +25,61 @@ with open(json_file_path, 'r', encoding='utf-8') as file:
     correct_words_map = json.load(file)
 
 
-
 def get_phones_and_bert(text, language, version, final=False):
-    if language in {"en", "all_zh", "all_ja", "all_ko", "all_yue"}:
-        language = language.replace("all_", "")
-        if language == "en":
-            iw.LangSegment.setfilters(["en"])
-            formattext = " ".join(tmp["text"] for tmp in iw.LangSegment.getTexts(text))  # type: ignore
+    if language in {'en', 'all_zh', 'all_ja', 'all_ko', 'all_yue'}:
+        language = language.replace('all_', '')
+        if language == 'en':
+            iw.LangSegment.setfilters(['en'])
+            formattext = ' '.join(tmp['text'] for tmp in iw.LangSegment.getTexts(text))  # type: ignore
         else:
             # 因无法区别中日韩文汉字,以用户输入为准
             formattext = text
-        while "  " in formattext:
-            formattext = formattext.replace("  ", " ")
-        if language == "zh":
-            if "<tone" in formattext:
-                phones, word2ph, norm_text = clean_text_inf(
-                    formattext, language, version
-                )
+        while '  ' in formattext:
+            formattext = formattext.replace('  ', ' ')
+        if language == 'zh':
+            if '<tone' in formattext:
+                phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
                 bert = iw.get_bert_feature(norm_text, word2ph).to(iw.device)
 
-            elif re.search(r"[A-Za-z]", formattext):
-                formattext = re.sub(r"[a-z]", lambda x: x.group(0).upper(), formattext)
+            elif re.search(r'[A-Za-z]', formattext):
+                formattext = re.sub(r'[a-z]', lambda x: x.group(0).upper(), formattext)
                 formattext = iw.chinese.mix_text_normalize(formattext)
-                return get_phones_and_bert(formattext, "zh", version)
+                return get_phones_and_bert(formattext, 'zh', version)
             else:
-                phones, word2ph, norm_text = clean_text_inf(
-                    formattext, language, version
-                )
+                phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
                 bert = iw.get_bert_feature(norm_text, word2ph).to(iw.device)
-        elif language == "yue" and re.search(r"[A-Za-z]", formattext):
-            formattext = re.sub(r"[a-z]", lambda x: x.group(0).upper(), formattext)
+        elif language == 'yue' and re.search(r'[A-Za-z]', formattext):
+            formattext = re.sub(r'[a-z]', lambda x: x.group(0).upper(), formattext)
             formattext = iw.chinese.mix_text_normalize(formattext)
-            return get_phones_and_bert(formattext, "yue", version)
+            return get_phones_and_bert(formattext, 'yue', version)
         else:
             phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
             bert = iw.torch.zeros(
                 (1024, len(phones)),
                 dtype=iw.torch.float16 if iw.is_half else iw.torch.float32,
             ).to(iw.device)
-    elif language in {"zh", "ja", "ko", "yue", "auto", "auto_yue"}:
+    elif language in {'zh', 'ja', 'ko', 'yue', 'auto', 'auto_yue'}:
         textlist = []
         langlist = []
-        iw.LangSegment.setfilters(["zh", "ja", "en", "ko"])
-        if language == "auto":
+        iw.LangSegment.setfilters(['zh', 'ja', 'en', 'ko'])
+        if language == 'auto':
             for tmp in iw.LangSegment.getTexts(text):
-                langlist.append(tmp["lang"])  # type: ignore
-                textlist.append(tmp["text"])  # type: ignore
-        elif language == "auto_yue":
+                langlist.append(tmp['lang'])  # type: ignore
+                textlist.append(tmp['text'])  # type: ignore
+        elif language == 'auto_yue':
             for tmp in iw.LangSegment.getTexts(text):
-                if tmp["lang"] == "zh":  # type: ignore
-                    tmp["lang"] = "yue"  # type: ignore
-                langlist.append(tmp["lang"])  # type: ignore
-                textlist.append(tmp["text"])  # type: ignore
+                if tmp['lang'] == 'zh':  # type: ignore
+                    tmp['lang'] = 'yue'  # type: ignore
+                langlist.append(tmp['lang'])  # type: ignore
+                textlist.append(tmp['text'])  # type: ignore
         else:
             for tmp in iw.LangSegment.getTexts(text):
-                if tmp["lang"] == "en":  # type: ignore
-                    langlist.append(tmp["lang"])  # type: ignore
+                if tmp['lang'] == 'en':  # type: ignore
+                    langlist.append(tmp['lang'])  # type: ignore
                 else:
                     # 因无法区别中日韩文汉字,以用户输入为准
                     langlist.append(language)
-                textlist.append(tmp["text"])  # type: ignore
+                textlist.append(tmp['text'])  # type: ignore
         print(textlist)
         print(langlist)
         phones_list = []
@@ -99,10 +94,10 @@ def get_phones_and_bert(text, language, version, final=False):
             bert_list.append(bert)
         bert = iw.torch.cat(bert_list, dim=1)
         phones = sum(phones_list, [])
-        norm_text = "".join(norm_text_list)
+        norm_text = ''.join(norm_text_list)
 
     if not final and len(phones) < 6:
-        return get_phones_and_bert("." + text, language, version, final=True)
+        return get_phones_and_bert('.' + text, language, version, final=True)
 
     return phones, bert.to(iw.dtype), norm_text
 
@@ -118,7 +113,7 @@ def find_custom_tone(text: str):
     tone_list = []
     txts = []
     # 识别 tone 标记，形如<tone as=shu4>数</tone>或<tone as=\"shu3\">数</tone>或<tone as=\"shù\">数</tone>
-    ptn1 = re.compile(r"<tone.*?>(.*?)</tone>")
+    ptn1 = re.compile(r'<tone.*?>(.*?)</tone>')
     # 清除 tone 标记中不需要的部分
     ptn2 = re.compile(r"(</?tone)|(as)|([>\"'\s=])")
     matches = list(re.finditer(ptn1, text))
@@ -132,8 +127,8 @@ def find_custom_tone(text: str):
         txts.append(tone_text)
         # 提取读音，支持识别 Style.TONE 和  Style.TONE3
         tone = match.group(0)
-        tone = re.sub(ptn2, "", tone)
-        tone = tone.replace(tone_text, "")
+        tone = re.sub(ptn2, '', tone)
+        tone = tone.replace(tone_text, '')
         # 多音字在当前文本中的索引位置
         pos = sum([len(s) for s in txts])
         offset = match.end()
@@ -144,8 +139,8 @@ def find_custom_tone(text: str):
     if offset < len(text):
         txts.append(text[offset:])
 
-    text = "".join(str(i) for i in txts)
-    text = text.replace(" ", "")  # 去除空格
+    text = ''.join(str(i) for i in txts)
+    text = text.replace(' ', '')  # 去除空格
     return text, tone_list
 
 
@@ -171,8 +166,8 @@ def replace_custom_words(text: str):
 
 
 def correct_initial_final(tone):
-    init = ""
-    final = ""
+    init = ''
+    final = ''
     if tone[0].isalpha():
         init = to_initials(tone)
         final = to_finals_tone3(tone, neutral_tone_with_five=True)
@@ -188,39 +183,39 @@ def correct_initial_final(tone):
         _tone = final[-1]
 
         pinyin = init + v_without_tone
-        assert _tone in "12345"
+        assert _tone in '12345'
 
         if init:
             # 多音节
             v_rep_map = {
-                "uei": "ui",
-                "iou": "iu",
-                "uen": "un",
+                'uei': 'ui',
+                'iou': 'iu',
+                'uen': 'un',
             }
             if v_without_tone in v_rep_map.keys():
                 pinyin = init + v_rep_map[v_without_tone]
         else:
             # 单音节
             pinyin_rep_map = {
-                "ing": "ying",
-                "i": "yi",
-                "in": "yin",
-                "u": "wu",
+                'ing': 'ying',
+                'i': 'yi',
+                'in': 'yin',
+                'u': 'wu',
             }
             if pinyin in pinyin_rep_map.keys():
                 pinyin = pinyin_rep_map[pinyin]
             else:
                 single_rep_map = {
-                    "v": "yu",
-                    "e": "e",
-                    "i": "y",
-                    "u": "w",
+                    'v': 'yu',
+                    'e': 'e',
+                    'i': 'y',
+                    'u': 'w',
                 }
                 if pinyin[0] in single_rep_map.keys():
                     pinyin = single_rep_map[pinyin[0]] + pinyin[1:]
 
         assert pinyin in pinyin_to_symbol_map.keys(), tone
-        new_init, new_final = pinyin_to_symbol_map[pinyin].split(" ")
+        new_init, new_final = pinyin_to_symbol_map[pinyin].split(' ')
         new_final = new_final + _tone
 
         return new_init, new_final
@@ -235,7 +230,7 @@ def revise_custom_tone(phones, word2ph, tone_data_list):
         init = td[1]
         final = td[2]
         pos = td[3]
-        if init == "" and final == "":
+        if init == '' and final == '':
             # 如果匹配拼音的时候失败，这里保持模型中默认提供的读音
             continue
 
@@ -246,7 +241,7 @@ def revise_custom_tone(phones, word2ph, tone_data_list):
         org_final = phones[wd_pos - 1]
         phones[wd_pos - 2] = init
         phones[wd_pos - 1] = final
-        print(f"[+]成功修改读音: {org_init}{org_final} => {tone}")
+        print(f'[+]成功修改读音: {org_init}{org_final} => {tone}')
 
 
 def clean_text_inf(text, language, version):
@@ -282,26 +277,24 @@ def save_audio(file_path, sampling_rate, audio_data):
 
 
 def load_ttschars(json_file: str):
-    with open(json_file, "r", encoding="utf-8") as f:
+    with open(json_file, 'r', encoding='utf-8') as f:
         tts_chars_dict_loaded = dict(json.load(f))
         for k in tts_chars_dict_loaded.keys():
-            tts_chars_dict_loaded[k]["feels"] = [
-                d.name for d in Path(rf"sample\{k}").iterdir() if d.is_dir()
-            ]
+            tts_chars_dict_loaded[k]['feels'] = [d.name for d in Path(rf'sample\{k}').iterdir() if d.is_dir()]
         return tts_chars_dict_loaded
 
 
-tts_chars_dict = load_ttschars(r"sample\tts_chars_dict.json")
+tts_chars_dict = load_ttschars(r'sample\tts_chars_dict.json')
 char_names = list(tts_chars_dict.keys())
 
 
 def change_char_ui(char_name):
     global current_feels
-    current_feels = tts_chars_dict[char_name]["feels"]
+    current_feels = tts_chars_dict[char_name]['feels']
 
-    return {"choices": char_names, "__type__": "update"}, {
-        "choices": current_feels,
-        "__type__": "update",
+    return {'choices': char_names, '__type__': 'update'}, {
+        'choices': current_feels,
+        '__type__': 'update',
     }
 
 
@@ -309,41 +302,39 @@ change_char_ui(char_names[0])
 
 
 def change_char(char_name):
-    load_gpt_path = tts_chars_dict[char_name]["gpt_path"]
+    load_gpt_path = tts_chars_dict[char_name]['gpt_path']
     if load_gpt_path:
-        gpt_path = f"GPT_weights_v2\\{load_gpt_path}"
+        gpt_path = f'GPT_weights_v2\\{load_gpt_path}'
     else:
-        gpt_path = r"GPT_SoVITS\pretrained_models\gsv-v2final-pretrained\s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt"
+        gpt_path = r'GPT_SoVITS\pretrained_models\gsv-v2final-pretrained\s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt'
     iw.change_gpt_weights(gpt_path)
 
-    load_sovits_path = tts_chars_dict[char_name]["sovist_path"]
+    load_sovits_path = tts_chars_dict[char_name]['sovist_path']
     if load_sovits_path:
-        sovits_path = f"SoVITS_weights_v2\\{load_sovits_path}"
+        sovits_path = f'SoVITS_weights_v2\\{load_sovits_path}'
     else:
-        sovits_path = (
-            r"GPT_SoVITS\pretrained_models\gsv-v2final-pretrained\s2G2333k.pth"
-        )
+        sovits_path = r'GPT_SoVITS\pretrained_models\gsv-v2final-pretrained\s2G2333k.pth'
     iw.change_sovits_weights(sovits_path)
 
-    iw.config["char_name"] = char_name
+    iw.config['char_name'] = char_name
 
 
 def detect_language(text):
     try:
         # 检测文本语言
         lang = detect(text)
-        if lang == "zh-cn":
-            return "中文"
-        elif lang == "en":
-            return "英文"
-        elif lang == "ja":
-            return "日文"
-        elif lang == "ko":
-            return "韩文"
+        if lang == 'zh-cn':
+            return '中文'
+        elif lang == 'en':
+            return '英文'
+        elif lang == 'ja':
+            return '日文'
+        elif lang == 'ko':
+            return '韩文'
         else:
-            return "中文"
+            return '中文'
     except Exception:
-        return "中文"
+        return '中文'
 
 
 # 附加参考音频，为了适应inference_webui中的格式
@@ -353,24 +344,24 @@ class RefsParam:
 
 
 def create_tts_params(char_name, feel):
-    sample_path = Path(rf"sample\{char_name}\{feel}")
-    sample_wav_files = list(sample_path.glob("*.wav"))
-    assert sample_wav_files, "参考音频不存在"
+    sample_path = Path(rf'sample\{char_name}\{feel}')
+    sample_wav_files = list(sample_path.glob('*.wav'))
+    assert sample_wav_files, '参考音频不存在'
 
     ref_wav_path = str(sample_wav_files[0])
     prompt_text = sample_wav_files[0].stem
     prompt_language = detect_language(prompt_text)
 
-    refs_path = sample_path / "refs"
-    inp_refs = [RefsParam(x) for x in refs_path.glob("*.wav")]
+    refs_path = sample_path / 'refs'
+    inp_refs = [RefsParam(x) for x in refs_path.glob('*.wav')]
     return ref_wav_path, prompt_text, prompt_language, inp_refs
 
 
 def extract_all_parts(text, charname, feel):
     # 定义正则表达式模式
-    pattern_full = r"(.*?)_(.*?)\|(.*)"
-    pattern_front = r"(.*?)_(.*)"
-    pattern_back = r"(.*?)\|(.*)"
+    pattern_full = r'(.*?)_(.*?)\|(.*)'
+    pattern_front = r'(.*?)_(.*)'
+    pattern_back = r'(.*?)\|(.*)'
 
     # 使用正则表达式进行匹配
     match_full = re.search(pattern_full, text)
@@ -402,7 +393,7 @@ def get_tts(
     feel,
     text,
     text_language,
-    how_to_cut=iw.i18n("按中文句号。切"),
+    how_to_cut=iw.i18n('按中文句号。切'),
     top_k=20,
     top_p=0.6,
     temperature=0.6,
@@ -414,13 +405,13 @@ def get_tts(
     ref_text_free = False
 
     # 输出结果另外保存
-    out_dir = Path("TEMP\\_output")
+    out_dir = Path('TEMP\\_output')
     if not out_dir.exists():
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    save_path = str(out_dir / f"{char_name}_{sanitize_filename(text[:30])}.wav")
+    save_path = str(out_dir / f'{char_name}_{sanitize_filename(text[:30])}.wav')
 
-    if iw.config.get("char_name", None) is None:
+    if iw.config.get('char_name', None) is None:
         change_char(char_name)
 
     if if_single:
@@ -435,26 +426,20 @@ def get_tts(
                     dtype=np.float16 if iw.is_half is True else np.float32,
                 )
                 combined_audio = np.concatenate((combined_audio, zero_wav))
-                print(f"空行添加{blank_ms}ms间隔")
+                print(f'空行添加{blank_ms}ms间隔')
                 continue
 
-            sub_char_name, sub_feel, left_text = extract_all_parts(
-                sub_text, char_name, feel
-            )
+            sub_char_name, sub_feel, left_text = extract_all_parts(sub_text, char_name, feel)
 
-            model_charname = iw.config.get("char_name", None)
-            assert model_charname, "模型角色未设置"
+            model_charname = iw.config.get('char_name', None)
+            assert model_charname, '模型角色未设置'
 
             if sub_char_name != model_charname:
                 change_char(sub_char_name)
-                ref_wav_path, prompt_text, prompt_language, inp_refs = (
-                    create_tts_params(sub_char_name, sub_feel)
-                )
+                ref_wav_path, prompt_text, prompt_language, inp_refs = create_tts_params(sub_char_name, sub_feel)
 
             else:
-                ref_wav_path, prompt_text, prompt_language, inp_refs = (
-                    create_tts_params(char_name, sub_feel)
-                )
+                ref_wav_path, prompt_text, prompt_language, inp_refs = create_tts_params(char_name, sub_feel)
 
             for sr, audio in iw.get_tts_wav(
                 ref_wav_path,
@@ -481,13 +466,11 @@ def get_tts(
         )
 
     else:
-        model_charname = iw.config["train"]["exp_name"]
+        model_charname = iw.config['train']['exp_name']
         if char_name != model_charname:
             change_char(char_name)
 
-        ref_wav_path, prompt_text, prompt_language, inp_refs = create_tts_params(
-            char_name, feel
-        )
+        ref_wav_path, prompt_text, prompt_language, inp_refs = create_tts_params(char_name, feel)
         for sr, audio_data in iw.get_tts_wav(
             ref_wav_path,
             prompt_text,
@@ -507,19 +490,19 @@ def get_tts(
 
 
 def ui():
-    with iw.gr.Blocks(title="GPT-SoVITS WebUI") as app:
+    with iw.gr.Blocks(title='GPT-SoVITS WebUI') as app:
         with iw.gr.Group():
-            iw.gr.Markdown(iw.i18n("角色选择"))
+            iw.gr.Markdown(iw.i18n('角色选择'))
             with iw.gr.Row():
                 chars_dropdown = iw.gr.Dropdown(
-                    label=iw.i18n("角色列表"),
+                    label=iw.i18n('角色列表'),
                     choices=char_names,
                     value=char_names[0],
                     interactive=True,
                     scale=14,
                 )
                 feel_dropdown = iw.gr.Dropdown(
-                    label=iw.i18n("情绪选择"),
+                    label=iw.i18n('情绪选择'),
                     choices=current_feels,
                     value=current_feels[0],
                     interactive=True,
@@ -529,31 +512,30 @@ def ui():
             with iw.gr.Row():
                 with iw.gr.Column(scale=13):
                     text = iw.gr.Textbox(
-                        label=iw.i18n("需要合成的文本"),
-                        value="",
+                        label=iw.i18n('需要合成的文本'),
+                        value='',
                         lines=34,
                         max_lines=34,
                     )
-                    output = iw.gr.Audio(label=iw.i18n("输出的语音"), scale=14)
+                    output = iw.gr.Audio(label=iw.i18n('输出的语音'), scale=14)
                 with iw.gr.Column(scale=7):
                     text_language = iw.gr.Dropdown(
-                        label=iw.i18n("需要合成的语种")
-                        + iw.i18n(".限制范围越小判别效果越好。"),
+                        label=iw.i18n('需要合成的语种') + iw.i18n('.限制范围越小判别效果越好。'),
                         choices=list(iw.dict_language.keys()),
-                        value=iw.i18n("中文"),
+                        value=iw.i18n('中文'),
                         scale=1,
                     )
                     how_to_cut = iw.gr.Dropdown(
-                        label=iw.i18n("怎么切"),
+                        label=iw.i18n('怎么切'),
                         choices=[
-                            iw.i18n("不切"),
-                            iw.i18n("凑四句一切"),
-                            iw.i18n("凑50字一切"),
-                            iw.i18n("按中文句号。切"),
-                            iw.i18n("按英文句号.切"),
-                            iw.i18n("按标点符号切"),
+                            iw.i18n('不切'),
+                            iw.i18n('凑四句一切'),
+                            iw.i18n('凑50字一切'),
+                            iw.i18n('按中文句号。切'),
+                            iw.i18n('按英文句号.切'),
+                            iw.i18n('按标点符号切'),
                         ],
-                        value=iw.i18n("按中文句号。切"),
+                        value=iw.i18n('按中文句号。切'),
                         interactive=True,
                         scale=1,
                     )
@@ -561,17 +543,15 @@ def ui():
                         minimum=0,
                         maximum=10000,
                         step=100,
-                        label=iw.i18n("停顿"),
+                        label=iw.i18n('停顿'),
                         value=300,
                         interactive=True,
                         scale=1,
                     )
 
-                    iw.gr.Markdown(value=iw.html_center(iw.i18n("语速调整，高为更快")))
+                    iw.gr.Markdown(value=iw.html_center(iw.i18n('语速调整，高为更快')))
                     if_freeze = iw.gr.Checkbox(
-                        label=iw.i18n(
-                            "是否直接对上次合成结果调整语速和音色。防止随机性。"
-                        ),
+                        label=iw.i18n('是否直接对上次合成结果调整语速和音色。防止随机性。'),
                         value=False,
                         interactive=True,
                         show_label=True,
@@ -581,21 +561,17 @@ def ui():
                         minimum=0.6,
                         maximum=1.65,
                         step=0.01,
-                        label=iw.i18n("语速"),
+                        label=iw.i18n('语速'),
                         value=1,
                         interactive=True,
                         scale=1,
                     )
-                    iw.gr.Markdown(
-                        iw.html_center(
-                            iw.i18n("GPT采样参数(无参考文本时不要太低。不懂就用默认)：")
-                        )
-                    )
+                    iw.gr.Markdown(iw.html_center(iw.i18n('GPT采样参数(无参考文本时不要太低。不懂就用默认)：')))
                     top_k = iw.gr.Slider(
                         minimum=1,
                         maximum=100,
                         step=1,
-                        label=iw.i18n("top_k"),
+                        label=iw.i18n('top_k'),
                         value=15,
                         interactive=True,
                         scale=1,
@@ -604,7 +580,7 @@ def ui():
                         minimum=0,
                         maximum=1,
                         step=0.05,
-                        label=iw.i18n("top_p"),
+                        label=iw.i18n('top_p'),
                         value=1,
                         interactive=True,
                         scale=1,
@@ -613,24 +589,22 @@ def ui():
                         minimum=0,
                         maximum=1,
                         step=0.05,
-                        label=iw.i18n("temperature"),
+                        label=iw.i18n('temperature'),
                         value=1,
                         interactive=True,
                         scale=1,
                     )
 
-                    iw.gr.Markdown(value=iw.html_center(iw.i18n("情感标签")))
+                    iw.gr.Markdown(value=iw.html_center(iw.i18n('情感标签')))
                     if_single = iw.gr.Checkbox(
-                        label=iw.i18n("是否启用情感标签(格式: 情绪|文本内容)"),
+                        label=iw.i18n('是否启用情感标签(格式: 情绪|文本内容)'),
                         value=True,
                         interactive=True,
                         show_label=True,
                         scale=1,
                     )
 
-                    inference_button = iw.gr.Button(
-                        iw.i18n("合成语音"), variant="primary", size="lg", scale=2
-                    )
+                    inference_button = iw.gr.Button(iw.i18n('合成语音'), variant='primary', size='lg', scale=2)
 
             inference_button.click(
                 get_tts,
@@ -657,7 +631,7 @@ def ui():
             )
 
     app.queue().launch(
-        server_name="0.0.0.0",
+        server_name='0.0.0.0',
         inbrowser=True,
         share=iw.is_share,
         server_port=iw.infer_ttswebui,
@@ -665,5 +639,5 @@ def ui():
     )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     ui()

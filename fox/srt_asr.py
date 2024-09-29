@@ -48,8 +48,8 @@ system = platform.system()
 
 
 def kill_process(pid):
-    if system == "Windows":
-        cmd = "taskkill /t /f /pid %s" % pid
+    if system == 'Windows':
+        cmd = 'taskkill /t /f /pid %s' % pid
         os.system(cmd)
     else:
         kill_proc_tree(pid)
@@ -59,20 +59,17 @@ def change_label(if_label, path_list):
     global p_label
     if if_label is True and p_label is None:
         path_list = my_utils.clean_path(path_list)
-        cmd = (
-            '"%s" tools/subfix_webui.py --load_list "%s" --webui_port %s --is_share %s'
-            % (python_exec, path_list, webui_port_subfix, is_share)
-        )
-        yield i18n("打标工具WebUI已开启")
+        cmd = '"%s" tools/subfix_webui.py --load_list "%s" --webui_port %s --is_share %s' % (python_exec, path_list, webui_port_subfix, is_share)
+        yield i18n('打标工具WebUI已开启')
         print(cmd)
         p_label = Popen(cmd, shell=True)
     elif if_label is False and p_label is not None:
         kill_process(p_label.pid)
         p_label = None
-        yield i18n("打标工具WebUI已关闭")
+        yield i18n('打标工具WebUI已关闭')
 
 
-def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir, languate="ZH"):
+def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir, languate='ZH'):
     # temp_path = Path(tempfile.mkdtemp(dir='TEMP'))
     raw_audio = my_utils.clean_path(raw_audio)
     input_srt = my_utils.clean_path(input_srt)
@@ -83,8 +80,8 @@ def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir, languate
     subs = pysrt.open(input_srt)
 
     output_path = Path(output_dir)
-    asr_list_file = output_path / "raw_cut.list"
-    raw_cut_path = output_path / "raw_cut"
+    asr_list_file = output_path / 'raw_cut.list'
+    raw_cut_path = output_path / 'raw_cut'
     raw_cut_path.mkdir(exist_ok=True)
 
     asr_list = []
@@ -97,23 +94,21 @@ def asr_cut(raw_audio, input_srt, min_seconds, max_seconds, output_dir, languate
         text = sub.text
         # 从音频中提取对应的片段
         if end - start < min_seconds * 1000 or end - start > max_seconds * 1000:
-            tqdm.write(f"skip:{text}")
+            tqdm.write(f'skip:{text}')
             continue
 
         sub_wav = main_audio[start:end]
-        sub_wav_fname = raw_cut_path / f"{prefix_text}_{i:09d}.wav"
+        sub_wav_fname = raw_cut_path / f'{prefix_text}_{i:09d}.wav'
 
-        asr_list.append(
-            f"{sub_wav_fname}|{raw_cut_path.stem}|{languate.upper()}|{text}"
-        )
+        asr_list.append(f'{sub_wav_fname}|{raw_cut_path.stem}|{languate.upper()}|{text}')
 
-        sub_wav.export(sub_wav_fname, format="wav")
+        sub_wav.export(sub_wav_fname, format='wav')
 
-    with open(asr_list_file, "w", encoding="utf8") as f:
+    with open(asr_list_file, 'w', encoding='utf8') as f:
         for i in asr_list:
-            f.write(i + "\n")
+            f.write(i + '\n')
 
-    return "切分"
+    return '切分'
 
 
 def format_timedelta(td):
@@ -121,7 +116,7 @@ def format_timedelta(td):
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     milliseconds = td.microseconds // 1000
-    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
+    return f'{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}'
 
 
 def merge_audio_with_subtitles(txt_file_path, output_dir):
@@ -131,17 +126,17 @@ def merge_audio_with_subtitles(txt_file_path, output_dir):
     output_dir = my_utils.clean_path(output_dir)
 
     # 读取txt文件内容
-    with open(txt_file_path, "r", encoding="utf-8") as file:
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
         lines = file.readlines()
 
     # 解析txt内容
-    files_and_texts = [line.strip().split("|") for line in lines]
+    files_and_texts = [line.strip().split('|') for line in lines]
 
     name = files_and_texts[0][1]
 
-    output_audio_path = os.path.join(output_dir, f"{name}.wav")
+    output_audio_path = os.path.join(output_dir, f'{name}.wav')
 
-    output_srt_path = os.path.join(output_dir, f"{name}.srt")
+    output_srt_path = os.path.join(output_dir, f'{name}.srt')
 
     # 创建srt文件内容的列表
     srt_content = []
@@ -166,9 +161,9 @@ def merge_audio_with_subtitles(txt_file_path, output_dir):
         # 创建srt条目
         start_str = format_timedelta(start_time)
         end_str = format_timedelta(end_time)
-        srt_entry = f"{index + 1}\n{start_str} --> {end_str}\n{text}\n"
+        srt_entry = f'{index + 1}\n{start_str} --> {end_str}\n{text}\n'
         srt_content.append(srt_entry)
-        srt_content.append("\n")
+        srt_content.append('\n')
         print(srt_entry)
 
         # 更新起始时间：加上当前音频时长和500毫秒静音
@@ -176,21 +171,21 @@ def merge_audio_with_subtitles(txt_file_path, output_dir):
         combined_audio += silence
 
     # 保存合并后的音频文件
-    combined_audio.export(output_audio_path, format="wav")
+    combined_audio.export(output_audio_path, format='wav')
 
     # 保存srt文件
-    with open(output_srt_path, "w", encoding="utf-8") as srt_file:
+    with open(output_srt_path, 'w', encoding='utf-8') as srt_file:
         srt_file.writelines(srt_content)
 
     yield gr.update(visible=True, interactive=True)
 
 
 def main():
-    with gr.Blocks(title="字幕切分工具") as app:
-        gr.Markdown(value="根据srt字幕进行音频切分，过滤指定长度")
+    with gr.Blocks(title='字幕切分工具') as app:
+        gr.Markdown(value='根据srt字幕进行音频切分，过滤指定长度')
         with gr.Row():
-            raw_audio = gr.Textbox(label="音频")
-            input_srt = gr.Textbox(label="srt文件")
+            raw_audio = gr.Textbox(label='音频')
+            input_srt = gr.Textbox(label='srt文件')
 
         with gr.Row():
             with gr.Column():
@@ -198,7 +193,7 @@ def main():
                     minimum=1,
                     maximum=40,
                     step=1,
-                    label="最小秒数",
+                    label='最小秒数',
                     value=3,
                     interactive=True,
                 )
@@ -206,17 +201,17 @@ def main():
                     minimum=1,
                     maximum=40,
                     step=1,
-                    label="最大秒数",
+                    label='最大秒数',
                     value=10,
                     interactive=True,
                 )
             output_dir = gr.Textbox(
-                label="*生成音频保存位置",
-                value=r"D:\aisound\temp",
+                label='*生成音频保存位置',
+                value=r'D:\aisound\temp',
                 interactive=True,
                 scale=4,
             )
-            run_button = gr.Button("切分", variant="primary", scale=1)
+            run_button = gr.Button('切分', variant='primary', scale=1)
 
         run_button.click(
             asr_cut,
@@ -224,31 +219,31 @@ def main():
             [run_button],
         )
 
-        gr.Markdown(value=i18n("语音文本校对标注工具"))
+        gr.Markdown(value=i18n('语音文本校对标注工具'))
         with gr.Row():
-            if_label = gr.Checkbox(label=i18n("是否开启打标WebUI"), show_label=True)
+            if_label = gr.Checkbox(label=i18n('是否开启打标WebUI'), show_label=True)
             path_list = gr.Textbox(
-                label=i18n(".list标注文件的路径"),
-                value=r"D:\aisound\sound_data\简一\raw_cut.list",
+                label=i18n('.list标注文件的路径'),
+                value=r'D:\aisound\sound_data\简一\raw_cut.list',
                 interactive=True,
             )
-            label_info = gr.Textbox(label=i18n("打标工具进程输出信息"))
+            label_info = gr.Textbox(label=i18n('打标工具进程输出信息'))
         if_label.change(change_label, [if_label, path_list], [label_info])
 
-        gr.Markdown(value=i18n("合并标注文件音频，并转为srt"))
+        gr.Markdown(value=i18n('合并标注文件音频，并转为srt'))
         with gr.Row():
             asr_file = gr.Textbox(
-                label="srt文件",
-                value=r"D:\aisound\sound_data\简一\raw_cut.list",
+                label='srt文件',
+                value=r'D:\aisound\sound_data\简一\raw_cut.list',
                 scale=4,
             )
             asr_wavsrt_output_dir = gr.Textbox(
-                label="*生成音频和srt保存位置",
-                value=r"D:\aisound\temp",
+                label='*生成音频和srt保存位置',
+                value=r'D:\aisound\temp',
                 interactive=True,
                 scale=4,
             )
-            trans_button = gr.Button("切分", variant="primary", scale=1)
+            trans_button = gr.Button('切分', variant='primary', scale=1)
 
         trans_button.click(
             merge_audio_with_subtitles,
@@ -257,7 +252,7 @@ def main():
         )
 
     app.queue().launch(
-        server_name="0.0.0.0",
+        server_name='0.0.0.0',
         inbrowser=True,
         server_port=9889,
         quiet=True,
@@ -265,5 +260,5 @@ def main():
 
 
 # 使用示例
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
