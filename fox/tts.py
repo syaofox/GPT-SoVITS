@@ -479,6 +479,10 @@ def get_tts(
         parallel_infer = True
         repetition_penalty = 1.35
         batch_size = 20
+        top_k = 5
+        top_p = 1
+        temperature = 1
+
         for item, actual_seed in iwf.inference(
             text, text_language, ref_wav_path, inp_refs, prompt_text, prompt_language, top_k, top_p, temperature, how_to_cut, batch_size, speed, ref_text_free, split_bucket, fragment_interval, seed, keep_random, parallel_infer, repetition_penalty
         ):
