@@ -14,6 +14,7 @@ from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
 from scipy.io import wavfile
 
 from GPT_SoVITS import inference_webui as iw
+from GPT_SoVITS import inference_webui_fast as iwf
 from GPT_SoVITS.text.chinese2 import pinyin_to_symbol_map
 from GPT_SoVITS.text.symbols import punctuation
 
@@ -400,6 +401,7 @@ def get_tts(
     speed=1,
     if_freeze=False,
     if_single=True,
+    if_fast=False,
     blank_ms=300,
 ):
     ref_text_free = False
@@ -464,7 +466,27 @@ def get_tts(
             target_sample_rate,
             normalize_audio(save_path, target_sample_rate, combined_audio),
         )
+    elif if_fast:
+        model_charname = iw.config['train']['exp_name']
+        if char_name != model_charname:
+            change_char(char_name)
+        ref_wav_path, prompt_text, prompt_language, inp_refs = create_tts_params(char_name, feel)
 
+        split_bucket = True
+        fragment_interval = 0.3
+        seed = -1
+        keep_random = True
+        parallel_infer = True
+        repetition_penalty = 1.35
+        batch_size = 20
+        for item, actual_seed in iwf.inference(
+            text, text_language, ref_wav_path, inp_refs, prompt_text, prompt_language, top_k, top_p, temperature, how_to_cut, batch_size, speed, ref_text_free, split_bucket, fragment_interval, seed, keep_random, parallel_infer, repetition_penalty
+        ):
+            if isinstance(item, tuple) and len(item) == 2:
+                sr, audio_data = item
+                yield sr, normalize_audio(save_path, sr, audio_data)
+            else:
+                print(f'Unexpected item format in fast inference: {item}')
     else:
         model_charname = iw.config['train']['exp_name']
         if char_name != model_charname:
@@ -598,7 +620,14 @@ def ui():
                     iw.gr.Markdown(value=iw.html_center(iw.i18n('情感标签')))
                     if_single = iw.gr.Checkbox(
                         label=iw.i18n('是否启用情感标签(格式: 情绪|文本内容)'),
-                        value=True,
+                        value=False,
+                        interactive=True,
+                        show_label=True,
+                        scale=1,
+                    )
+                    if_fast = iw.gr.Checkbox(
+                        label=iw.i18n('是否启用快速合成'),
+                        value=False,
                         interactive=True,
                         show_label=True,
                         scale=1,
@@ -620,6 +649,7 @@ def ui():
                     speed,
                     if_freeze,
                     if_single,
+                    if_fast,
                     blank_ms,
                 ],
                 [output],
