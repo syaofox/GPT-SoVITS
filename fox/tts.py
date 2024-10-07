@@ -285,6 +285,12 @@ def load_ttschars(json_file: str):
         return tts_chars_dict_loaded
 
 
+def refresh_feels(char_name):
+    global tts_chars_dict
+    tts_chars_dict[char_name]['feels'] = [d.name for d in Path(rf'sample\{char_name}').iterdir() if d.is_dir()]
+    return {'choices': tts_chars_dict[char_name]['feels'], '__type__': 'update'}
+
+
 tts_chars_dict = load_ttschars(r'sample\tts_chars_dict.json')
 char_names = list(tts_chars_dict.keys())
 
@@ -534,6 +540,7 @@ def ui():
                     interactive=True,
                     scale=14,
                 )
+                refresh_button = iw.gr.Button("刷新情绪列表")
 
             with iw.gr.Row():
                 with iw.gr.Column(scale=13):
@@ -592,7 +599,7 @@ def ui():
                         interactive=True,
                         scale=1,
                     )
-                    iw.gr.Markdown(iw.html_center(iw.i18n('GPT采样参数(无参考文本时不要太低。不懂就用默认)：')))
+                    iw.gr.Markdown(value=iw.html_center(iw.i18n('GPT采样参数(无参考文本时不要太低。不懂就用默认)：')))
                     top_k = iw.gr.Slider(
                         minimum=1,
                         maximum=100,
@@ -663,6 +670,8 @@ def ui():
                 [chars_dropdown],
                 outputs=[chars_dropdown, feel_dropdown],
             )
+
+            refresh_button.click(refresh_feels, chars_dropdown, feel_dropdown)
 
     app.queue().launch(
         server_name='0.0.0.0',
