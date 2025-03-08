@@ -99,18 +99,51 @@ def list_roles() -> list[str]:
     return roles
 
 
-def get_emotions(role: str) -> list[str]:
-    """获取指定角色的所有可用情绪"""
+def get_emotions(role: str = "") -> list[str]:
+    """获取情绪列表，使用固定的情绪选项"""
+    # 固定的情绪选项
+    default_emotions = [
+        "平静",
+        "开心",
+        "愤怒",
+        "尖叫",
+        "低语",
+        "撒娇",
+        "舒服",
+        "疑问",
+        "嘲讽",
+        "悲伤",
+    ]
+
+    if not role:
+        return default_emotions
+
+    # 读取角色配置
     role_path = Path("configs/roles") / f"{role}.json"
     if not role_path.exists():
-        return []
+        return default_emotions
 
     with open(role_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
     if "emotions" not in config:
-        return []
-    return sorted(config["emotions"].keys())
+        return default_emotions
+
+    # 检查角色配置中的情绪是否都在默认情绪列表中
+    # 如果有缺失的情绪，使用配置中的第一个情绪填充
+    emotions = config["emotions"]
+    first_emotion = next(iter(emotions.keys()))
+
+    result_emotions = []
+    for emotion in default_emotions:
+        if emotion in emotions:
+            result_emotions.append(emotion)
+        else:
+            # 使用第一个情绪的配置
+            emotions[emotion] = emotions[first_emotion].copy()
+            result_emotions.append(emotion)
+
+    return result_emotions
 
 
 def get_role_config(role: str, emotion: str = "") -> dict:
@@ -387,17 +420,26 @@ def process_file(
     )
 
 
-def update_emotions(role: str) -> dict:
-    """更新情绪选项"""
+def update_multiline_emotions(role: str) -> dict:
+    """更新多行文本模式的情绪选项"""
     emotions = get_emotions(role)
-    # 修改返回值，添加空字符串选项，并确保有默认值
-    if emotions:
-        choices = [""] + emotions  # 添加空选项
-        return {
-            "choices": choices,
-            "value": "",  # 默认选择空选项
-        }
-    return {"choices": [""], "value": ""}
+    # 多行文本模式需要空选项
+    choices = [("", "")] + [(e, e) for e in emotions]
+    return {
+        "choices": choices,
+        "value": "",  # 默认选择空选项
+    }
+
+
+def update_singleline_emotions(role: str) -> dict:
+    """更新单行文本模式的情绪选项"""
+    emotions = get_emotions(role)
+    # 单行文本模式不需要空选项
+    choices = [(e, e) for e in emotions]
+    return {
+        "choices": choices,
+        "value": emotions[0] if emotions else None,  # 默认选择第一个情绪
+    }
 
 
 # UI部分
@@ -428,25 +470,22 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
 
             default_role = gr.Dropdown(
                 label="默认角色（必选）",
-                choices=[(role, role) for role in roles],  # 修改为元组列表
+                choices=[(role, role) for role in roles],
                 value=roles[0] if roles else None,
                 type="value",
             )
             force_role = gr.Dropdown(
                 label="强制使用角色（可选）",
-                choices=[("", "")] + [(role, role) for role in roles],  # 修改为元组列表
-                value="",
+                choices=[("", "")] + [(role, role) for role in roles],
+                value=("", ""),
                 type="value",
             )
-            # 修改初始化
+            # 修改多行文本标签页的情绪下拉列表初始化
             initial_emotions = get_emotions(roles[0]) if roles else []
             force_emotion = gr.Dropdown(
                 label="强制使用情绪（可选）",
-                choices=[("", "")]
-                + [
-                    (emotion, emotion) for emotion in initial_emotions
-                ],  # 修改为元组列表
-                value="",
+                choices=[("", "")] + [(e, e) for e in initial_emotions],
+                value=("", ""),  # 默认选择空选项
                 type="value",
             )
 
@@ -466,7 +505,12 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
             outputs=file_output,
         )
 
-        force_role.change(update_emotions, inputs=[force_role], outputs=[force_emotion])
+        # 多行文本模式更新情绪列表
+        force_role.change(
+            update_multiline_emotions,
+            inputs=[force_role],
+            outputs=[force_emotion],
+        )
 
     with gr.Tab("单条文本"):
         with gr.Row():
@@ -479,16 +523,14 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
             roles = list_roles()
             role = gr.Dropdown(
                 label="选择角色",
-                choices=[(role, role) for role in roles],  # 修改为元组列表
+                choices=[(role, role) for role in roles],
                 value=roles[0] if roles else None,
             )
-            # 修改初始化
+            # 初始化情绪列表
             initial_emotions = get_emotions(roles[0]) if roles else []
             emotion = gr.Dropdown(
                 label="选择情绪",
-                choices=[
-                    (emotion, emotion) for emotion in initial_emotions
-                ],  # 修改为元组列表
+                choices=[(e, e) for e in initial_emotions],
                 value=initial_emotions[0] if initial_emotions else None,
             )
 
@@ -499,7 +541,12 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
             outputs=audio_output,
         )
 
-        role.change(update_emotions, inputs=[role], outputs=[emotion])
+        # 单行文本模式更新情绪列表
+        role.change(
+            update_singleline_emotions,
+            inputs=[role],
+            outputs=[emotion],
+        )
 
     gr.Markdown("""
     ## 使用说明
