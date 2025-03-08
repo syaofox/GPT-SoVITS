@@ -21,6 +21,21 @@ g_config = Config()
 # API配置
 API_URL = "http://127.0.0.1:9880"  # 默认API地址
 
+# 修改语言选项常量
+LANGUAGE_OPTIONS = [
+    ("中文", "中文"),
+    ("英文", "英文"),
+    ("日文", "日文"),
+    ("粤语", "粤语"),
+    ("韩文", "韩文"),
+    ("中英混合", "中英混合"),
+    ("日英混合", "日英混合"),
+    ("粤英混合", "粤英混合"),
+    ("韩英混合", "韩英混合"),
+    ("多语种混合", "多语种混合"),
+    ("多语种混合(粤语)", "多语种混合(粤语)"),
+]
+
 
 def get_model_paths_from_role(role: str) -> Tuple[str, str]:
     """从角色配置文件中获取模型路径"""
@@ -146,7 +161,7 @@ def get_emotions(role: str = "") -> list[str]:
     return result_emotions
 
 
-def get_role_config(role: str, emotion: str = "") -> dict:
+def get_role_config(role: str, emotion: str = "", text_lang: str = "中文") -> dict:
     """获取角色配置"""
     role_path = Path("configs/roles") / f"{role}.json"
     if not role_path.exists():
@@ -179,7 +194,6 @@ def get_role_config(role: str, emotion: str = "") -> dict:
 
     # 确保必要的字段存在
     result_config.setdefault("prompt_lang", "zh")
-    result_config.setdefault("text_lang", "zh")
     result_config.setdefault("speed", 1.0)
     result_config.setdefault("top_k", 15)
     result_config.setdefault("top_p", 1.0)
@@ -192,6 +206,13 @@ def get_role_config(role: str, emotion: str = "") -> dict:
         raise ValueError(f"角色 {role} 的情绪 {emotion} 配置缺少参考音频路径")
     if not os.path.exists(result_config["ref_audio"]):
         raise ValueError(f"找不到参考音频文件: {result_config['ref_audio']}")
+
+    # 删除从配置文件读取的语言设置
+    if "text_lang" in result_config:
+        del result_config["text_lang"]
+
+    # 使用界面传入的语言设置
+    result_config["text_lang"] = text_lang
 
     return result_config
 
@@ -313,7 +334,11 @@ def parse_line(line: str) -> tuple[str, str, str]:
 
 
 def process_text(
-    text: str, role: str, emotion: str = "", output_dir: str = "output"
+    text: str,
+    role: str,
+    emotion: str = "",
+    text_lang: str = "中文",
+    output_dir: str = "output",
 ) -> str:
     """处理单条文本"""
     os.makedirs(output_dir, exist_ok=True)
@@ -325,7 +350,7 @@ def process_text(
         # 确保使用正确的模型
         init_models(role)
 
-        role_config = get_role_config(role, emotion)
+        role_config = get_role_config(role, emotion, text_lang)
         audio_data = call_api(text, role_config, role)
 
         with open(output_path, "wb") as f:
@@ -341,6 +366,7 @@ def process_text_content(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
+    text_lang: str = "中文",
     output_dir: str = "output",
 ) -> str:
     """处理文本内容"""
@@ -357,7 +383,7 @@ def process_text_content(
             role_name, emotion, text = parse_line(line)
 
             # 使用强制角色（如果指定）或原始解析的角色或默认角色
-            if force_role:
+            if force_role and force_role != "" and force_role != "无":  # 修改判断条件
                 role_name = force_role
             elif not role_name:  # 如果没有指定角色，使用默认角色
                 role_name = default_role
@@ -367,12 +393,14 @@ def process_text_content(
 
             # 如果角色改变，需要重新初始化模型
             if role_name != current_role:
-                print(f"切换到角色: {role_name}")  # 添加调试信息
+                print(f"切换到角色: {role_name}")
                 init_models(role_name)
                 current_role = role_name
 
             # 使用强制情绪（如果指定）或原始解析的情绪
-            if force_emotion:
+            if (
+                force_emotion and force_emotion != "" and force_emotion != "无"
+            ):  # 修改判断条件
                 emotion = force_emotion
 
             if not text:  # 空行
@@ -380,7 +408,7 @@ def process_text_content(
 
             try:
                 # 获取配置并调用API
-                role_config = get_role_config(role_name, emotion)
+                role_config = get_role_config(role_name, emotion, text_lang)
                 audio_data = call_api(text, role_config, role_name)
                 audio_segments.append(audio_data)
             except Exception as e:
@@ -406,6 +434,7 @@ def process_file(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
+    text_lang: str = "中文",
     output_dir: str = "output",
 ) -> str:
     """处理文本文件"""
@@ -416,7 +445,7 @@ def process_file(
         text_content = f.read()
 
     return process_text_content(
-        text_content, force_role, default_role, force_emotion, output_dir
+        text_content, force_role, default_role, force_emotion, text_lang, output_dir
     )
 
 
@@ -424,7 +453,7 @@ def update_multiline_emotions(role: str) -> dict:
     """更新多行文本模式的情绪选项"""
     emotions = get_emotions(role)
     # 多行文本模式需要空选项
-    choices = [("", "")] + [(e, e) for e in emotions]
+    choices = [("", "无")] + [(e, e) for e in emotions]
     return {
         "choices": choices,
         "value": "",  # 默认选择空选项
@@ -476,16 +505,22 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
             )
             force_role = gr.Dropdown(
                 label="强制使用角色（可选）",
-                choices=[("", "")] + [(role, role) for role in roles],
-                value=("", ""),
+                choices=[("", "无")] + [(role, role) for role in roles],
+                value="",  # 修改为字符串值
                 type="value",
             )
             # 修改多行文本标签页的情绪下拉列表初始化
             initial_emotions = get_emotions(roles[0]) if roles else []
             force_emotion = gr.Dropdown(
                 label="强制使用情绪（可选）",
-                choices=[("", "")] + [(e, e) for e in initial_emotions],
-                value=("", ""),  # 默认选择空选项
+                choices=[("", "无")] + [(e, e) for e in initial_emotions],
+                value="",  # 修改为字符串值
+                type="value",
+            )
+            text_lang = gr.Dropdown(
+                label="文本语言",
+                choices=LANGUAGE_OPTIONS,
+                value="中文",
                 type="value",
             )
 
@@ -495,13 +530,13 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
 
         process_text_btn.click(
             process_text_content,
-            inputs=[text_content, force_role, default_role, force_emotion],
+            inputs=[text_content, force_role, default_role, force_emotion, text_lang],
             outputs=file_output,
         )
 
         process_file_btn.click(
             process_file,
-            inputs=[file_input, force_role, default_role, force_emotion],
+            inputs=[file_input, force_role, default_role, force_emotion, text_lang],
             outputs=file_output,
         )
 
@@ -533,11 +568,17 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 choices=[(e, e) for e in initial_emotions],
                 value=initial_emotions[0] if initial_emotions else None,
             )
+            text_lang = gr.Dropdown(
+                label="文本语言",
+                choices=LANGUAGE_OPTIONS,
+                value="中文",
+                type="value",
+            )
 
         convert_btn = gr.Button("转换")
         convert_btn.click(
             process_text,
-            inputs=[text_input, role, emotion],
+            inputs=[text_input, role, emotion, text_lang],
             outputs=audio_output,
         )
 
