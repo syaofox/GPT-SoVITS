@@ -280,7 +280,7 @@ def parse_line(line: str) -> tuple[str, str, str]:
 
 
 def process_text(
-    text: str, role: str, emotion: str = "", output_dir: str = "outputs"
+    text: str, role: str, emotion: str = "", output_dir: str = "output"
 ) -> str:
     """处理单条文本"""
     os.makedirs(output_dir, exist_ok=True)
@@ -308,7 +308,7 @@ def process_text_content(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
-    output_dir: str = "outputs",
+    output_dir: str = "output",
 ) -> str:
     """处理文本内容"""
     os.makedirs(output_dir, exist_ok=True)
@@ -373,7 +373,7 @@ def process_file(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
-    output_dir: str = "outputs",
+    output_dir: str = "output",
 ) -> str:
     """处理文本文件"""
     if not file or not hasattr(file, "name"):
@@ -403,19 +403,12 @@ def update_emotions(role: str) -> dict:
 # UI部分
 with gr.Blocks(title="GPT-SoVITS API推理") as app:
     gr.Markdown("# GPT-SoVITS 文本转语音 (API版)")
-    try:
-        # 获取默认角色
-        roles = list_roles()
-        default_role = roles[0]
-        # 初始化默认角色的模型
-        gpt_path, sovits_path = init_models(default_role)
 
-    except Exception as e:
-        gr.Markdown(f"""
-        # GPT-SoVITS 文本转语音 (API版)
-        
-        错误: {str(e)}
-        """)
+    # 获取默认角色
+    roles = list_roles()
+    default_role = roles[0]
+    # 初始化默认角色的模型
+    gpt_path, sovits_path = init_models(default_role)
 
     with gr.Tab("文本文件"):
         with gr.Column():
