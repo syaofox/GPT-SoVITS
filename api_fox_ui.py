@@ -348,6 +348,7 @@ def process_text_content(
     default_emotion: str = "",
     text_lang: str = "中文",
     cut_punc: str = "",
+    disable_parsing: bool = False,
     output_dir: str = "output",
 ) -> str:
     """处理文本内容"""
@@ -355,7 +356,36 @@ def process_text_content(
     output_path = os.path.join(output_dir, f"output_{int(time.time())}.wav")
 
     try:
-        # 解析每一行
+        # 如果禁用解析，直接使用默认角色和情绪处理整个文本
+        if disable_parsing:
+            if not default_role:
+                raise gr.Error("禁用解析时必须设置默认角色")
+
+            # 如果没有指定情绪，使用角色配置中的第一个情绪
+            if not default_emotion or default_emotion == "无":
+                role_path = Path("configs/roles") / f"{default_role}.json"
+                with open(role_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                if "emotions" in config:
+                    default_emotion = next(iter(config["emotions"].keys()))
+                else:
+                    raise gr.Error(f"角色 {default_role} 配置缺少情绪配置")
+
+            print(f"禁用解析模式 - 角色: {default_role} 情绪: {default_emotion}")
+            # 初始化默认角色的模型
+            init_models(default_role)
+            # 获取配置并调用API
+            role_config = get_role_config(default_role, default_emotion, text_lang)
+            audio_data = call_api(
+                text_content, role_config, default_role, cut_punc=cut_punc
+            )
+
+            # 保存音频
+            with open(output_path, "wb") as f:
+                f.write(audio_data)
+            return output_path
+
+        # 原有的处理逻辑
         lines = text_content.strip().split("\n")
         audio_segments = []
         current_role = None
@@ -419,6 +449,7 @@ def process_file(
     default_emotion: str = "",
     text_lang: str = "中文",
     cut_punc: str = "",
+    disable_parsing: bool = False,
     output_dir: str = "output",
 ) -> str:
     """处理文本文件"""
@@ -436,6 +467,7 @@ def process_file(
         default_emotion,
         text_lang,
         cut_punc,
+        disable_parsing,
         output_dir,
     )
 
@@ -456,12 +488,15 @@ def update_default_emotions(role: str) -> gr.update:
     """更新默认情绪选项"""
     # 如果选择了"无"角色，返回空的情绪列表
     if not role or role == "无":
-        empty_choices = [("", "无")]
-        return gr.update(choices=empty_choices, value="")
+        return gr.update(choices=[], value=None)
 
     emotions = get_emotions(role)
-    default_choices = [("", "无")] + [(e, e) for e in emotions]
-    return gr.update(choices=default_choices, value="")
+    if not emotions:
+        return gr.update(choices=[], value=None)
+
+    # 直接使用情绪列表，不添加"无"选项
+    default_choices = [(e, e) for e in emotions]
+    return gr.update(choices=default_choices, value=emotions[0])  # 默认选择第一个情绪
 
 
 # UI部分
@@ -502,9 +537,11 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 )
                 initial_emotions = get_emotions(g_default_role)
                 default_emotion = gr.Dropdown(
-                    label="默认情绪（可选）",
-                    choices=[("", "无")] + [(e, e) for e in initial_emotions],
-                    value="",
+                    label="默认情绪",  # 移除"可选"说明
+                    choices=[(e, e) for e in initial_emotions],  # 移除"无"选项
+                    value=initial_emotions[0]
+                    if initial_emotions
+                    else None,  # 默认选择第一个情绪
                     type="value",
                 )
 
@@ -539,6 +576,11 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                     placeholder="例如：,.。，",
                     value="。",
                 )
+                disable_parsing = gr.Checkbox(
+                    label="禁用角色情绪解析",
+                    value=False,
+                    info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
+                )
 
         with gr.Row():
             process_text_btn = gr.Button("处理文本", variant="primary")
@@ -554,6 +596,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 default_emotion,
                 text_lang,
                 cut_punc_input,
+                disable_parsing,
             ],
             outputs=file_output,
         )
@@ -568,6 +611,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 default_emotion,
                 text_lang,
                 cut_punc_input,
+                disable_parsing,
             ],
             outputs=file_output,
         )
