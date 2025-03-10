@@ -382,6 +382,7 @@ def process_text_content(
                 continue
 
             try:
+                print(f"当前角色: {role_name} 当前情绪: {emotion} 当前文本: {text}")
                 # 获取配置并调用API
                 role_config = get_role_config(role_name, emotion, text_lang)
                 audio_data = call_api(text, role_config, role_name)
