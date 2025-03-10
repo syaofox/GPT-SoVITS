@@ -36,7 +36,7 @@ LANGUAGE_OPTIONS = [
     ("多语种混合(粤语)", "多语种混合(粤语)"),
 ]
 
-g_default_role: str = "凡子霞"
+g_default_role: str = "晓辰"
 
 
 def get_model_paths_from_role(role: str) -> Tuple[str, str]:
@@ -341,6 +341,7 @@ def process_text_content(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
+    default_emotion: str = "",
     text_lang: str = "中文",
     output_dir: str = "output",
 ) -> str:
@@ -357,26 +358,26 @@ def process_text_content(
         for i, line in enumerate(lines):
             role_name, emotion, text = parse_line(line)
 
-            # 使用强制角色（如果指定）或原始解析的角色或默认角色
-            if force_role and force_role != "" and force_role != "无":  # 修改判断条件
+            # 使用强制角色或原始解析的角色或默认角色
+            if force_role and force_role != "" and force_role != "无":
                 role_name = force_role
-            elif not role_name:  # 如果没有指定角色，使用默认角色
+            elif not role_name:
                 role_name = default_role
 
             if not role_name:
                 raise gr.Error("未指定角色且未设置默认角色")
+
+            # 使用强制情绪或原始解析的情绪或默认情绪
+            if force_emotion and force_emotion != "" and force_emotion != "无":
+                emotion = force_emotion
+            elif not emotion and default_emotion and default_emotion != "无":
+                emotion = default_emotion
 
             # 如果角色改变，需要重新初始化模型
             if role_name != current_role:
                 print(f"切换到角色: {role_name}")
                 init_models(role_name)
                 current_role = role_name
-
-            # 使用强制情绪（如果指定）或原始解析的情绪
-            if (
-                force_emotion and force_emotion != "" and force_emotion != "无"
-            ):  # 修改判断条件
-                emotion = force_emotion
 
             if not text:  # 空行
                 continue
@@ -410,6 +411,7 @@ def process_file(
     force_role: str = "",
     default_role: str = "",
     force_emotion: str = "",
+    default_emotion: str = "",
     text_lang: str = "中文",
     output_dir: str = "output",
 ) -> str:
@@ -421,26 +423,38 @@ def process_file(
         text_content = f.read()
 
     return process_text_content(
-        text_content, force_role, default_role, force_emotion, text_lang, output_dir
+        text_content,
+        force_role,
+        default_role,
+        force_emotion,
+        default_emotion,
+        text_lang,
+        output_dir,
     )
 
 
-def update_multiline_emotions(role: str) -> gr.update:
-    """更新多行文本模式的情绪选项"""
+def update_force_emotions(role: str) -> gr.update:
+    """更新强制情绪选项"""
     # 如果选择了"无"角色，返回空的情绪列表
     if not role or role == "无":
-        return gr.update(choices=[("", "无")], value="")
+        empty_choices = [("", "无")]
+        return gr.update(choices=empty_choices, value="")
 
     emotions = get_emotions(role)
-    choices = [("", "无")] + [(e, e) for e in emotions]
-    return gr.update(choices=choices, value="")
+    force_choices = [("", "无")] + [(e, e) for e in emotions]
+    return gr.update(choices=force_choices, value="")
 
 
-def update_singleline_emotions(role: str) -> gr.update:
-    """更新单行文本模式的情绪选项"""
+def update_default_emotions(role: str) -> gr.update:
+    """更新默认情绪选项"""
+    # 如果选择了"无"角色，返回空的情绪列表
+    if not role or role == "无":
+        empty_choices = [("", "无")]
+        return gr.update(choices=empty_choices, value="")
+
     emotions = get_emotions(role)
-    choices = [(e, e) for e in emotions]
-    return gr.update(choices=choices, value=emotions[0] if emotions else None)
+    default_choices = [("", "无")] + [(e, e) for e in emotions]
+    return gr.update(choices=default_choices, value="")
 
 
 # UI部分
@@ -471,32 +485,45 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
         with gr.Row():
             roles = list_roles()  # 获取角色列表
 
-            default_role = gr.Dropdown(
-                label="默认角色（必选）",
-                choices=[(role, role) for role in roles],
-                value=g_default_role,
-                type="value",
-            )
-            force_role = gr.Dropdown(
-                label="强制使用角色（可选）",
-                choices=[("", "无")] + [(role, role) for role in roles],
-                value="",  # 修改为字符串值
-                type="value",
-            )
-            # 修改多行文本标签页的情绪下拉列表初始化
-            initial_emotions = get_emotions(g_default_role)
-            force_emotion = gr.Dropdown(
-                label="强制使用情绪（可选）",
-                choices=[("", "无")] + [(e, e) for e in initial_emotions],
-                value="",
-                type="value",
-            )
-            text_lang = gr.Dropdown(
-                label="文本语言",
-                choices=LANGUAGE_OPTIONS,
-                value="中文",
-                type="value",
-            )
+            # 第一列：默认角色及其情绪
+            with gr.Column():
+                default_role = gr.Dropdown(
+                    label="默认角色（必选）",
+                    choices=[(role, role) for role in roles],
+                    value=g_default_role,
+                    type="value",
+                )
+                initial_emotions = get_emotions(g_default_role)
+                default_emotion = gr.Dropdown(
+                    label="默认情绪（可选）",
+                    choices=[("", "无")] + [(e, e) for e in initial_emotions],
+                    value="",
+                    type="value",
+                )
+
+            # 第二列：强制角色及其情绪
+            with gr.Column():
+                force_role = gr.Dropdown(
+                    label="强制使用角色（可选）",
+                    choices=[("", "无")] + [(role, role) for role in roles],
+                    value="",
+                    type="value",
+                )
+                force_emotion = gr.Dropdown(
+                    label="强制使用情绪（可选）",
+                    choices=[("", "无")] + [(e, e) for e in initial_emotions],
+                    value="",
+                    type="value",
+                )
+
+            # 第三列：语言选择
+            with gr.Column():
+                text_lang = gr.Dropdown(
+                    label="文本语言",
+                    choices=LANGUAGE_OPTIONS,
+                    value="中文",
+                    type="value",
+                )
 
         with gr.Row():
             process_text_btn = gr.Button("处理文本", variant="primary")
@@ -504,24 +531,38 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
 
         process_text_btn.click(
             process_text_content,
-            inputs=[text_content, force_role, default_role, force_emotion, text_lang],
+            inputs=[
+                text_content,
+                force_role,
+                default_role,
+                force_emotion,
+                default_emotion,
+                text_lang,
+            ],
             outputs=file_output,
         )
 
         process_file_btn.click(
             process_file,
-            inputs=[file_input, force_role, default_role, force_emotion, text_lang],
+            inputs=[
+                file_input,
+                force_role,
+                default_role,
+                force_emotion,
+                default_emotion,
+                text_lang,
+            ],
             outputs=file_output,
         )
 
-        # 修改多行文本模式的角色切换事件
+        # 更新角色切换事件
         default_role.change(
-            update_multiline_emotions,
+            update_default_emotions,
             inputs=[default_role],
-            outputs=[force_emotion],
+            outputs=[default_emotion],
         )
         force_role.change(
-            update_multiline_emotions,
+            update_force_emotions,
             inputs=[force_role],
             outputs=[force_emotion],
         )
@@ -563,7 +604,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
 
         # 修改单行文本模式的角色切换事件
         role.change(
-            update_singleline_emotions,
+            update_default_emotions,
             inputs=[role],
             outputs=[emotion],
         )
