@@ -192,13 +192,14 @@ def get_role_config(role: str, emotion: str = "", text_lang: str = "中文") -> 
     return result_config
 
 
-def call_api(text: str, role_config: dict, role_name: str) -> bytes:
+def call_api(text: str, role_config: dict, role_name: str, cut_punc: str = "") -> bytes:
     """调用API进行推理
 
     Args:
         text: 要转换的文本
         role_config: 角色配置
         role_name: 角色名称
+        cut_punc: 切分符号
     """
     # 检查必要的配置
     if "ref_audio" not in role_config:
@@ -219,6 +220,7 @@ def call_api(text: str, role_config: dict, role_name: str) -> bytes:
         "temperature": role_config.get("temperature", 1.0),
         "sample_steps": role_config.get("sample_steps", 32),
         "if_sr": role_config.get("if_sr", False),
+        "cut_punc": cut_punc,
         "spk": role_name,  # 添加角色名称
     }
 
@@ -226,6 +228,7 @@ def call_api(text: str, role_config: dict, role_name: str) -> bytes:
         params["inp_refs"] = role_config["aux_refs"]
 
     try:
+        print(params)
         response = requests.post(API_URL, json=params)
         if response.status_code != 200:
             error_msg = response.text
@@ -313,6 +316,7 @@ def process_text(
     role: str,
     emotion: str = "",
     text_lang: str = "中文",
+    cut_punc: str = "",
     output_dir: str = "output",
 ) -> str:
     """处理单条文本"""
@@ -326,7 +330,7 @@ def process_text(
         init_models(role)
 
         role_config = get_role_config(role, emotion, text_lang)
-        audio_data = call_api(text, role_config, role)
+        audio_data = call_api(text, role_config, role, cut_punc=cut_punc)
 
         with open(output_path, "wb") as f:
             f.write(audio_data)
@@ -343,6 +347,7 @@ def process_text_content(
     force_emotion: str = "",
     default_emotion: str = "",
     text_lang: str = "中文",
+    cut_punc: str = "",
     output_dir: str = "output",
 ) -> str:
     """处理文本内容"""
@@ -386,7 +391,7 @@ def process_text_content(
                 print(f"当前角色: {role_name} 当前情绪: {emotion} 当前文本: {text}")
                 # 获取配置并调用API
                 role_config = get_role_config(role_name, emotion, text_lang)
-                audio_data = call_api(text, role_config, role_name)
+                audio_data = call_api(text, role_config, role_name, cut_punc=cut_punc)
                 audio_segments.append(audio_data)
             except Exception as e:
                 print(f"处理文本失败: {text}, 错误: {str(e)}")
@@ -413,6 +418,7 @@ def process_file(
     force_emotion: str = "",
     default_emotion: str = "",
     text_lang: str = "中文",
+    cut_punc: str = "",
     output_dir: str = "output",
 ) -> str:
     """处理文本文件"""
@@ -429,6 +435,7 @@ def process_file(
         force_emotion,
         default_emotion,
         text_lang,
+        cut_punc,
         output_dir,
     )
 
@@ -525,6 +532,14 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                     type="value",
                 )
 
+            # 第四列：切分符号
+            with gr.Column():
+                cut_punc_input = gr.Textbox(
+                    label="切分符号（可选）",
+                    placeholder="例如：,.。，",
+                    value="。",
+                )
+
         with gr.Row():
             process_text_btn = gr.Button("处理文本", variant="primary")
             process_file_btn = gr.Button("处理文件", variant="secondary")
@@ -538,6 +553,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 force_emotion,
                 default_emotion,
                 text_lang,
+                cut_punc_input,
             ],
             outputs=file_output,
         )
@@ -551,6 +567,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 force_emotion,
                 default_emotion,
                 text_lang,
+                cut_punc_input,
             ],
             outputs=file_output,
         )
@@ -595,10 +612,17 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 type="value",
             )
 
+            # 添加切分符号输入
+            cut_punc_input = gr.Textbox(
+                label="切分符号（可选）",
+                placeholder="例如：,.。，",
+                value="",
+            )
+
         convert_btn = gr.Button("转换")
         convert_btn.click(
             process_text,
-            inputs=[text_input, role, emotion, text_lang],
+            inputs=[text_input, role, emotion, text_lang, cut_punc_input],
             outputs=audio_output,
         )
 
