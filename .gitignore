@@ -25,3 +25,4 @@ tools/AP_BWE_main/24kto48k/*
 !tools/AP_BWE_main/24kto48k/readme.txt
 GPT_SoVITS/text/ja_userdic/user.dict
 GPT_SoVITS/text/ja_userdic/userdict.md5
+GPT_SoVITS/inference_webui - 副本 (变声修改版).py
