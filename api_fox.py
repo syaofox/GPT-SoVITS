@@ -613,8 +613,19 @@ def correct_extra_pronunciation(text: str):
     txts = []
     offset = 0
 
+    # 找出所有被<tone>标签包裹的字符位置
+    tone_tag_pattern = re.compile(r"<tone.*?>(.*?)</tone>")
+    tone_tag_chars = set()
+    for match in tone_tag_pattern.finditer(text):
+        char_pos = match.start(1)  # 获取字符在标签内的位置
+        tone_tag_chars.add(char_pos)
+
     # 遍历文本中的每个字符
     for i, char in enumerate(text):
+        # 跳过被<tone>标签包裹的字符
+        if i in tone_tag_chars:
+            continue
+
         if char in extra_pronunciation_map:
             pronunciation = extra_pronunciation_map[char]
 
