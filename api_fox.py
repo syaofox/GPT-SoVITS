@@ -608,7 +608,7 @@ def correct_initial_final(tone):
 
 
 def correct_extra_pronunciation(text: str):
-    """处理额外的多音字配置"""
+    """处理额外的多音字配置,支持上下文相关的读音"""
     tone_list = []
     txts = []
     offset = 0
@@ -616,15 +616,56 @@ def correct_extra_pronunciation(text: str):
     # 遍历文本中的每个字符
     for i, char in enumerate(text):
         if char in extra_pronunciation_map:
+            pronunciation = extra_pronunciation_map[char]
+
+            # 如果是字典格式,需要根据上下文判断读音
+            if isinstance(pronunciation, dict):
+                # 获取默认读音
+                tone = pronunciation.get("default", "")
+
+                # 获取当前字符的上下文窗口
+                context_window = text[max(0, i - 10) : min(len(text), i + 10)]
+
+                # 找到最长匹配的上下文
+                max_match_len = 0
+                matched_tone = tone
+
+                # 检查所有上下文规则
+                for context, specific_tone in pronunciation.items():
+                    if context != "default":
+                        # 检查当前字符是否在上下文中的正确位置
+                        char_pos = context.find(char)
+                        if char_pos != -1:
+                            # 检查上下文窗口中是否包含完整上下文
+                            start_pos = context_window.find(context)
+                            if start_pos != -1:
+                                # 确保上下文中的字符位置与当前字符位置对应
+                                context_char_pos = i - (max(0, i - 10)) - start_pos
+                                if (
+                                    context_char_pos == char_pos
+                                    and len(context) > max_match_len
+                                ):
+                                    max_match_len = len(context)
+                                    matched_tone = specific_tone
+
+                if not matched_tone:  # 如果没有默认读音且没找到匹配的上下文
+                    continue
+
+                tone = matched_tone
+            else:
+                # 如果是直接指定读音的格式
+                tone = pronunciation
+
             # 将匹配到的字符及之前的文本添加到txts
             if offset < i:
                 txts.append(text[offset:i])
             txts.append(char)
-            tone = extra_pronunciation_map[char]
+
             pos = sum(len(s) for s in txts)
             init, final = correct_initial_final(tone)
             tone_list.append([tone, init, final, pos])
             offset = i + 1
+
     return tone_list
 
 
