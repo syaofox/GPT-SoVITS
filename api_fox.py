@@ -652,16 +652,17 @@ def revise_custom_tone(phones, word2ph, tone_data_list):
 def clean_text_inf(text, language, version):
     language = language.replace("all_", "")
 
+    print(f"text: {text}")
     text, tone_data_list = find_custom_tone(text)
+    print(f"tone_data_list: {tone_data_list}", "text: {text}")
     replace_tone_data_list = correct_extra_pronunciation(text)
+    print(f"replace_tone_data_list: {replace_tone_data_list}")
 
+    tone_data_list = tone_data_list + replace_tone_data_list
+    print(f"tone_data_list: {tone_data_list}")
     phones, word2ph, norm_text = clean_text(text, language, version)
     # 修正多音字
-    if len(replace_tone_data_list) > 0:
-        revise_custom_tone(phones, word2ph, replace_tone_data_list)
-
-    if len(tone_data_list) > 0:
-        revise_custom_tone(phones, word2ph, tone_data_list)
+    revise_custom_tone(phones, word2ph, tone_data_list)
 
     phones = cleaned_text_to_sequence(phones, version)
     return phones, word2ph, norm_text
