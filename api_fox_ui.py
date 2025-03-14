@@ -574,11 +574,11 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 cut_punc_input = gr.Textbox(
                     label="切分符号（可选）",
                     placeholder="例如：,.。，",
-                    value="。",
+                    value="。！？：.!?:",
                 )
                 disable_parsing = gr.Checkbox(
                     label="禁用角色情绪解析",
-                    value=False,
+                    value=True,
                     info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
                 )
 
