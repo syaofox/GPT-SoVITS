@@ -574,7 +574,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 cut_punc_input = gr.Textbox(
                     label="切分符号（可选）",
                     placeholder="例如：,.。，",
-                    value="。！？：.!?:",
+                    value="。！？：.!?:…",
                 )
                 disable_parsing = gr.Checkbox(
                     label="禁用角色情绪解析",
@@ -659,7 +659,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
             # 添加切分符号输入
             cut_punc_input = gr.Textbox(
                 label="切分符号（可选）",
-                placeholder="例如：,.。，",
+                placeholder="例如：,.。，…",
                 value="",
             )
 
