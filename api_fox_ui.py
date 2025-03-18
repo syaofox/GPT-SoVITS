@@ -36,7 +36,7 @@ LANGUAGE_OPTIONS = [
     ("多语种混合(粤语)", "多语种混合(粤语)"),
 ]
 
-g_default_role: str = "晓辰"
+g_default_role: str = "凡子霞"
 
 
 def get_model_paths_from_role(role: str) -> Tuple[str, str]:
@@ -574,7 +574,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 cut_punc_input = gr.Textbox(
                     label="切分符号（可选）",
                     placeholder="例如：,.。，",
-                    value="。！？：.!?:…",
+                    value="。！？：.!?:",
                 )
                 disable_parsing = gr.Checkbox(
                     label="禁用角色情绪解析",
