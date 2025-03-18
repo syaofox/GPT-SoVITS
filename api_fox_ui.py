@@ -311,6 +311,73 @@ def parse_line(line: str) -> tuple[str, str, str]:
     return "", "", line.strip()
 
 
+def preprocess_text(text_content: str, default_role: str, default_emotion: str) -> str:
+    """预处理文本，提取双引号内容作为对白，其他作为叙述
+    
+    Args:
+        text_content: 原始文本内容
+        default_role: 默认角色
+        default_emotion: 默认情绪
+        
+    Returns:
+        处理后的文本
+    """
+    if not default_role:
+        raise gr.Error("请先选择默认角色")
+    
+    # 获取角色配置
+    role_path = Path("configs/roles") / f"{default_role}.json"
+    if not role_path.exists():
+        raise gr.Error(f"找不到角色配置文件: {default_role}")
+    
+    with open(role_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    
+    # 获取情绪列表
+    if "emotions" not in config:
+        raise gr.Error(f"角色 {default_role} 配置缺少情绪配置")
+    
+    emotions = list(config["emotions"].keys())
+    
+    # 如果没有指定默认情绪，使用第一个情绪
+    if not default_emotion:
+        default_emotion = emotions[0]
+    
+    # 处理文本
+    lines = text_content.strip().split("\n")
+    processed_lines = []
+    
+    for line in lines:
+        if not line.strip():
+            processed_lines.append("")
+            continue
+        
+        # 查找所有双引号包围的内容
+        dialogue_parts = re.findall(r'"([^"]*)"', line)
+        
+        if dialogue_parts:
+            # 处理包含对白的行
+            remaining = line
+            for part in dialogue_parts:
+                # 分割成对白前、对白、对白后三部分
+                before, remaining = remaining.split(f'"{part}"', 1)
+                
+                # 处理对白前的叙述部分(如果有)，不添加角色标记
+                if before.strip():
+                    processed_lines.append(f"{before.strip()}")
+                
+                # 处理对白部分，添加角色和情绪
+                processed_lines.append(f"({default_role}|{default_emotion})\"{part}\"")
+            
+            # 处理最后一个对白后的叙述部分(如果有)，不添加角色标记
+            if remaining.strip():
+                processed_lines.append(f"{remaining.strip()}")
+        else:
+            # 没有对白，整行作为叙述，不添加任何标记
+            processed_lines.append(f"{line.strip()}")
+    
+    return "\n".join(processed_lines)
+
 def process_text(
     text: str,
     role: str,
@@ -583,9 +650,12 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 )
 
         with gr.Row():
+            preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
             process_text_btn = gr.Button("处理文本", variant="primary")
             process_file_btn = gr.Button("处理文件", variant="secondary")
 
+        
+        
         process_text_btn.click(
             process_text_content,
             inputs=[
@@ -614,6 +684,12 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                 disable_parsing,
             ],
             outputs=file_output,
+        )
+
+        preprocess_text_btn.click(
+            preprocess_text,
+            inputs=[text_content, default_role, default_emotion],
+            outputs=text_content,
         )
 
         # 更新角色切换事件
@@ -689,6 +765,7 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
        - 直接输入文本（需要设置默认角色）
     3. **强制角色**：忽略文本中的角色标记，全部使用指定角色
     4. **默认角色**：当文本没有指定角色时使用的角色
+    5. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
     """)
 
 if __name__ == "__main__":
