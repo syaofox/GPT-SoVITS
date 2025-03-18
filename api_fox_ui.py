@@ -312,7 +312,7 @@ def parse_line(line: str) -> tuple[str, str, str]:
 
 
 def preprocess_text(text_content: str, default_role: str, default_emotion: str) -> str:
-    """预处理文本，提取双引号内容作为对白，其他作为叙述
+    """预处理文本，提取双引号或「」内容作为对白，其他作为叙述
     
     Args:
         text_content: 原始文本内容
@@ -352,29 +352,58 @@ def preprocess_text(text_content: str, default_role: str, default_emotion: str) 
             processed_lines.append("")
             continue
         
-        # 查找所有双引号包围的内容
-        dialogue_parts = re.findall(r'"([^"]*)"', line)
-        
-        if dialogue_parts:
-            # 处理包含对白的行
-            remaining = line
-            for part in dialogue_parts:
-                # 分割成对白前、对白、对白后三部分
-                before, remaining = remaining.split(f'"{part}"', 1)
-                
-                # 处理对白前的叙述部分(如果有)，不添加角色标记
-                if before.strip():
-                    processed_lines.append(f"{before.strip()}")
-                
-                # 处理对白部分，添加角色和情绪
-                processed_lines.append(f"({default_role}|{default_emotion})\"{part}\"")
+        # 先处理双引号包围的内容
+        if '"' in line:
+            # 查找所有双引号包围的内容
+            dialogue_parts = re.findall(r'"([^"]*)"', line)
             
-            # 处理最后一个对白后的叙述部分(如果有)，不添加角色标记
-            if remaining.strip():
-                processed_lines.append(f"{remaining.strip()}")
-        else:
-            # 没有对白，整行作为叙述，不添加任何标记
-            processed_lines.append(f"{line.strip()}")
+            if dialogue_parts:
+                # 处理包含对白的行
+                remaining = line
+                for part in dialogue_parts:
+                    # 分割成对白前、对白、对白后三部分
+                    before, remaining = remaining.split(f'"{part}"', 1)
+                    
+                    # 处理对白前的叙述部分(如果有)，不添加角色标记
+                    if before.strip():
+                        processed_lines.append(f"{before.strip()}")
+                    
+                    # 处理对白部分，添加角色和情绪
+                    processed_lines.append(f"({default_role}|{default_emotion})\"{part}\"")
+                
+                # 处理最后一个对白后的叙述部分(如果有)，不添加角色标记
+                if remaining.strip():
+                    processed_lines.append(f"{remaining.strip()}")
+                
+                continue  # 已处理完这一行，继续下一行
+        
+        # 处理「」包围的内容
+        if '「' in line and '」' in line:
+            # 查找所有「」包围的内容
+            dialogue_parts = re.findall(r'「([^」]*)」', line)
+            
+            if dialogue_parts:
+                # 处理包含对白的行
+                remaining = line
+                for part in dialogue_parts:
+                    # 分割成对白前、对白、对白后三部分
+                    before, remaining = remaining.split(f'「{part}」', 1)
+                    
+                    # 处理对白前的叙述部分(如果有)，不添加角色标记
+                    if before.strip():
+                        processed_lines.append(f"{before.strip()}")
+                    
+                    # 处理对白部分，添加角色和情绪，转换为双引号格式
+                    processed_lines.append(f"({default_role}|{default_emotion})\"{part}\"")
+                
+                # 处理最后一个对白后的叙述部分(如果有)，不添加角色标记
+                if remaining.strip():
+                    processed_lines.append(f"{remaining.strip()}")
+                
+                continue  # 已处理完这一行，继续下一行
+        
+        # 没有对白，整行作为叙述，不添加任何标记
+        processed_lines.append(f"{line.strip()}")
     
     return "\n".join(processed_lines)
 
