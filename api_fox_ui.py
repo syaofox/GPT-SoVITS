@@ -649,13 +649,11 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                     info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
                 )
 
-        with gr.Row():
-            preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
+        with gr.Row():            
             process_text_btn = gr.Button("处理文本", variant="primary")
             process_file_btn = gr.Button("处理文件", variant="secondary")
-
-        
-        
+            preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
+   
         process_text_btn.click(
             process_text_content,
             inputs=[
