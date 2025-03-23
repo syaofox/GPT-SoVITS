@@ -707,10 +707,10 @@ def clean_text_inf(text, language, version):
     print(f"text: {text}")
     text, tone_data_list = find_custom_tone(text)
     print(f"tone_data_list: {tone_data_list}", "text: {text}")
-    replace_tone_data_list = correct_extra_pronunciation(text)
-    print(f"replace_tone_data_list: {replace_tone_data_list}")
+    # replace_tone_data_list = correct_extra_pronunciation(text)
+    # print(f"replace_tone_data_list: {replace_tone_data_list}")
 
-    tone_data_list = tone_data_list + replace_tone_data_list
+    # tone_data_list = tone_data_list + replace_tone_data_list
     print(f"tone_data_list: {tone_data_list}")
     phones, word2ph, norm_text = clean_text(text, language, version)
     # 修正多音字
