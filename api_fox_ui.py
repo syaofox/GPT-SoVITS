@@ -401,6 +401,31 @@ def preprocess_text(text_content: str, default_role: str, default_emotion: str) 
                     processed_lines.append(f"{remaining.strip()}")
                 
                 continue  # 已处理完这一行，继续下一行
+
+         # 处理“”包围的内容
+        if '“' in line and '”' in line:
+            # 查找所有“”包围的内容
+            dialogue_parts = re.findall(r'“([^”]*)”', line)
+            
+            if dialogue_parts:
+                # 处理包含对白的行
+                remaining = line
+                for part in dialogue_parts:
+                    # 分割成对白前、对白、对白后三部分
+                    before, remaining = remaining.split(f'“{part}”', 1)
+                    
+                    # 处理对白前的叙述部分(如果有)，不添加角色标记
+                    if before.strip():
+                        processed_lines.append(f"{before.strip()}")
+                    
+                    # 处理对白部分，添加角色和情绪，转换为双引号格式
+                    processed_lines.append(f"({default_role}|{default_emotion})\"{part}\"")
+                
+                # 处理最后一个对白后的叙述部分(如果有)，不添加角色标记
+                if remaining.strip():
+                    processed_lines.append(f"{remaining.strip()}")
+                
+                continue  # 已处理完这一行，继续下一行
         
         # 没有对白，整行作为叙述，不添加任何标记
         processed_lines.append(f"{line.strip()}")
@@ -468,12 +493,24 @@ def process_text_content(
                     raise gr.Error(f"角色 {default_role} 配置缺少情绪配置")
 
             print(f"禁用解析模式 - 角色: {default_role} 情绪: {default_emotion}")
+            
+            # 处理文本，移除所有角色和情绪标记
+            processed_text = ""
+            lines = text_content.strip().split("\n")
+            for line in lines:
+                # 移除角色和情绪标记
+                if line.startswith("(") and ")" in line:
+                    _, text = line.split(")", 1)
+                    processed_text += text.strip() + "\n"
+                else:
+                    processed_text += line.strip() + "\n"
+            
             # 初始化默认角色的模型
             init_models(default_role)
             # 获取配置并调用API
             role_config = get_role_config(default_role, default_emotion, text_lang)
             audio_data = call_api(
-                text_content, role_config, default_role, cut_punc=cut_punc
+                processed_text.strip(), role_config, default_role, cut_punc=cut_punc
             )
 
             # 保存音频
