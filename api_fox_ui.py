@@ -4,7 +4,7 @@ import re
 import time
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union, Dict
 
 import gradio as gr
 import librosa  # 添加这个导入
@@ -192,6 +192,68 @@ def get_role_config(role: str, emotion: str = "", text_lang: str = "中文") -> 
     return result_config
 
 
+def load_word_replace_dict() -> Dict[str, str]:
+    """加载字符替换字典
+    
+    从configs/word_replace.txt加载字符替换规则
+    格式：替换前 替换后
+    """
+    replace_dict = {}
+    replace_file = Path("configs/word_replace.txt")
+    
+    if not replace_file.exists():
+        print(f"警告: 字符替换文件不存在: {replace_file}")
+        return replace_dict
+    
+    try:
+        with open(replace_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):  # 跳过空行和注释
+                    continue
+                
+                parts = line.split(maxsplit=1)
+                if len(parts) != 2:
+                    print(f"警告: 字符替换格式错误: {line}")
+                    continue
+                
+                src, dst = parts
+                # 英文不区分大小写，将英文部分转为小写作为键
+                src_lower = ''.join([c.lower() if c.isascii() and c.isalpha() else c for c in src])
+                replace_dict[src_lower] = dst
+    except Exception as e:
+        print(f"加载字符替换文件失败: {str(e)}")
+    
+    return replace_dict
+
+
+# 全局替换字典
+g_word_replace_dict = load_word_replace_dict()
+
+def clean_text(text: str) -> str:
+    """清理文本，进行字符替换
+    
+    Args:
+        text: 原始文本
+        
+    Returns:
+        替换后的文本
+    """
+    if not g_word_replace_dict:
+        return text
+    
+    result = text
+    
+    # 对文本中的每个单词进行检查和替换
+    for src, dst in g_word_replace_dict.items():
+        # 创建一个模式，匹配源字符串，英文部分不区分大小写
+        pattern = ''.join(['[' + c.upper() + c.lower() + ']' if c.isascii() and c.isalpha() else re.escape(c) for c in src])
+        result = re.sub(pattern, dst, result)
+      
+    
+    return result
+
+
 def call_api(text: str, role_config: dict, role_name: str, cut_punc: str = "") -> bytes:
     """调用API进行推理
 
@@ -201,6 +263,9 @@ def call_api(text: str, role_config: dict, role_name: str, cut_punc: str = "") -
         role_name: 角色名称
         cut_punc: 切分符号
     """
+    # 清理文本，进行字符替换
+    text = clean_text(text)
+    
     # 检查必要的配置
     if "ref_audio" not in role_config:
         raise ValueError("角色配置缺少参考音频路径(ref_audio)")
@@ -402,17 +467,17 @@ def preprocess_text(text_content: str, default_role: str, default_emotion: str) 
                 
                 continue  # 已处理完这一行，继续下一行
 
-         # 处理“”包围的内容
-        if '“' in line and '”' in line:
-            # 查找所有“”包围的内容
-            dialogue_parts = re.findall(r'“([^”]*)”', line)
+         # 处理"包围的内容
+        if '"' in line and '"' in line:
+            # 查找所有"包围的内容
+            dialogue_parts = re.findall(r'"([^"]*)"', line)
             
             if dialogue_parts:
                 # 处理包含对白的行
                 remaining = line
                 for part in dialogue_parts:
                     # 分割成对白前、对白、对白后三部分
-                    before, remaining = remaining.split(f'“{part}”', 1)
+                    before, remaining = remaining.split(f'"{part}"', 1)
                     
                     # 处理对白前的叙述部分(如果有)，不添加角色标记
                     if before.strip():
