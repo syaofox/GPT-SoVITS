@@ -927,17 +927,26 @@ def create_ui():
     return app
 
 def load_word_replace_config():
+    """加载并更新全局替换字典"""
+    global g_word_replace_dict
     try:
         with open("configs/word_replace.txt", "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+            # 更新全局字典
+            g_word_replace_dict = load_word_replace_dict()
+            return content
     except Exception as e:
         print(f"加载词语替换配置失败: {e}")
         return ""
 
 def save_word_replace_config(text):
+    """保存并更新全局替换字典"""
+    global g_word_replace_dict
     try:
         with open("configs/word_replace.txt", "w", encoding="utf-8") as f:
             f.write(text)
+        # 更新全局字典
+        g_word_replace_dict = load_word_replace_dict()
         return "保存成功！"
     except Exception as e:
         print(f"保存词语替换配置失败: {e}")
