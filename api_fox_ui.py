@@ -786,6 +786,7 @@ def create_ui():
                 process_text_btn = gr.Button("处理文本", variant="primary")
                 process_file_btn = gr.Button("处理文件", variant="secondary")
                 preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
+                refresh_roles_btn = gr.Button("刷新角色列表", variant="secondary")  # 新增刷新按钮
        
             process_text_btn.click(
                 process_text_content,
@@ -821,6 +822,13 @@ def create_ui():
                 preprocess_text,
                 inputs=[text_content, default_role, default_emotion],
                 outputs=text_content,
+            )
+
+            # 添加刷新角色列表按钮的事件
+            refresh_roles_btn.click(
+                fn=lambda: gr.update(choices=[(role, role) for role in list_roles()]),
+                inputs=[],
+                outputs=[default_role]
             )
 
             # 更新角色切换事件
