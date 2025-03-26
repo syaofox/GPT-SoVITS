@@ -188,6 +188,27 @@ def merge_audio_with_subtitles(txt_file_path, output_dir):
     yield gr.update(visible=True, interactive=True)
 
 
+def generate_list_from_wav(wav_dir):
+    wav_dir = my_utils.clean_path(wav_dir)
+    wav_path = Path(wav_dir)
+    
+    if not wav_path.exists():
+        return "目录不存在"
+    
+    list_file = wav_path.parent / f"{wav_path.stem}.list"
+    list_content = []
+    
+    for wav_file in wav_path.glob("*.wav"):
+        dir_name = wav_path.stem
+        text = wav_file.stem  # 使用文件名作为文本
+        list_content.append(f"{wav_file}|{dir_name}|ZH|{text}")
+    
+    with open(list_file, "w", encoding="utf8") as f:
+        f.write("\n".join(list_content))
+    
+    return f"已生成list文件: {list_file}"
+
+
 def main():
     with gr.Blocks(title="字幕切分工具") as app:
         gr.Markdown(value="根据srt字幕进行音频切分，过滤指定长度")
@@ -257,6 +278,22 @@ def main():
             merge_audio_with_subtitles,
             [asr_file, asr_wavsrt_output_dir],
             [trans_button],
+        )
+
+        gr.Markdown(value="从wav目录生成list文件")
+        with gr.Row():
+            wav_dir_input = gr.Textbox(
+                label="wav文件目录",
+                value=r"D:\aisound\sound_data\已鸟\已鸟cut",
+                interactive=True
+            )
+            gen_list_button = gr.Button("生成list", variant="primary")
+            list_output = gr.Textbox(label="输出信息")
+        
+        gen_list_button.click(
+            generate_list_from_wav,
+            [wav_dir_input],
+            [list_output]
         )
 
     app.queue().launch(
