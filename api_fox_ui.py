@@ -697,69 +697,165 @@ def update_default_emotions(role: str) -> gr.update:
     return gr.update(choices=default_choices, value=emotions[0])  # 默认选择第一个情绪
 
 
-# UI部分
-with gr.Blocks(title="GPT-SoVITS API推理") as app:
-    gr.Markdown("# GPT-SoVITS 文本转语音 (API版)")
+def create_ui():
+    global g_default_role  # 添加这一行，声明使用全局变量
+    
+    with gr.Blocks(title="GPT-SoVITS API推理") as app:
+        gr.Markdown("# GPT-SoVITS 文本转语音 (API版)")
 
-    # 获取默认角色
-    roles = list_roles()
+        # 获取默认角色
+        roles = list_roles()
 
-    g_default_role = roles[0] if g_default_role not in roles else g_default_role
+        g_default_role = roles[0] if g_default_role not in roles else g_default_role
 
-    # 初始化默认角色的模型
-    gpt_path, sovits_path = init_models(g_default_role)
+        # 初始化默认角色的模型
+        gpt_path, sovits_path = init_models(g_default_role)
 
-    with gr.Tab("文本文件"):
-        with gr.Column():
-            with gr.Row():
-                with gr.Column(scale=2):
-                    text_content = gr.Textbox(
-                        label="输入多行文本",
-                        placeholder="每行一句话，支持以下格式：\n(角色)文本内容\n(角色|情绪)文本内容\n直接输入文本",
-                        lines=8,
-                    )
-                with gr.Column(scale=1):
-                    file_input = gr.File(label="或上传文本文件", file_types=[".txt"])
-            file_output = gr.Audio(label="输出音频")
-
-        with gr.Row():
-            roles = list_roles()  # 获取角色列表
-
-            # 第一列：默认角色及其情绪
+        with gr.Tab("文本文件"):
             with gr.Column():
-                default_role = gr.Dropdown(
-                    label="默认角色（必选）",
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        text_content = gr.Textbox(
+                            label="输入多行文本",
+                            placeholder="每行一句话，支持以下格式：\n(角色)文本内容\n(角色|情绪)文本内容\n直接输入文本",
+                            lines=8,
+                        )
+                    with gr.Column(scale=1):
+                        file_input = gr.File(label="或上传文本文件", file_types=[".txt"])
+                file_output = gr.Audio(label="输出音频")
+
+            with gr.Row():
+                roles = list_roles()  # 获取角色列表
+
+                # 第一列：默认角色及其情绪
+                with gr.Column():
+                    default_role = gr.Dropdown(
+                        label="默认角色（必选）",
+                        choices=[(role, role) for role in roles],
+                        value=g_default_role,
+                        type="value",
+                    )
+                    initial_emotions = get_emotions(g_default_role)
+                    default_emotion = gr.Dropdown(
+                        label="默认情绪",  # 移除"可选"说明
+                        choices=[(e, e) for e in initial_emotions],  # 移除"无"选项
+                        value=initial_emotions[0]
+                        if initial_emotions
+                        else None,  # 默认选择第一个情绪
+                        type="value",
+                    )
+
+                # 第二列：强制角色及其情绪
+                with gr.Column():
+                    force_role = gr.Dropdown(
+                        label="强制使用角色（可选）",
+                        choices=[("", "无")] + [(role, role) for role in roles],
+                        value="",
+                        type="value",
+                    )
+                    force_emotion = gr.Dropdown(
+                        label="强制使用情绪（可选）",
+                        choices=[("", "无")] + [(e, e) for e in initial_emotions],
+                        value="",
+                        type="value",
+                    )
+
+                # 第三列：语言选择
+                with gr.Column():
+                    text_lang = gr.Dropdown(
+                        label="文本语言",
+                        choices=LANGUAGE_OPTIONS,
+                        value="中文",
+                        type="value",
+                    )
+
+                # 第四列：切分符号
+                with gr.Column():
+                    cut_punc_input = gr.Textbox(
+                        label="切分符号（可选）",
+                        placeholder="例如：,.。，",
+                        value="。！？：.!?:",
+                    )
+                    disable_parsing = gr.Checkbox(
+                        label="禁用角色情绪解析",
+                        value=True,
+                        info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
+                    )
+
+            with gr.Row():            
+                process_text_btn = gr.Button("处理文本", variant="primary")
+                process_file_btn = gr.Button("处理文件", variant="secondary")
+                preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
+       
+            process_text_btn.click(
+                process_text_content,
+                inputs=[
+                    text_content,
+                    force_role,
+                    default_role,
+                    force_emotion,
+                    default_emotion,
+                    text_lang,
+                    cut_punc_input,
+                    disable_parsing,
+                ],
+                outputs=file_output,
+            )
+
+            process_file_btn.click(
+                process_file,
+                inputs=[
+                    file_input,
+                    force_role,
+                    default_role,
+                    force_emotion,
+                    default_emotion,
+                    text_lang,
+                    cut_punc_input,
+                    disable_parsing,
+                ],
+                outputs=file_output,
+            )
+
+            preprocess_text_btn.click(
+                preprocess_text,
+                inputs=[text_content, default_role, default_emotion],
+                outputs=text_content,
+            )
+
+            # 更新角色切换事件
+            default_role.change(
+                update_default_emotions,
+                inputs=[default_role],
+                outputs=[default_emotion],
+            )
+            force_role.change(
+                update_force_emotions,
+                inputs=[force_role],
+                outputs=[force_emotion],
+            )
+
+        with gr.Tab("单条文本"):
+            with gr.Row():
+                text_input = gr.Textbox(
+                    label="输入文本", placeholder="请输入要转换的文本", lines=3
+                )
+                audio_output = gr.Audio(label="输出音频")
+
+            with gr.Row():
+                roles = list_roles()
+                role = gr.Dropdown(
+                    label="选择角色",
                     choices=[(role, role) for role in roles],
                     value=g_default_role,
-                    type="value",
                 )
+                # 初始化情绪列表
                 initial_emotions = get_emotions(g_default_role)
-                default_emotion = gr.Dropdown(
-                    label="默认情绪",  # 移除"可选"说明
-                    choices=[(e, e) for e in initial_emotions],  # 移除"无"选项
-                    value=initial_emotions[0]
-                    if initial_emotions
-                    else None,  # 默认选择第一个情绪
-                    type="value",
+                emotion = gr.Dropdown(
+                    label="选择情绪",
+                    choices=[(e, e) for e in initial_emotions],
+                    value=initial_emotions[0] if initial_emotions else None,
                 )
-
-            # 第二列：强制角色及其情绪
-            with gr.Column():
-                force_role = gr.Dropdown(
-                    label="强制使用角色（可选）",
-                    choices=[("", "无")] + [(role, role) for role in roles],
-                    value="",
-                    type="value",
-                )
-                force_emotion = gr.Dropdown(
-                    label="强制使用情绪（可选）",
-                    choices=[("", "无")] + [(e, e) for e in initial_emotions],
-                    value="",
-                    type="value",
-                )
-
-            # 第三列：语言选择
-            with gr.Column():
                 text_lang = gr.Dropdown(
                     label="文本语言",
                     choices=LANGUAGE_OPTIONS,
@@ -767,135 +863,86 @@ with gr.Blocks(title="GPT-SoVITS API推理") as app:
                     type="value",
                 )
 
-            # 第四列：切分符号
-            with gr.Column():
+                # 添加切分符号输入
                 cut_punc_input = gr.Textbox(
                     label="切分符号（可选）",
-                    placeholder="例如：,.。，",
-                    value="。！？：.!?:",
-                )
-                disable_parsing = gr.Checkbox(
-                    label="禁用角色情绪解析",
-                    value=True,
-                    info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
+                    placeholder="例如：,.。，…",
+                    value="",
                 )
 
-        with gr.Row():            
-            process_text_btn = gr.Button("处理文本", variant="primary")
-            process_file_btn = gr.Button("处理文件", variant="secondary")
-            preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
-   
-        process_text_btn.click(
-            process_text_content,
-            inputs=[
-                text_content,
-                force_role,
-                default_role,
-                force_emotion,
-                default_emotion,
-                text_lang,
-                cut_punc_input,
-                disable_parsing,
-            ],
-            outputs=file_output,
-        )
-
-        process_file_btn.click(
-            process_file,
-            inputs=[
-                file_input,
-                force_role,
-                default_role,
-                force_emotion,
-                default_emotion,
-                text_lang,
-                cut_punc_input,
-                disable_parsing,
-            ],
-            outputs=file_output,
-        )
-
-        preprocess_text_btn.click(
-            preprocess_text,
-            inputs=[text_content, default_role, default_emotion],
-            outputs=text_content,
-        )
-
-        # 更新角色切换事件
-        default_role.change(
-            update_default_emotions,
-            inputs=[default_role],
-            outputs=[default_emotion],
-        )
-        force_role.change(
-            update_force_emotions,
-            inputs=[force_role],
-            outputs=[force_emotion],
-        )
-
-    with gr.Tab("单条文本"):
-        with gr.Row():
-            text_input = gr.Textbox(
-                label="输入文本", placeholder="请输入要转换的文本", lines=3
-            )
-            audio_output = gr.Audio(label="输出音频")
-
-        with gr.Row():
-            roles = list_roles()
-            role = gr.Dropdown(
-                label="选择角色",
-                choices=[(role, role) for role in roles],
-                value=g_default_role,
-            )
-            # 初始化情绪列表
-            initial_emotions = get_emotions(g_default_role)
-            emotion = gr.Dropdown(
-                label="选择情绪",
-                choices=[(e, e) for e in initial_emotions],
-                value=initial_emotions[0] if initial_emotions else None,
-            )
-            text_lang = gr.Dropdown(
-                label="文本语言",
-                choices=LANGUAGE_OPTIONS,
-                value="中文",
-                type="value",
+            convert_btn = gr.Button("转换")
+            convert_btn.click(
+                process_text,
+                inputs=[text_input, role, emotion, text_lang, cut_punc_input],
+                outputs=audio_output,
             )
 
-            # 添加切分符号输入
-            cut_punc_input = gr.Textbox(
-                label="切分符号（可选）",
-                placeholder="例如：,.。，…",
-                value="",
+            # 修改单行文本模式的角色切换事件
+            role.change(
+                update_default_emotions,
+                inputs=[role],
+                outputs=[emotion],
             )
 
-        convert_btn = gr.Button("转换")
-        convert_btn.click(
-            process_text,
-            inputs=[text_input, role, emotion, text_lang, cut_punc_input],
-            outputs=audio_output,
-        )
+        with gr.Tab("配置"):
+            with gr.Tab("词语替换"):
+                word_replace_text = gr.TextArea(
+                    label="词语替换配置",
+                    value=load_word_replace_config(),
+                    lines=20,
+                    max_lines=50
+                )
+                
+                with gr.Row():
+                    save_word_replace_btn = gr.Button("保存词语替换配置")
+                    refresh_word_replace_btn = gr.Button("刷新")
+                
+                save_word_replace_btn.click(
+                    fn=save_word_replace_config,
+                    inputs=[word_replace_text],
+                    outputs=[gr.Markdown("保存成功！")]
+                )
+                
+                refresh_word_replace_btn.click(
+                    fn=load_word_replace_config,
+                    inputs=[],
+                    outputs=[word_replace_text]
+                )
 
-        # 修改单行文本模式的角色切换事件
-        role.change(
-            update_default_emotions,
-            inputs=[role],
-            outputs=[emotion],
-        )
+        gr.Markdown("""
+        ## 使用说明
+        1. **单条文本**：直接输入文本，选择角色和情绪，点击转换
+        2. **文本文件**：可以选择以下两种方式之一：
+           - 上传文本文件
+           - 直接在文本框中输入多行文本
+           支持以下格式：
+           - `(角色)文本内容`
+           - `(角色|情绪)文本内容`
+           - 直接输入文本（需要设置默认角色）
+        3. **强制角色**：忽略文本中的角色标记，全部使用指定角色
+        4. **默认角色**：当文本没有指定角色时使用的角色
+        5. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
+        """)
 
-    gr.Markdown("""
-    ## 使用说明
-    1. **单条文本**：直接输入文本，选择角色和情绪，点击转换
-    2. **文本文件**：可以选择以下两种方式之一：
-       - 上传文本文件
-       - 直接在文本框中输入多行文本
-       支持以下格式：
-       - `(角色)文本内容`
-       - `(角色|情绪)文本内容`
-       - 直接输入文本（需要设置默认角色）
-    3. **强制角色**：忽略文本中的角色标记，全部使用指定角色
-    4. **默认角色**：当文本没有指定角色时使用的角色
-    5. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
-    """)
+    return app
+
+def load_word_replace_config():
+    try:
+        with open("configs/word_replace.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        print(f"加载词语替换配置失败: {e}")
+        return ""
+
+def save_word_replace_config(text):
+    try:
+        with open("configs/word_replace.txt", "w", encoding="utf-8") as f:
+            f.write(text)
+        return "保存成功！"
+    except Exception as e:
+        print(f"保存词语替换配置失败: {e}")
+        return f"保存失败: {e}"
 
 if __name__ == "__main__":
+    app = create_ui()
     app.launch(server_name="0.0.0.0", server_port=7878, inbrowser=True)
