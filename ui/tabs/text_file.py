@@ -160,83 +160,82 @@ def process_file(
 
 def create_text_file_tab():
     """创建文本文件标签页"""
-    with gr.Column():
+    with gr.Group():
         with gr.Row():
             with gr.Column(scale=2):
                 text_content = gr.Textbox(
                     label="输入多行文本",
                     placeholder="每行一句话，支持以下格式：\n(角色)文本内容\n(角色|情绪)文本内容\n直接输入文本",
-                    lines=8,
+                    lines=15,
+                    max_lines=15
                 )
             with gr.Column(scale=1):
                 file_input = gr.File(label="或上传文本文件", file_types=[".txt"])
-        file_output = gr.Audio(label="输出音频")
+                file_output = gr.Audio(label="输出音频")
 
-    with gr.Row():
-        roles = list_roles()  # 获取角色列表
+    with gr.Group():
+        with gr.Row():
+            roles = list_roles()  # 获取角色列表
 
-        # 第一列：默认角色及其情绪
-        with gr.Column():
-            default_role = gr.Dropdown(
-                label="默认角色（必选）",
-                choices=[(role, role) for role in roles],
-                value=g_default_role,
-                type="value",
-            )
-            initial_emotions = get_emotions(g_default_role)
-            default_emotion = gr.Dropdown(
-                label="默认情绪",  # 移除"可选"说明
-                choices=[(e, e) for e in initial_emotions],  # 移除"无"选项
-                value=initial_emotions[0]
-                if initial_emotions
-                else None,  # 默认选择第一个情绪
-                type="value",
-            )
+            # 第一列：默认角色及其情绪
+            with gr.Column():
+                default_role = gr.Dropdown(
+                    label="默认角色（必选）",
+                    choices=[(role, role) for role in roles],
+                    value=g_default_role,
+                    type="value",
+                )
+                initial_emotions = get_emotions(g_default_role)
+                default_emotion = gr.Dropdown(
+                    label="默认情绪",
+                    choices=[(e, e) for e in initial_emotions],
+                    value=initial_emotions[0] if initial_emotions else None,
+                    type="value",
+                )
 
-        # 第二列：强制角色及其情绪
-        with gr.Column():
-            force_role = gr.Dropdown(
-                label="强制使用角色（可选）",
-                choices=[("", "无")] + [(role, role) for role in roles],
-                value="",
-                type="value",
-            )
-            force_emotion = gr.Dropdown(
-                label="强制使用情绪（可选）",
-                choices=[("", "无")] + [(e, e) for e in initial_emotions],
-                value="",
-                type="value",
-            )
+            # 第二列：强制角色及其情绪
+            with gr.Column():
+                force_role = gr.Dropdown(
+                    label="强制使用角色（可选）",
+                    choices=[("", "无")] + [(role, role) for role in roles],
+                    value="",
+                    type="value",
+                )
+                force_emotion = gr.Dropdown(
+                    label="强制使用情绪（可选）",
+                    choices=[("", "无")] + [(e, e) for e in initial_emotions],
+                    value="",
+                    type="value",
+                )
 
-        # 第三列：语言选择
-        with gr.Column():
-            text_lang = gr.Dropdown(
-                label="文本语言",
-                choices=LANGUAGE_OPTIONS,
-                value="中文",
-                type="value",
-            )
+            # 第三列：语言选择和切分符号
+            with gr.Column():
+                text_lang = gr.Dropdown(
+                    label="文本语言",
+                    choices=LANGUAGE_OPTIONS,
+                    value="中文",
+                    type="value",
+                )
+                cut_punc_input = gr.Textbox(
+                    label="切分符号（可选）",
+                    placeholder="例如：,.。，",
+                    value="。！？：.!?:",
+                )
+                disable_parsing = gr.Checkbox(
+                    label="禁用角色情绪解析",
+                    value=True,
+                    info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
+                )
 
-        # 第四列：切分符号
-        with gr.Column():
-            cut_punc_input = gr.Textbox(
-                label="切分符号（可选）",
-                placeholder="例如：,.。，",
-                value="。！？：.!?:",
-            )
-            disable_parsing = gr.Checkbox(
-                label="禁用角色情绪解析",
-                value=True,
-                info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
-            )
-
-    with gr.Row():            
-        process_text_btn = gr.Button("处理文本", variant="primary")
-        process_file_btn = gr.Button("处理文件", variant="secondary")
-        preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
-        refresh_roles_btn = gr.Button("刷新角色列表", variant="secondary")  # 新增刷新按钮
+    with gr.Group():
+        with gr.Row():            
+            process_text_btn = gr.Button("处理文本", variant="primary")
+            process_file_btn = gr.Button("处理文件", variant="secondary")
+            preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
+            refresh_roles_btn = gr.Button("刷新角色列表", variant="secondary")
     
-     # 添加使用说明
+    # 添加使用说明
+    
     gr.Markdown("""
     ## 使用说明
     1. **文本文件**：可以选择以下两种方式之一：
@@ -250,8 +249,6 @@ def create_text_file_tab():
     3. **默认角色**：当文本没有指定角色时使用的角色
     4. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
     """)
-
-
 
     process_text_btn.click(
         process_text_content,
