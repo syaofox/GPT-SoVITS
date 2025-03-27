@@ -55,8 +55,6 @@ def create_role_management_tab():
     gpt_models, sovits_models = get_model_lists()
     
     with gr.Blocks(title="GPT-SoVITS 角色管理"):
-        # 顶部标题
-        gr.Markdown("# GPT-SoVITS 文本转语音")
         
         # 模型选择区域
         with gr.Group():
@@ -79,7 +77,7 @@ def create_role_management_tab():
                 refresh_models_btn = gr.Button("刷新模型列表", variant="primary", scale=14)
             
             # 参考音频区域
-            gr.Markdown(html_center("*请上传并填写参考信息", 'h3'))
+            gr.Markdown(html_center("参考音频", 'h3'))
             with gr.Row():
                 ref_audio = gr.Audio(
                     label="请上传3~10秒内参考音频，超过会报错！",
@@ -124,7 +122,7 @@ def create_role_management_tab():
                     sample_steps = gr.Radio(
                         label="采样步数,如果觉得电,提高试试,如果觉得慢,降低试试",
                         value=32,
-                        choices=[4, 8, 16, 32],
+                        choices=[4, 8, 16, 32, 64, 128],
                         visible=True
                     )
                     if_sr = gr.Checkbox(
@@ -134,14 +132,14 @@ def create_role_management_tab():
                     )
             
             # 合成区域
-            gr.Markdown(html_center("*请填写需要合成的目标文本和语种模式", 'h3'))
+            gr.Markdown(html_center("参数区", 'h3'))
             with gr.Row():
                 with gr.Column(scale=13):
                     target_text = gr.Textbox(
                         label="需要合成的文本",
                         value="",
-                        lines=12,
-                        max_lines=12
+                        lines=26,
+                        max_lines=26
                     )
                 with gr.Column(scale=7):
                     cut_punc = gr.Textbox(
@@ -196,7 +194,7 @@ def create_role_management_tab():
             with gr.Row():
                 synthesis_btn = gr.Button("合成语音", variant="primary", size="lg", scale=25)
                 synthesis_output = gr.Audio(label="输出的语音", scale=14)
-                status_text = gr.Markdown("")
+                
             
             # 角色管理区域
             gr.Markdown(html_center("角色管理", 'h3'))
@@ -225,7 +223,8 @@ def create_role_management_tab():
                         load_role_btn = gr.Button("加载角色")
                         delete_role_btn = gr.Button("删除角色", variant="stop")
                         refresh_role_list_btn = gr.Button("刷新列表", variant="secondary")
-    
+                    with gr.Row():
+                        status_text = gr.Markdown("")
     # 事件绑定
     
     # 刷新模型列表
