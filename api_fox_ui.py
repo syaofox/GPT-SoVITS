@@ -817,10 +817,7 @@ def save_role_config(
     # 处理辅助参考音频
     aux_refs_copied = []
     if aux_refs and isinstance(aux_refs, (list, tuple)) and len(aux_refs) > 0:
-        # 如果传入的是单个音频文件而非列表，将其转换为列表
-        if isinstance(aux_refs, str):
-            aux_refs = [aux_refs]
-        
+        # 处理多个辅助参考音频文件
         for aux_ref in aux_refs:
             if aux_ref and os.path.exists(aux_ref):
                 aux_filename = os.path.basename(aux_ref)
@@ -831,6 +828,16 @@ def save_role_config(
                     print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
                 except Exception as e:
                     print(f"复制辅助参考音频失败: {str(e)}")
+    elif aux_refs and os.path.exists(aux_refs):  # 处理单个文件情况
+        # 处理单个辅助参考音频
+        aux_filename = os.path.basename(aux_refs)
+        target_aux_ref = str(ref_audio_dir / aux_filename)
+        try:
+            shutil.copy2(aux_refs, target_aux_ref)
+            aux_refs_copied.append(target_aux_ref)
+            print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
+        except Exception as e:
+            print(f"复制辅助参考音频失败: {str(e)}")
     
     # 构建配置数据
     config = {
@@ -990,7 +997,8 @@ def test_role_synthesis(
     valid_aux_refs = []
     if aux_refs:
         # 确保aux_refs是列表
-        if isinstance(aux_refs, str):
+        if not isinstance(aux_refs, list):
+            # 单个文件情况，转为列表处理
             aux_refs = [aux_refs]
             
         for aux_ref in aux_refs:
@@ -1319,8 +1327,10 @@ def create_ui():
                         placeholder="参考音频对应的文本内容",
                         lines=2
                     )
-                    aux_refs = gr.Audio(
+                    aux_refs = gr.File(
                         label="辅助参考音频(可选)",
+                        file_count="multiple", 
+                        file_types=["audio"],
                         type="filepath",
                         interactive=True
                     )
@@ -1437,7 +1447,8 @@ def create_ui():
                     with gr.Row():
                         load_role_btn = gr.Button("加载角色")
                         delete_role_btn = gr.Button("删除角色", variant="stop")
-                        
+                    refresh_role_list_btn = gr.Button("刷新角色列表", variant="secondary")
+                
                 with gr.Column(scale=1):
                     gr.Markdown("### 合成结果")
                     synthesis_btn = gr.Button("合成测试", variant="primary")
@@ -1468,9 +1479,35 @@ def create_ui():
                 outputs=[prompt_text]
             )
             
+            # 辅助参考音频处理函数
+            def process_aux_refs(aux_refs_list):
+                """处理辅助参考音频列表，提取文件路径"""
+                if not aux_refs_list:
+                    return []
+                
+                processed_refs = []
+                if isinstance(aux_refs_list, list):
+                    for item in aux_refs_list:
+                        if isinstance(item, dict) and "name" in item:
+                            processed_refs.append(item["name"])
+                        elif isinstance(item, str):
+                            processed_refs.append(item)
+                elif isinstance(aux_refs_list, dict) and "name" in aux_refs_list:
+                    processed_refs.append(aux_refs_list["name"])
+                elif isinstance(aux_refs_list, str):
+                    processed_refs.append(aux_refs_list)
+                
+                return processed_refs
+            
             # 保存角色配置
             create_btn.click(
-                fn=save_role_config,
+                fn=lambda role_name, gpt_model, sovits_model, ref_audio, prompt_text, prompt_lang, text_lang, 
+                       speed, ref_free, if_sr, top_k, top_p, temperature, sample_steps, pause_second, 
+                       description, aux_refs: save_role_config(
+                    role_name, gpt_model, sovits_model, ref_audio, prompt_text, prompt_lang, text_lang,
+                    speed, ref_free, if_sr, top_k, top_p, temperature, sample_steps, pause_second, 
+                    description, process_aux_refs(aux_refs)
+                ),
                 inputs=[
                     role_name, gpt_model, sovits_model, 
                     ref_audio, prompt_text, prompt_lang, text_lang,
@@ -1486,133 +1523,26 @@ def create_ui():
                 outputs=[role_list]
             )
             
+            synthesis_btn.click(
+                fn=lambda target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
+                        prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
+                        temperature, sample_steps, cut_punc, role_name, aux_refs: test_role_synthesis(
+                    target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
+                    prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
+                    temperature, sample_steps, cut_punc, role_name, process_aux_refs(aux_refs)
+                ),
+                inputs=[
+                    target_text, gpt_model, sovits_model,
+                    ref_audio, prompt_text, prompt_lang, text_lang,
+                    speed, ref_free, if_sr, top_k, top_p,
+                    temperature, sample_steps, cut_punc, role_name, aux_refs
+                ],
+                outputs=[synthesis_output]
+            )
+
             # 加载角色配置
-            def load_role_config(role):
-                if not role:
-                    return [gr.update()] * 16 + ["请选择角色"]
-                
-                try:
-                    role_path = Path("configs/roles") / f"{role}.json"
-                    if not role_path.exists():
-                        return [gr.update()] * 16 + [f"找不到角色配置文件: {role}"]
-                    
-                    with open(role_path, "r", encoding="utf-8") as f:
-                        config = json.load(f)
-                    
-                    # 获取第一个情绪配置
-                    if "emotions" not in config or not config["emotions"]:
-                        return [gr.update()] * 16 + [f"角色 {role} 没有情绪配置"]
-                    
-                    first_emotion = next(iter(config["emotions"].values()))
-                    
-                    # 提取配置参数
-                    gpt_path = config.get("gpt_path", "")
-                    sovits_path = config.get("sovits_path", "")
-                    ref_audio = first_emotion.get("ref_audio", "")
-                    prompt_text = first_emotion.get("prompt_text", "")
-                    aux_refs = first_emotion.get("aux_refs", [])
-                    prompt_lang = config.get("prompt_lang", "中文")
-                    text_lang = config.get("text_lang", "中文")
-                    speed = config.get("speed", 1.0)
-                    ref_free = config.get("ref_free", False)
-                    if_sr = config.get("if_sr", False)
-                    top_k = config.get("top_k", 15)
-                    top_p = config.get("top_p", 1.0)
-                    temperature = config.get("temperature", 1.0)
-                    sample_steps = config.get("sample_steps", 32)
-                    pause_second = config.get("pause_second", 0.3)
-                    description = config.get("description", "")
-                    
-                    # 检查文件是否存在
-                    warning_msg = ""
-                    
-                    # 检查参考音频
-                    if not os.path.exists(ref_audio):
-                        # 尝试在旧目录中查找文件
-                        old_ref_audio = ref_audio
-                        filename = os.path.basename(ref_audio)
-                        ref_audio_alternatives = [
-                            os.path.join("configs/ref_audio", role, filename),
-                            os.path.join("configs/refsounds", filename)
-                        ]
-                        
-                        ref_audio = None
-                        for alt_path in ref_audio_alternatives:
-                            if os.path.exists(alt_path):
-                                ref_audio = alt_path
-                                warning_msg += f"已重定向参考音频: {old_ref_audio} → {ref_audio}\n"
-                                break
-                        
-                        if not ref_audio:
-                            warning_msg += f"警告: 参考音频文件不存在: {old_ref_audio}\n"
-                            ref_audio = old_ref_audio  # 保留原路径，即使不存在
-                    
-                    # 检查GPT模型
-                    if not os.path.exists(gpt_path):
-                        warning_msg += f"警告: GPT模型文件不存在: {gpt_path}\n"
-                    
-                    # 检查SoVITS模型
-                    if not os.path.exists(sovits_path):
-                        warning_msg += f"警告: SoVITS模型文件不存在: {sovits_path}\n"
-                    
-                    # 检查辅助参考音频
-                    aux_ref_to_use = None
-                    if aux_refs:
-                        # 取第一个辅助参考音频
-                        if isinstance(aux_refs, list) and len(aux_refs) > 0:
-                            if os.path.exists(aux_refs[0]):
-                                aux_ref_to_use = aux_refs[0]
-                            else:
-                                # 尝试重定向
-                                old_aux_ref = aux_refs[0]
-                                filename = os.path.basename(aux_refs[0])
-                                aux_ref_alternatives = [
-                                    os.path.join("configs/ref_audio", role, filename),
-                                    os.path.join("configs/refsounds", filename)
-                                ]
-                                
-                                for alt_path in aux_ref_alternatives:
-                                    if os.path.exists(alt_path):
-                                        aux_ref_to_use = alt_path
-                                        warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {aux_ref_to_use}\n"
-                                        break
-                                
-                                if not aux_ref_to_use:
-                                    warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
-                                    aux_ref_to_use = old_aux_ref  # 保留原路径，即使不存在
-                    
-                    # 构建状态消息
-                    status = f"角色 {role} 配置已加载"
-                    if warning_msg:
-                        status = warning_msg + status
-                    
-                    return [
-                        gr.update(value=gpt_path),
-                        gr.update(value=sovits_path),
-                        gr.update(value=ref_audio),
-                        gr.update(value=prompt_text),
-                        gr.update(value=aux_ref_to_use),
-                        gr.update(value=prompt_lang),
-                        gr.update(value=text_lang),
-                        gr.update(value=speed),
-                        gr.update(value=ref_free),
-                        gr.update(value=if_sr),
-                        gr.update(value=top_k),
-                        gr.update(value=top_p),
-                        gr.update(value=temperature),
-                        gr.update(value=sample_steps),
-                        gr.update(value=pause_second),
-                        gr.update(value=description),
-                        status
-                    ]
-                except Exception as e:
-                    import traceback
-                    trace = traceback.format_exc()
-                    print(f"加载配置异常: {trace}")
-                    return [gr.update()] * 16 + [f"加载配置失败: {str(e)}"]
-            
             load_role_btn.click(
-                fn=load_role_config,
+                fn=lambda role: load_and_process_role_config(role, process_aux_refs),
                 inputs=[role_list],
                 outputs=[
                     gpt_model, sovits_model, ref_audio, prompt_text, aux_refs,
@@ -1635,18 +1565,15 @@ def create_ui():
                 outputs=[role_list]
             )
             
-            # 合成测试
-            synthesis_btn.click(
-                fn=test_role_synthesis,
-                inputs=[
-                    target_text, gpt_model, sovits_model,
-                    ref_audio, prompt_text, prompt_lang, text_lang,
-                    speed, ref_free, if_sr, top_k, top_p,
-                    temperature, sample_steps, cut_punc, role_name, aux_refs
-                ],
-                outputs=[synthesis_output]
+            # 刷新角色列表
+            refresh_role_list_btn.click(
+                fn=lambda: (
+                    gr.update(choices=[(role, role) for role in list_roles()])
+                ),
+                inputs=[],
+                outputs=[role_list]
             )
-            
+
         with gr.Tab("配置"):
             with gr.Tab("词语替换"):
                 word_replace_text = gr.TextArea(
@@ -1714,6 +1641,164 @@ def save_word_replace_config(text):
     except Exception as e:
         print(f"保存词语替换配置失败: {e}")
         return f"保存失败: {e}"
+
+def load_and_process_role_config(role, process_aux_refs_func=None):
+    """加载角色配置并处理辅助参考音频
+    
+    Args:
+        role: 角色名称
+        process_aux_refs_func: 处理辅助参考音频的函数，默认为None
+        
+    Returns:
+        加载的角色配置列表
+    """
+    if not role:
+        return [gr.update()] * 16 + ["请选择角色"]
+    
+    try:
+        role_path = Path("configs/roles") / f"{role}.json"
+        if not role_path.exists():
+            return [gr.update()] * 16 + [f"找不到角色配置文件: {role}"]
+        
+        with open(role_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        
+        # 获取第一个情绪配置
+        if "emotions" not in config or not config["emotions"]:
+            return [gr.update()] * 16 + [f"角色 {role} 没有情绪配置"]
+        
+        first_emotion = next(iter(config["emotions"].values()))
+        
+        # 提取配置参数
+        gpt_path = config.get("gpt_path", "")
+        sovits_path = config.get("sovits_path", "")
+        ref_audio = first_emotion.get("ref_audio", "")
+        prompt_text = first_emotion.get("prompt_text", "")
+        aux_refs = first_emotion.get("aux_refs", [])
+        prompt_lang = config.get("prompt_lang", "中文")
+        text_lang = config.get("text_lang", "中文")
+        speed = config.get("speed", 1.0)
+        ref_free = config.get("ref_free", False)
+        if_sr = config.get("if_sr", False)
+        top_k = config.get("top_k", 15)
+        top_p = config.get("top_p", 1.0)
+        temperature = config.get("temperature", 1.0)
+        sample_steps = config.get("sample_steps", 32)
+        pause_second = config.get("pause_second", 0.3)
+        description = config.get("description", "")
+        
+        # 检查文件是否存在
+        warning_msg = ""
+        
+        # 检查参考音频
+        if not os.path.exists(ref_audio):
+            # 尝试在旧目录中查找文件
+            old_ref_audio = ref_audio
+            filename = os.path.basename(ref_audio)
+            ref_audio_alternatives = [
+                os.path.join("configs/ref_audio", role, filename),
+                os.path.join("configs/refsounds", filename)
+            ]
+            
+            ref_audio = None
+            for alt_path in ref_audio_alternatives:
+                if os.path.exists(alt_path):
+                    ref_audio = alt_path
+                    warning_msg += f"已重定向参考音频: {old_ref_audio} → {ref_audio}\n"
+                    break
+            
+            if not ref_audio:
+                warning_msg += f"警告: 参考音频文件不存在: {old_ref_audio}\n"
+                ref_audio = old_ref_audio  # 保留原路径，即使不存在
+        
+        # 检查GPT模型
+        if not os.path.exists(gpt_path):
+            warning_msg += f"警告: GPT模型文件不存在: {gpt_path}\n"
+        
+        # 检查SoVITS模型
+        if not os.path.exists(sovits_path):
+            warning_msg += f"警告: SoVITS模型文件不存在: {sovits_path}\n"
+        
+        # 检查辅助参考音频
+        aux_refs_to_use = []
+        if aux_refs:
+            # 处理辅助参考音频列表
+            if isinstance(aux_refs, list):
+                for aux_ref in aux_refs:
+                    if os.path.exists(aux_ref):
+                        aux_refs_to_use.append(aux_ref)
+                    else:
+                        # 尝试重定向
+                        old_aux_ref = aux_ref
+                        filename = os.path.basename(aux_ref)
+                        aux_ref_alternatives = [
+                            os.path.join("configs/ref_audio", role, filename),
+                            os.path.join("configs/refsounds", filename)
+                        ]
+                        
+                        found = False
+                        for alt_path in aux_ref_alternatives:
+                            if os.path.exists(alt_path):
+                                aux_refs_to_use.append(alt_path)
+                                found = True
+                                warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path}\n"
+                                break
+                        
+                        if not found:
+                            warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
+            elif aux_refs and isinstance(aux_refs, str):
+                # 处理单个辅助参考音频
+                if os.path.exists(aux_refs):
+                    aux_refs_to_use.append(aux_refs)
+                else:
+                    # 尝试重定向
+                    old_aux_ref = aux_refs
+                    filename = os.path.basename(aux_refs)
+                    aux_ref_alternatives = [
+                        os.path.join("configs/ref_audio", role, filename),
+                        os.path.join("configs/refsounds", filename)
+                    ]
+                    
+                    found = False
+                    for alt_path in aux_ref_alternatives:
+                        if os.path.exists(alt_path):
+                            aux_refs_to_use.append(alt_path)
+                            found = True
+                            warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path}\n"
+                            break
+                    
+                    if not found:
+                        warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
+        
+        # 构建状态消息
+        status = f"角色 {role} 配置已加载"
+        if warning_msg:
+            status = warning_msg + status
+        
+        return [
+            gr.update(value=gpt_path),
+            gr.update(value=sovits_path),
+            gr.update(value=ref_audio),
+            gr.update(value=prompt_text),
+            gr.update(value=aux_refs_to_use),
+            gr.update(value=prompt_lang),
+            gr.update(value=text_lang),
+            gr.update(value=speed),
+            gr.update(value=ref_free),
+            gr.update(value=if_sr),
+            gr.update(value=top_k),
+            gr.update(value=top_p),
+            gr.update(value=temperature),
+            gr.update(value=sample_steps),
+            gr.update(value=pause_second),
+            gr.update(value=description),
+            status
+        ]
+    except Exception as e:
+        import traceback
+        trace = traceback.format_exc()
+        print(f"加载配置异常: {trace}")
+        return [gr.update()] * 16 + [f"加载配置失败: {str(e)}"]
 
 if __name__ == "__main__":
     app = create_ui()
