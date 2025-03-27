@@ -23,6 +23,7 @@ def call_api(text: str, role_config: Dict[str, Any], role_name: str, cut_punc: s
     """
     # 清理文本，进行字符替换
     text = clean_text(text)
+    print(text)
     
     # 检查必要的配置
     if "ref_audio" not in role_config:
@@ -261,41 +262,30 @@ def test_role_synthesis(
         except requests.exceptions.RequestException as e:
             raise gr.Error(f"API请求失败: {str(e)}")
         
-        # 准备API请求参数
-        params = {
-            "refer_wav_path": ref_audio,
+        # 构建角色配置字典，与call_api兼容
+        role_config = {
+            "ref_audio": ref_audio,
             "prompt_text": prompt_text,
-            "prompt_language": prompt_lang,
-            "text": text,
-            "text_language": text_lang,
+            "prompt_lang": prompt_lang,
+            "text_lang": text_lang,
             "speed": speed,
             "top_k": top_k,
             "top_p": top_p,
             "temperature": temperature,
             "sample_steps": sample_steps,
-            "if_sr": if_sr,
-            "cut_punc": cut_punc,
-            "spk": role_name,
+            "if_sr": if_sr
         }
         
+        # 添加辅助参考音频
         if valid_aux_refs:
-            params["inp_refs"] = valid_aux_refs
+            role_config["aux_refs"] = valid_aux_refs
             
-        # 调用API
-        response = requests.post(API_URL, json=params)
-        if response.status_code != 200:
-            error_msg = response.text
-            try:
-                error_data = response.json()
-                if "message" in error_data:
-                    error_msg = error_data["message"]
-            except:
-                pass
-            raise RuntimeError(f"API调用失败: {error_msg}")
+        # 调用现有的API函数，避免代码重复
+        audio_data = call_api(text, role_config, role_name, cut_punc=cut_punc)
             
         # 保存音频
         with open(output_path, "wb") as f:
-            f.write(response.content)
+            f.write(audio_data)
             
         return output_path
     except Exception as e:

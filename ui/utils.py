@@ -91,7 +91,8 @@ def clean_text(text: str) -> str:
     global g_word_replace_dict
     if not g_word_replace_dict:
         g_word_replace_dict = load_word_replace_dict()
-        
+    
+    print(g_word_replace_dict)
     if not g_word_replace_dict:
         return text
     
