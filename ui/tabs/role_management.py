@@ -1,4 +1,5 @@
 import gradio as gr
+import os
 
 from ui.utils import LANGUAGE_OPTIONS, g_default_role
 from ui.models import get_model_lists
@@ -33,10 +34,16 @@ def extract_text_from_filename(file_path):
     """从文件名自动提取参考文本"""
     if not file_path:
         return ""
-    import os
     file_name = os.path.basename(file_path)
     name_without_ext = os.path.splitext(file_name)[0]
     return name_without_ext
+
+
+def preview_audio_if_exists(file_path):
+    """如果文件存在则返回用于预览的路径"""
+    if file_path and os.path.isfile(file_path):
+        return file_path
+    return None
 
 
 def create_role_management_tab():
@@ -79,11 +86,18 @@ def create_role_management_tab():
             # 参考音频区域
             gr.Markdown(html_center("参考音频", 'h3'))
             with gr.Row():
-                ref_audio = gr.Audio(
-                    label="请上传3~10秒内参考音频，超过会报错！",
-                    type="filepath",
-                    scale=13
-                )
+                with gr.Column(scale=13):
+                    ref_audio = gr.Textbox(
+                        label="请输入3~10秒内参考音频的文件路径，超过会报错！",
+                        placeholder="输入音频文件的完整路径",
+                        type="text"
+                    )
+                    audio_preview = gr.Audio(
+                        label="音频预览",
+                        type="filepath",
+                        visible=True,
+                        interactive=False
+                    )
                 with gr.Column(scale=13):
                     ref_free = gr.Checkbox(
                         label="开启无参考文本模式。不填参考文本亦相当于开启。v3暂不支持该模式，使用了会报错。",
@@ -237,11 +251,15 @@ def create_role_management_tab():
         outputs=[gpt_model, sovits_model]
     )
     
-    # 从文件名自动提取参考文本
+    # 从文件名自动提取参考文本并预览音频
     ref_audio.change(
         fn=extract_text_from_filename,
         inputs=[ref_audio],
         outputs=[prompt_text]
+    ).then(
+        fn=preview_audio_if_exists,
+        inputs=[ref_audio],
+        outputs=[audio_preview]
     )
     
     # 保存角色配置
