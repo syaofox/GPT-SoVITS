@@ -16,7 +16,15 @@ def process_aux_refs(aux_refs_list):
         return []
     
     processed_refs = []
-    if isinstance(aux_refs_list, list):
+    
+    # 如果输入是字符串（文本框输入），按行分割，每行作为一个文件路径
+    if isinstance(aux_refs_list, str):
+        for line in aux_refs_list.splitlines():
+            line = line.strip()
+            if line:  # 跳过空行
+                processed_refs.append(clean_file_path(line))
+    # 兼容旧格式（上传文件返回的对象）
+    elif isinstance(aux_refs_list, list):
         for item in aux_refs_list:
             if isinstance(item, dict) and "name" in item:
                 processed_refs.append(clean_file_path(item["name"]))
@@ -24,8 +32,6 @@ def process_aux_refs(aux_refs_list):
                 processed_refs.append(clean_file_path(item))
     elif isinstance(aux_refs_list, dict) and "name" in aux_refs_list:
         processed_refs.append(clean_file_path(aux_refs_list["name"]))
-    elif isinstance(aux_refs_list, str):
-        processed_refs.append(clean_file_path(aux_refs_list))
     
     return processed_refs
 
@@ -131,11 +137,11 @@ def create_role_management_tab():
                         value="中文",
                         scale=1
                     )
-                    aux_refs = gr.File(
-                        label="可选项：通过拖拽多个文件上传多个参考音频（建议同性），平均融合他们的音色。",
-                        file_count="multiple",
-                        file_types=["audio"],
-                        type="filepath"
+                    aux_refs = gr.Textbox(
+                        label="辅助参考音频（可选）：每行输入一个音频文件路径，用于融合多个音色",
+                        placeholder="输入音频文件路径，每行一个",
+                        lines=3,
+                        max_lines=5
                     )
                     sample_steps = gr.Radio(
                         label="采样步数,如果觉得电,提高试试,如果觉得慢,降低试试",
@@ -318,6 +324,11 @@ def create_role_management_tab():
             top_k, top_p, temperature, sample_steps, pause_second,
             description, status_text
         ]
+    ).then(
+        # 将辅助参考音频列表格式化为文本框格式（每行一个路径）
+        fn=lambda aux_refs_list: gr.update(value="\n".join(aux_refs_list) if isinstance(aux_refs_list, list) else ""),
+        inputs=[aux_refs],
+        outputs=[aux_refs]
     )
     
     # 删除角色配置
