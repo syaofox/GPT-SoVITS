@@ -182,28 +182,43 @@ def save_role_config(
     
     # 处理辅助参考音频
     aux_refs_copied = []
-    if aux_refs and isinstance(aux_refs, (list, tuple)) and len(aux_refs) > 0:
-        # 处理多个辅助参考音频文件
-        for aux_ref in aux_refs:
-            if aux_ref and os.path.exists(aux_ref):
-                aux_filename = os.path.basename(aux_ref)
-                target_aux_ref = str(ref_audio_dir / aux_filename)
-                try:
-                    shutil.copy2(aux_ref, target_aux_ref)
-                    aux_refs_copied.append(target_aux_ref)
-                    print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
-                except Exception as e:
-                    print(f"复制辅助参考音频失败: {str(e)}")
-    elif aux_refs and os.path.exists(aux_refs):  # 处理单个文件情况
-        # 处理单个辅助参考音频
-        aux_filename = os.path.basename(aux_refs)
-        target_aux_ref = str(ref_audio_dir / aux_filename)
-        try:
-            shutil.copy2(aux_refs, target_aux_ref)
-            aux_refs_copied.append(target_aux_ref)
-            print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
-        except Exception as e:
-            print(f"复制辅助参考音频失败: {str(e)}")
+    if aux_refs:
+        # 处理aux_refs为字符串的情况（来自文本框，每行一个路径）
+        if isinstance(aux_refs, str):
+            for line in aux_refs.splitlines():
+                line = line.strip()
+                if line and os.path.exists(line):
+                    aux_filename = os.path.basename(line)
+                    target_aux_ref = str(ref_audio_dir / aux_filename)
+                    try:
+                        shutil.copy2(line, target_aux_ref)
+                        aux_refs_copied.append(target_aux_ref)
+                        print(f"复制辅助参考音频: {line} -> {target_aux_ref}")
+                    except Exception as e:
+                        print(f"复制辅助参考音频失败: {str(e)}")
+        # 兼容列表形式（旧格式或从process_aux_refs函数处理后的结果）
+        elif isinstance(aux_refs, (list, tuple)) and len(aux_refs) > 0:
+            # 处理多个辅助参考音频文件
+            for aux_ref in aux_refs:
+                if aux_ref and os.path.exists(aux_ref):
+                    aux_filename = os.path.basename(aux_ref)
+                    target_aux_ref = str(ref_audio_dir / aux_filename)
+                    try:
+                        shutil.copy2(aux_ref, target_aux_ref)
+                        aux_refs_copied.append(target_aux_ref)
+                        print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
+                    except Exception as e:
+                        print(f"复制辅助参考音频失败: {str(e)}")
+        elif aux_refs and os.path.exists(aux_refs):  # 处理单个文件情况
+            # 处理单个辅助参考音频
+            aux_filename = os.path.basename(aux_refs)
+            target_aux_ref = str(ref_audio_dir / aux_filename)
+            try:
+                shutil.copy2(aux_refs, target_aux_ref)
+                aux_refs_copied.append(target_aux_ref)
+                print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
+            except Exception as e:
+                print(f"复制辅助参考音频失败: {str(e)}")
     
     # 构建配置数据
     config = {
