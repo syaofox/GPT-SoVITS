@@ -1,7 +1,7 @@
 import gradio as gr
 import os
 
-from ui.utils import LANGUAGE_OPTIONS, g_default_role
+from ui.utils import LANGUAGE_OPTIONS, g_default_role, clean_file_path
 from ui.models import get_model_lists
 from ui.roles import (
     list_roles, save_role_config, delete_role_config, 
@@ -34,6 +34,8 @@ def extract_text_from_filename(file_path):
     """从文件名自动提取参考文本"""
     if not file_path:
         return ""
+    # 清理文件路径，去除可能的引号
+    file_path = clean_file_path(file_path)
     file_name = os.path.basename(file_path)
     name_without_ext = os.path.splitext(file_name)[0]
     return name_without_ext
@@ -41,6 +43,8 @@ def extract_text_from_filename(file_path):
 
 def preview_audio_if_exists(file_path):
     """如果文件存在则返回用于预览的路径"""
+    # 清理文件路径，去除可能的引号
+    file_path = clean_file_path(file_path)
     if file_path and os.path.isfile(file_path):
         return file_path
     return None
