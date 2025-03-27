@@ -230,7 +230,6 @@ def create_text_file_tab():
     with gr.Group():
         with gr.Row():            
             process_text_btn = gr.Button("处理文本", variant="primary")
-            process_file_btn = gr.Button("处理文件", variant="secondary")
             preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
             refresh_roles_btn = gr.Button("刷新角色列表", variant="secondary")
     
@@ -265,19 +264,21 @@ def create_text_file_tab():
         outputs=file_output,
     )
 
-    process_file_btn.click(
-        process_file,
-        inputs=[
-            file_input,
-            force_role,
-            default_role,
-            force_emotion,
-            default_emotion,
-            text_lang,
-            cut_punc_input,
-            disable_parsing,
-        ],
-        outputs=file_output,
+    # 添加文件上传事件处理函数
+    def load_file_content(file):
+        if not file or not hasattr(file, "name"):
+            return None
+        try:
+            with open(file.name, "r", encoding="utf-8") as f:
+                content = f.read()
+            return content
+        except Exception as e:
+            return f"文件读取错误：{str(e)}"
+
+    file_input.change(
+        load_file_content,
+        inputs=[file_input],
+        outputs=[text_content],
     )
 
     preprocess_text_btn.click(
