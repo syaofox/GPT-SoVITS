@@ -706,12 +706,8 @@ def clean_text_inf(text, language, version):
 
     print(f"text: {text}")
     text, tone_data_list = find_custom_tone(text)
-    print(f"tone_data_list: {tone_data_list}", "text: {text}")
-    # replace_tone_data_list = correct_extra_pronunciation(text)
-    # print(f"replace_tone_data_list: {replace_tone_data_list}")
-
-    # tone_data_list = tone_data_list + replace_tone_data_list
     print(f"tone_data_list: {tone_data_list}")
+
     phones, word2ph, norm_text = clean_text(text, language, version)
     # 修正多音字
     revise_custom_tone(phones, word2ph, tone_data_list)
@@ -1090,6 +1086,7 @@ def get_tts_wav(
     # os.environ['version'] = version
     prompt_language = dict_language[prompt_language.lower()]
     text_language = dict_language[text_language.lower()]
+    print(f"prompt_language: {prompt_language}: text_language: {text_language}, version: {version},ref_wav_path: {ref_wav_path},inp_refs: {inp_refs},spk: {spk},prompt_text: {prompt_text},text: {text},top_k: {top_k},top_p: {top_p},temperature: {temperature},speed: {speed},sample_steps: {sample_steps},if_sr: {if_sr}")
     phones1, bert1, norm_text1 = get_phones_and_bert(
         prompt_text, prompt_language, version
     )
@@ -1302,7 +1299,7 @@ def handle(
                 {"code": 400, "message": "未指定参考音频且接口无预设"}, status_code=400
             )
 
-    if not sample_steps in [4, 8, 16, 32]:
+    if not sample_steps in [4, 8, 16, 32, 64, 128]:
         sample_steps = 32
 
     if cut_punc == None:
