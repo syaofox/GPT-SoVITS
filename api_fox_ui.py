@@ -697,6 +697,287 @@ def update_default_emotions(role: str) -> gr.update:
     return gr.update(choices=default_choices, value=emotions[0])  # 默认选择第一个情绪
 
 
+def get_model_lists():
+    """获取GPT和SoVITS模型列表"""
+    # GPT模型列表
+    gpt_models = []
+    gpt_roots = ["GPT_weights", "GPT_weights_v2", "GPT_weights_v3"]
+    for root in gpt_roots:
+        if os.path.exists(root):
+            for name in os.listdir(root):
+                if name.endswith(".ckpt"):
+                    gpt_models.append(f"{root}/{name}")
+    
+    # SoVITS模型列表
+    sovits_models = []
+    sovits_roots = ["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3"]
+    for root in sovits_roots:
+        if os.path.exists(root):
+            for name in os.listdir(root):
+                if name.endswith(".pth"):
+                    sovits_models.append(f"{root}/{name}")
+    
+    return sorted(gpt_models), sorted(sovits_models)
+
+
+def get_role_name_from_file_path(file_path):
+    """从文件路径中提取角色名称"""
+    # 提取文件名，不包含扩展名
+    file_name = os.path.basename(file_path)
+    file_name = os.path.splitext(file_name)[0]
+    return file_name
+
+
+def save_role_config(
+    role_name: str,
+    gpt_model: str,
+    sovits_model: str,
+    ref_audio: str,
+    prompt_text: str,
+    prompt_lang: str,
+    text_lang: str,
+    speed: float,
+    ref_free: bool,
+    if_sr: bool,
+    top_k: int,
+    top_p: float,
+    temperature: float,
+    sample_steps: int,
+    pause_second: float,
+    description: str = "",
+    aux_refs: List[str] = None
+) -> str:
+    """保存角色配置到JSON文件
+    
+    Args:
+        role_name: 角色名称
+        gpt_model: GPT模型路径
+        sovits_model: SoVITS模型路径
+        ref_audio: 参考音频路径
+        prompt_text: 参考音频文本
+        prompt_lang: 参考音频语言
+        text_lang: 默认文本语言
+        speed: 语速
+        ref_free: 是否开启参考自由模式
+        if_sr: 是否使用超分辨率
+        top_k: top_k参数
+        top_p: top_p参数
+        temperature: 温度参数
+        sample_steps: 采样步数
+        pause_second: 停顿秒数
+        description: 角色描述
+        aux_refs: 辅助参考音频列表
+    
+    Returns:
+        成功或错误消息
+    """
+    # 确定版本
+    version = "v2"  # 默认v2
+    if "GPT_weights_v3" in gpt_model or "SoVITS_weights_v3" in sovits_model:
+        version = "v3"
+    elif "GPT_weights_v2" in gpt_model or "SoVITS_weights_v2" in sovits_model:
+        version = "v2"
+    elif "GPT_weights/" in gpt_model or "SoVITS_weights/" in sovits_model:
+        version = "v1"
+    
+    # 提取参考音频文件名作为情绪名称
+    emotion_name = os.path.basename(ref_audio)
+    emotion_name = os.path.splitext(emotion_name)[0]
+    if len(emotion_name) > 10:  # 如果名称太长，截取一部分
+        emotion_name = emotion_name[:10]
+    
+    # 构建配置数据
+    config = {
+        "version": version,
+        "emotions": {
+            emotion_name: {
+                "ref_audio": ref_audio,
+                "prompt_text": prompt_text
+            }
+        },
+        "text_lang": text_lang,
+        "prompt_lang": prompt_lang,
+        "gpt_path": gpt_model,
+        "sovits_path": sovits_model,
+        "speed": speed,
+        "ref_free": ref_free,
+        "if_sr": if_sr,
+        "top_k": top_k,
+        "top_p": top_p,
+        "temperature": temperature,
+        "sample_steps": sample_steps,
+        "pause_second": pause_second,
+        "description": description
+    }
+    
+    # 添加辅助参考音频
+    if aux_refs and len(aux_refs) > 0:
+        config["emotions"][emotion_name]["aux_refs"] = aux_refs
+    
+    # 保存配置文件
+    config_dir = Path("configs/roles")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    
+    config_path = config_dir / f"{role_name}.json"
+    
+    # 如果文件已存在，读取已有配置并合并情绪
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                existing_config = json.load(f)
+            
+            # 合并情绪配置
+            if "emotions" in existing_config:
+                # 保留现有的情绪配置
+                for emotion, emotion_config in existing_config["emotions"].items():
+                    if emotion != emotion_name:  # 避免覆盖新添加的情绪
+                        config["emotions"][emotion] = emotion_config
+            
+            # 保留版本设置
+            if "version" in existing_config:
+                config["version"] = existing_config["version"]
+                
+        except Exception as e:
+            return f"读取现有配置失败: {str(e)}"
+    
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        return f"角色 {role_name} 配置保存成功"
+    except Exception as e:
+        return f"保存配置失败: {str(e)}"
+
+
+def delete_role_config(role_name: str) -> str:
+    """删除角色配置文件
+    
+    Args:
+        role_name: 角色名称
+        
+    Returns:
+        成功或错误消息
+    """
+    config_path = Path("configs/roles") / f"{role_name}.json"
+    if not config_path.exists():
+        return f"角色 {role_name} 配置文件不存在"
+    
+    try:
+        os.remove(config_path)
+        return f"角色 {role_name} 配置已删除"
+    except Exception as e:
+        return f"删除配置失败: {str(e)}"
+
+
+def test_role_synthesis(
+    text: str,
+    gpt_model: str,
+    sovits_model: str,
+    ref_audio: str,
+    prompt_text: str,
+    prompt_lang: str,
+    text_lang: str,
+    speed: float,
+    ref_free: bool,
+    if_sr: bool,
+    top_k: int,
+    top_p: float,
+    temperature: float,
+    sample_steps: int,
+    cut_punc: str,
+    role_name: str = "临时角色",
+    aux_refs: List[str] = None
+) -> str:
+    """测试角色合成
+    
+    Args:
+        text: 目标文本
+        gpt_model: GPT模型路径
+        sovits_model: SoVITS模型路径
+        ref_audio: 参考音频路径
+        prompt_text: 参考音频文本
+        prompt_lang: 参考音频语言
+        text_lang: 默认文本语言
+        speed: 语速
+        ref_free: 是否开启参考自由模式
+        if_sr: 是否使用超分辨率
+        top_k: top_k参数
+        top_p: top_p参数
+        temperature: 温度参数
+        sample_steps: 采样步数
+        cut_punc: 切分符号
+        role_name: 角色名称
+        aux_refs: 辅助参考音频列表
+    
+    Returns:
+        合成的音频文件路径
+    """
+    os.makedirs("output", exist_ok=True)
+    output_path = os.path.join("output", f"output_{role_name}_{int(time.time())}.wav")
+    
+    try:
+        # 设置模型
+        try:
+            response = requests.post(
+                f"{API_URL}/set_model",
+                json={
+                    "gpt_model_path": gpt_model,
+                    "sovits_model_path": sovits_model,
+                },
+                timeout=30,
+            )
+            if response.status_code != 200:
+                error_msg = response.text
+                try:
+                    error_data = response.json()
+                    if "message" in error_data:
+                        error_msg = error_data["message"]
+                except:
+                    pass
+                raise gr.Error(f"设置模型失败: {error_msg}")
+        except requests.exceptions.RequestException as e:
+            raise gr.Error(f"API请求失败: {str(e)}")
+        
+        # 准备API请求参数
+        params = {
+            "refer_wav_path": ref_audio,
+            "prompt_text": prompt_text,
+            "prompt_language": prompt_lang,
+            "text": text,
+            "text_language": text_lang,
+            "speed": speed,
+            "top_k": top_k,
+            "top_p": top_p,
+            "temperature": temperature,
+            "sample_steps": sample_steps,
+            "if_sr": if_sr,
+            "cut_punc": cut_punc,
+            "spk": role_name,
+        }
+        
+        if aux_refs and len(aux_refs) > 0:
+            params["inp_refs"] = aux_refs
+            
+        # 调用API
+        response = requests.post(API_URL, json=params)
+        if response.status_code != 200:
+            error_msg = response.text
+            try:
+                error_data = response.json()
+                if "message" in error_data:
+                    error_msg = error_data["message"]
+            except:
+                pass
+            raise RuntimeError(f"API调用失败: {error_msg}")
+            
+        # 保存音频
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+            
+        return output_path
+    except Exception as e:
+        raise gr.Error(f"合成失败: {str(e)}")
+
+
 def create_ui():
     global g_default_role  # 添加这一行，声明使用全局变量
     
@@ -892,6 +1173,300 @@ def create_ui():
                 outputs=[emotion],
             )
 
+        with gr.Tab("角色管理合成"):
+            gpt_models, sovits_models = get_model_lists()
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 模型选择")
+                    gpt_model = gr.Dropdown(
+                        label="GPT模型",
+                        choices=gpt_models,
+                        value=gpt_models[0] if gpt_models else None,
+                        interactive=True
+                    )
+                    sovits_model = gr.Dropdown(
+                        label="SoVITS模型",
+                        choices=sovits_models,
+                        value=sovits_models[0] if sovits_models else None,
+                        interactive=True
+                    )
+                    refresh_models_btn = gr.Button("刷新模型列表")
+                
+                with gr.Column(scale=1):
+                    gr.Markdown("### 参考音频")
+                    ref_audio = gr.Audio(
+                        label="参考音频",
+                        type="filepath",
+                        interactive=True
+                    )
+                    prompt_text = gr.Textbox(
+                        label="参考音频文本",
+                        placeholder="参考音频对应的文本内容",
+                        lines=2
+                    )
+                    aux_refs = gr.Audio(
+                        label="辅助参考音频(可选)",
+                        type="filepath",
+                        interactive=True
+                    )
+                    
+                with gr.Column(scale=1):
+                    gr.Markdown("### 语言设置")
+                    prompt_lang = gr.Dropdown(
+                        label="参考音频语言",
+                        choices=LANGUAGE_OPTIONS,
+                        value="中文",
+                        type="value"
+                    )
+                    text_lang = gr.Dropdown(
+                        label="目标文本语言",
+                        choices=LANGUAGE_OPTIONS,
+                        value="中文",
+                        type="value"
+                    )
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    gr.Markdown("### 目标文本")
+                    target_text = gr.Textbox(
+                        label="目标文本",
+                        placeholder="输入要合成的文本内容",
+                        lines=4
+                    )
+                    cut_punc = gr.Textbox(
+                        label="切分符号（可选）",
+                        placeholder="例如：,.。，",
+                        value="。！？：.!?:"
+                    )
+                    
+                with gr.Column(scale=1):
+                    gr.Markdown("### 参数配置")
+                    with gr.Row():
+                        with gr.Column(scale=1):
+                            speed = gr.Slider(
+                                label="语速",
+                                minimum=0.5,
+                                maximum=2.0,
+                                value=1.0,
+                                step=0.1
+                            )
+                            ref_free = gr.Checkbox(
+                                label="参考自由模式",
+                                value=False
+                            )
+                            if_sr = gr.Checkbox(
+                                label="使用超分辨率",
+                                value=False
+                            )
+                        
+                        with gr.Column(scale=1):
+                            top_k = gr.Slider(
+                                label="Top-K",
+                                minimum=1,
+                                maximum=30,
+                                value=15,
+                                step=1
+                            )
+                            top_p = gr.Slider(
+                                label="Top-P",
+                                minimum=0.1,
+                                maximum=1.0,
+                                value=1.0,
+                                step=0.05
+                            )
+                            temperature = gr.Slider(
+                                label="温度",
+                                minimum=0.1,
+                                maximum=2.0,
+                                value=1.0,
+                                step=0.1
+                            )
+                            sample_steps = gr.Slider(
+                                label="采样步数",
+                                minimum=16,
+                                maximum=64,
+                                value=32,
+                                step=8
+                            )
+                            pause_second = gr.Slider(
+                                label="停顿秒数",
+                                minimum=0.1,
+                                maximum=1.0,
+                                value=0.3,
+                                step=0.1
+                            )
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 角色信息")
+                    role_name = gr.Textbox(
+                        label="角色名称",
+                        placeholder="输入要保存的角色名称",
+                        value=""
+                    )
+                    description = gr.Textbox(
+                        label="角色描述(可选)",
+                        placeholder="输入角色描述，如：性别，声音特点等",
+                        lines=2
+                    )
+                    
+                with gr.Column(scale=1):
+                    gr.Markdown("### 操作")
+                    create_btn = gr.Button("新建/更新角色", variant="primary")
+                    role_list = gr.Dropdown(
+                        label="现有角色列表",
+                        choices=[(role, role) for role in roles],
+                        value=g_default_role if g_default_role in roles else None,
+                        type="value"
+                    )
+                    with gr.Row():
+                        load_role_btn = gr.Button("加载角色")
+                        delete_role_btn = gr.Button("删除角色", variant="stop")
+                        
+                with gr.Column(scale=1):
+                    gr.Markdown("### 合成结果")
+                    synthesis_btn = gr.Button("合成测试", variant="primary")
+                    synthesis_output = gr.Audio(label="合成结果")
+                    status_text = gr.Markdown("")
+            
+            # 刷新模型列表
+            refresh_models_btn.click(
+                fn=lambda: (
+                    gr.update(choices=get_model_lists()[0]),
+                    gr.update(choices=get_model_lists()[1])
+                ),
+                inputs=[],
+                outputs=[gpt_model, sovits_model]
+            )
+            
+            # 从文件名自动提取参考文本
+            def extract_text_from_filename(file_path):
+                if not file_path:
+                    return ""
+                file_name = os.path.basename(file_path)
+                name_without_ext = os.path.splitext(file_name)[0]
+                return name_without_ext
+            
+            ref_audio.change(
+                fn=extract_text_from_filename,
+                inputs=[ref_audio],
+                outputs=[prompt_text]
+            )
+            
+            # 保存角色配置
+            create_btn.click(
+                fn=save_role_config,
+                inputs=[
+                    role_name, gpt_model, sovits_model, 
+                    ref_audio, prompt_text, prompt_lang, text_lang,
+                    speed, ref_free, if_sr, top_k, top_p, 
+                    temperature, sample_steps, pause_second, description, aux_refs
+                ],
+                outputs=[status_text]
+            ).then(
+                fn=lambda: (
+                    gr.update(choices=[(role, role) for role in list_roles()])
+                ),
+                inputs=[],
+                outputs=[role_list]
+            )
+            
+            # 加载角色配置
+            def load_role_config(role):
+                if not role:
+                    return [gr.update()] * 14 + ["请选择角色"]
+                
+                try:
+                    role_path = Path("configs/roles") / f"{role}.json"
+                    if not role_path.exists():
+                        return [gr.update()] * 14 + [f"找不到角色配置文件: {role}"]
+                    
+                    with open(role_path, "r", encoding="utf-8") as f:
+                        config = json.load(f)
+                    
+                    # 获取第一个情绪配置
+                    if "emotions" not in config or not config["emotions"]:
+                        return [gr.update()] * 14 + [f"角色 {role} 没有情绪配置"]
+                    
+                    first_emotion = next(iter(config["emotions"].values()))
+                    
+                    # 提取配置参数
+                    gpt_path = config.get("gpt_path", "")
+                    sovits_path = config.get("sovits_path", "")
+                    ref_audio = first_emotion.get("ref_audio", "")
+                    prompt_text = first_emotion.get("prompt_text", "")
+                    aux_refs = first_emotion.get("aux_refs", [])
+                    prompt_lang = config.get("prompt_lang", "中文")
+                    text_lang = config.get("text_lang", "中文")
+                    speed = config.get("speed", 1.0)
+                    ref_free = config.get("ref_free", False)
+                    if_sr = config.get("if_sr", False)
+                    top_k = config.get("top_k", 15)
+                    top_p = config.get("top_p", 1.0)
+                    temperature = config.get("temperature", 1.0)
+                    sample_steps = config.get("sample_steps", 32)
+                    pause_second = config.get("pause_second", 0.3)
+                    description = config.get("description", "")
+                    
+                    return [
+                        gr.update(value=gpt_path),
+                        gr.update(value=sovits_path),
+                        gr.update(value=ref_audio),
+                        gr.update(value=prompt_text),
+                        gr.update(value=aux_refs[0] if aux_refs else None),
+                        gr.update(value=prompt_lang),
+                        gr.update(value=text_lang),
+                        gr.update(value=speed),
+                        gr.update(value=ref_free),
+                        gr.update(value=if_sr),
+                        gr.update(value=top_k),
+                        gr.update(value=top_p),
+                        gr.update(value=temperature),
+                        gr.update(value=sample_steps),
+                        gr.update(value=pause_second),
+                        gr.update(value=description),
+                        f"角色 {role} 配置已加载"
+                    ]
+                except Exception as e:
+                    return [gr.update()] * 16 + [f"加载配置失败: {str(e)}"]
+            
+            load_role_btn.click(
+                fn=load_role_config,
+                inputs=[role_list],
+                outputs=[
+                    gpt_model, sovits_model, ref_audio, prompt_text, aux_refs,
+                    prompt_lang, text_lang, speed, ref_free, if_sr,
+                    top_k, top_p, temperature, sample_steps, pause_second,
+                    description, status_text
+                ]
+            )
+            
+            # 删除角色配置
+            delete_role_btn.click(
+                fn=delete_role_config,
+                inputs=[role_list],
+                outputs=[status_text]
+            ).then(
+                fn=lambda: (
+                    gr.update(choices=[(role, role) for role in list_roles()])
+                ),
+                inputs=[],
+                outputs=[role_list]
+            )
+            
+            # 合成测试
+            synthesis_btn.click(
+                fn=test_role_synthesis,
+                inputs=[
+                    target_text, gpt_model, sovits_model,
+                    ref_audio, prompt_text, prompt_lang, text_lang,
+                    speed, ref_free, if_sr, top_k, top_p,
+                    temperature, sample_steps, cut_punc, role_name, aux_refs
+                ],
+                outputs=[synthesis_output]
+            )
+            
         with gr.Tab("配置"):
             with gr.Tab("词语替换"):
                 word_replace_text = gr.TextArea(
