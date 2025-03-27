@@ -41,164 +41,190 @@ def extract_text_from_filename(file_path):
 
 def create_role_management_tab():
     """创建角色管理标签页"""
+    # 辅助函数 - 移到函数开始处
+    def html_center(text, label='p'):
+        return f"""<div style="text-align: center; margin: 0; padding: 0;">
+                  <{label} style="margin: 0; padding: 0;">{text}</{label}>
+                  </div>"""
+    
+    def html_left(text, label='p'):
+        return f"""<div style="text-align: left; margin: 0; padding: 0;">
+                  <{label} style="margin: 0; padding: 0;">{text}</{label}>
+                  </div>"""
+    
     gpt_models, sovits_models = get_model_lists()
     
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### 模型选择")
-            gpt_model = gr.Dropdown(
-                label="GPT模型",
-                choices=gpt_models,
-                value=gpt_models[0] if gpt_models else None,
-                interactive=True
-            )
-            sovits_model = gr.Dropdown(
-                label="SoVITS模型",
-                choices=sovits_models,
-                value=sovits_models[0] if sovits_models else None,
-                interactive=True
-            )
-            refresh_models_btn = gr.Button("刷新模型列表")
+    with gr.Blocks(title="GPT-SoVITS 角色管理"):
+        # 顶部标题
+        gr.Markdown("# GPT-SoVITS 文本转语音")
         
-        with gr.Column(scale=1):
-            gr.Markdown("### 参考音频")
-            ref_audio = gr.Audio(
-                label="参考音频",
-                type="filepath",
-                interactive=True
-            )
-            prompt_text = gr.Textbox(
-                label="参考音频文本",
-                placeholder="参考音频对应的文本内容",
-                lines=2
-            )
-            aux_refs = gr.File(
-                label="辅助参考音频(可选)",
-                file_count="multiple", 
-                file_types=["audio"],
-                type="filepath",
-                interactive=True
-            )
-            
-        with gr.Column(scale=1):
-            gr.Markdown("### 语言设置")
-            prompt_lang = gr.Dropdown(
-                label="参考音频语言",
-                choices=LANGUAGE_OPTIONS,
-                value="中文",
-                type="value"
-            )
-            text_lang = gr.Dropdown(
-                label="目标文本语言",
-                choices=LANGUAGE_OPTIONS,
-                value="中文",
-                type="value"
-            )
-    
-    with gr.Row():
-        with gr.Column(scale=2):
-            gr.Markdown("### 目标文本")
-            target_text = gr.Textbox(
-                label="目标文本",
-                placeholder="输入要合成的文本内容",
-                lines=4
-            )
-            cut_punc = gr.Textbox(
-                label="切分符号（可选）",
-                placeholder="例如：,.。，",
-                value="。！？：.!?:"
-            )
-            
-        with gr.Column(scale=1):
-            gr.Markdown("### 参数配置")
+        # 模型选择区域
+        with gr.Group():
+            gr.Markdown(html_center("模型选择", 'h3'))
             with gr.Row():
-                with gr.Column(scale=1):
-                    speed = gr.Slider(
-                        label="语速",
-                        minimum=0.5,
-                        maximum=2.0,
-                        value=1.0,
-                        step=0.1
-                    )
+                gpt_model = gr.Dropdown(
+                    label="GPT模型列表",
+                    choices=gpt_models,
+                    value=gpt_models[0] if gpt_models else None,
+                    interactive=True,
+                    scale=14
+                )
+                sovits_model = gr.Dropdown(
+                    label="SoVITS模型列表",
+                    choices=sovits_models,
+                    value=sovits_models[0] if sovits_models else None,
+                    interactive=True,
+                    scale=14
+                )
+                refresh_models_btn = gr.Button("刷新模型列表", variant="primary", scale=14)
+            
+            # 参考音频区域
+            gr.Markdown(html_center("*请上传并填写参考信息", 'h3'))
+            with gr.Row():
+                ref_audio = gr.Audio(
+                    label="请上传3~10秒内参考音频，超过会报错！",
+                    type="filepath",
+                    scale=13
+                )
+                with gr.Column(scale=13):
                     ref_free = gr.Checkbox(
-                        label="参考自由模式",
-                        value=False
+                        label="开启无参考文本模式。不填参考文本亦相当于开启。v3暂不支持该模式，使用了会报错。",
+                        value=False,
+                        interactive=True,
+                        show_label=True,
+                        scale=1
+                    )
+                    gr.Markdown(html_left("使用无参考文本模式时建议使用微调的GPT<br>听不清参考音频说的啥(不晓得写啥)可以开。开启后无视填写的参考文本。"))
+                    prompt_text = gr.Textbox(
+                        label="参考音频的文本",
+                        value="",
+                        lines=5,
+                        max_lines=5,
+                        scale=1
+                    )
+                with gr.Column(scale=14):
+                    prompt_lang = gr.Dropdown(
+                        label="参考音频的语种",
+                        choices=LANGUAGE_OPTIONS,
+                        value="中文",
+                        scale=1
+                    )
+                    text_lang = gr.Dropdown(
+                        label="目标合成的语种(建议选'中文')",
+                        choices=LANGUAGE_OPTIONS,
+                        value="中文",
+                        scale=1
+                    )
+                    aux_refs = gr.File(
+                        label="可选项：通过拖拽多个文件上传多个参考音频（建议同性），平均融合他们的音色。",
+                        file_count="multiple",
+                        file_types=["audio"],
+                        type="filepath"
+                    )
+                    sample_steps = gr.Radio(
+                        label="采样步数,如果觉得电,提高试试,如果觉得慢,降低试试",
+                        value=32,
+                        choices=[4, 8, 16, 32],
+                        visible=True
                     )
                     if_sr = gr.Checkbox(
-                        label="使用超分辨率",
-                        value=False
+                        label="启用超采样提高语音质量(会增加延迟)",
+                        value=False,
+                        interactive=True
                     )
-                
-                with gr.Column(scale=1):
-                    top_k = gr.Slider(
-                        label="Top-K",
-                        minimum=1,
-                        maximum=30,
-                        value=15,
-                        step=1
+            
+            # 合成区域
+            gr.Markdown(html_center("*请填写需要合成的目标文本和语种模式", 'h3'))
+            with gr.Row():
+                with gr.Column(scale=13):
+                    target_text = gr.Textbox(
+                        label="需要合成的文本",
+                        value="",
+                        lines=12,
+                        max_lines=12
                     )
-                    top_p = gr.Slider(
-                        label="Top-P",
-                        minimum=0.1,
-                        maximum=1.0,
+                with gr.Column(scale=7):
+                    cut_punc = gr.Textbox(
+                        label="断句符号",
+                        placeholder="例如：,.。，",
+                        value="。！？：.!?:"
+                    )
+                    speed = gr.Slider(
+                        minimum=0.6,
+                        maximum=1.65,
+                        step=0.05,
+                        label="语速",
                         value=1.0,
-                        step=0.05
-                    )
-                    temperature = gr.Slider(
-                        label="温度",
-                        minimum=0.1,
-                        maximum=2.0,
-                        value=1.0,
-                        step=0.1
-                    )
-                    sample_steps = gr.Slider(
-                        label="采样步数",
-                        minimum=16,
-                        maximum=64,
-                        value=32,
-                        step=8
+                        interactive=True
                     )
                     pause_second = gr.Slider(
-                        label="停顿秒数",
                         minimum=0.1,
-                        maximum=1.0,
+                        maximum=0.5,
+                        step=0.01,
+                        label="句间停顿秒数",
                         value=0.3,
-                        step=0.1
+                        interactive=True
                     )
-    
-    with gr.Row():
-        with gr.Column(scale=1):
-            gr.Markdown("### 角色信息")
-            role_name = gr.Textbox(
-                label="角色名称",
-                placeholder="输入要保存的角色名称",
-                value=""
-            )
-            description = gr.Textbox(
-                label="角色描述(可选)",
-                placeholder="输入角色描述，如：性别，声音特点等",
-                lines=2
-            )
+                    
+                    gr.Markdown(html_center("GPT推理参数(不懂就用默认)："))
+                    top_k = gr.Slider(
+                        minimum=1,
+                        maximum=100,
+                        step=1,
+                        label="top_k",
+                        value=15,
+                        interactive=True
+                    )
+                    top_p = gr.Slider(
+                        minimum=0,
+                        maximum=1,
+                        step=0.05,
+                        label="top_p",
+                        value=1.0,
+                        interactive=True
+                    )
+                    temperature = gr.Slider(
+                        minimum=0,
+                        maximum=1,
+                        step=0.05,
+                        label="temperature",
+                        value=1.0,
+                        interactive=True
+                    )
             
-        with gr.Column(scale=1):
-            gr.Markdown("### 操作")
-            create_btn = gr.Button("新建/更新角色", variant="primary")
-            role_list = gr.Dropdown(
-                label="现有角色列表",
-                choices=[(role, role) for role in list_roles()],
-                value=g_default_role if g_default_role in list_roles() else None,
-                type="value"
-            )
+            # 合成按钮与结果
             with gr.Row():
-                load_role_btn = gr.Button("加载角色")
-                delete_role_btn = gr.Button("删除角色", variant="stop")
-            refresh_role_list_btn = gr.Button("刷新角色列表", variant="secondary")
-        
-        with gr.Column(scale=1):
-            gr.Markdown("### 合成结果")
-            synthesis_btn = gr.Button("合成测试", variant="primary")
-            synthesis_output = gr.Audio(label="合成结果")
-            status_text = gr.Markdown("")
+                synthesis_btn = gr.Button("合成语音", variant="primary", size="lg", scale=25)
+                synthesis_output = gr.Audio(label="输出的语音", scale=14)
+                status_text = gr.Markdown("")
+            
+            # 角色管理区域
+            gr.Markdown(html_center("角色管理", 'h3'))
+            with gr.Row():
+                with gr.Column(scale=1):
+                    role_name = gr.Textbox(
+                        label="角色名称",
+                        placeholder="输入要保存的角色名称",
+                        value=""
+                    )
+                    description = gr.Textbox(
+                        label="角色描述(可选)",
+                        placeholder="输入角色描述，如：性别，声音特点等",
+                        lines=2
+                    )
+                    create_btn = gr.Button("新建/更新角色", variant="primary")
+                
+                with gr.Column(scale=1):
+                    role_list = gr.Dropdown(
+                        label="现有角色列表",
+                        choices=[(role, role) for role in list_roles()],
+                        value=g_default_role if g_default_role in list_roles() else None,
+                        type="value"
+                    )
+                    with gr.Row():
+                        load_role_btn = gr.Button("加载角色")
+                        delete_role_btn = gr.Button("删除角色", variant="stop")
+                        refresh_role_list_btn = gr.Button("刷新列表", variant="secondary")
     
     # 事件绑定
     
