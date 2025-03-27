@@ -107,6 +107,22 @@ def clean_text(text: str) -> str:
     return result
 
 
+def clean_file_path(file_path: str) -> str:
+    """清理文件路径，去除引号
+    
+    Args:
+        file_path: 原始文件路径字符串，可能带有引号
+        
+    Returns:
+        清理后的文件路径
+    """
+    if not file_path:
+        return ""
+    
+    # 去除首尾的引号（单引号和双引号）
+    return file_path.strip('"\'')
+
+
 def parse_line(line: str) -> tuple[str, str, str]:
     """解析文本行，返回(角色名, 情绪, 文本)"""
     line = line.strip()
