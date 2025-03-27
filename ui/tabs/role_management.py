@@ -19,13 +19,13 @@ def process_aux_refs(aux_refs_list):
     if isinstance(aux_refs_list, list):
         for item in aux_refs_list:
             if isinstance(item, dict) and "name" in item:
-                processed_refs.append(item["name"])
+                processed_refs.append(clean_file_path(item["name"]))
             elif isinstance(item, str):
-                processed_refs.append(item)
+                processed_refs.append(clean_file_path(item))
     elif isinstance(aux_refs_list, dict) and "name" in aux_refs_list:
-        processed_refs.append(aux_refs_list["name"])
+        processed_refs.append(clean_file_path(aux_refs_list["name"]))
     elif isinstance(aux_refs_list, str):
-        processed_refs.append(aux_refs_list)
+        processed_refs.append(clean_file_path(aux_refs_list))
     
     return processed_refs
 
@@ -271,7 +271,7 @@ def create_role_management_tab():
         fn=lambda role_name, gpt_model, sovits_model, ref_audio, prompt_text, prompt_lang, text_lang, 
                speed, ref_free, if_sr, top_k, top_p, temperature, sample_steps, pause_second, 
                description, aux_refs: save_role_config(
-            role_name, gpt_model, sovits_model, ref_audio, prompt_text, prompt_lang, text_lang,
+            role_name, gpt_model, sovits_model, clean_file_path(ref_audio), prompt_text, prompt_lang, text_lang,
             speed, ref_free, if_sr, top_k, top_p, temperature, sample_steps, pause_second, 
             description, process_aux_refs(aux_refs)
         ),
@@ -295,7 +295,7 @@ def create_role_management_tab():
         fn=lambda target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
                 prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
                 temperature, sample_steps, cut_punc, role_name, aux_refs: test_role_synthesis(
-            target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
+            target_text, gpt_model, sovits_model, clean_file_path(ref_audio), prompt_text, 
             prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
             temperature, sample_steps, cut_punc, role_name, process_aux_refs(aux_refs)
         ),
