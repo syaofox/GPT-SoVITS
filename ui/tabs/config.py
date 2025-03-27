@@ -6,16 +6,17 @@ from ui.utils import load_word_replace_config, save_word_replace_config
 def create_config_tab():
     """创建配置标签页"""
 
-    word_replace_text = gr.TextArea(
-        label="词语替换配置",
-        value=load_word_replace_config(),
-        lines=30,
-        max_lines=30
-    )
-    
-    with gr.Row():
-        save_word_replace_btn = gr.Button("保存词语替换配置")
-        refresh_word_replace_btn = gr.Button("刷新")
+    with gr.Group():
+        word_replace_text = gr.TextArea(
+            label="词语替换配置",
+            value=load_word_replace_config(),
+            lines=30,
+            max_lines=30
+        )
+        
+        with gr.Row():
+            save_word_replace_btn = gr.Button("保存词语替换配置")
+            refresh_word_replace_btn = gr.Button("刷新")
     
     save_word_replace_btn.click(
         fn=save_word_replace_config,
