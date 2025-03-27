@@ -138,8 +138,8 @@ def create_role_management_tab():
                     target_text = gr.Textbox(
                         label="需要合成的文本",
                         value="",
-                        lines=26,
-                        max_lines=26
+                        lines=22,
+                        max_lines=22
                     )
                 with gr.Column(scale=7):
                     cut_punc = gr.Textbox(
