@@ -235,7 +235,24 @@ def create_text_file_tab():
         process_file_btn = gr.Button("处理文件", variant="secondary")
         preprocess_text_btn = gr.Button("预处理文本", variant="secondary")
         refresh_roles_btn = gr.Button("刷新角色列表", variant="secondary")  # 新增刷新按钮
-   
+    
+     # 添加使用说明
+    gr.Markdown("""
+    ## 使用说明
+    1. **文本文件**：可以选择以下两种方式之一：
+        - 上传文本文件
+        - 直接在文本框中输入多行文本
+        支持以下格式：
+        - `(角色)文本内容`
+        - `(角色|情绪)文本内容`
+        - 直接输入文本（需要设置默认角色）
+    2. **强制角色**：忽略文本中的角色标记，全部使用指定角色
+    3. **默认角色**：当文本没有指定角色时使用的角色
+    4. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
+    """)
+
+
+
     process_text_btn.click(
         process_text_content,
         inputs=[
