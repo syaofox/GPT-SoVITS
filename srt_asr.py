@@ -209,6 +209,95 @@ def generate_list_from_wav(wav_dir):
     return f"已生成list文件: {list_file}"
 
 
+def rename_audio_and_update_list(list_file, old_path, new_path, line_number):
+    try:
+        # 确保路径是字符串
+        old_path_str = str(old_path)
+        new_path_str = str(new_path)
+        
+        # 先尝试重命名音频文件
+        os.rename(old_path_str, new_path_str)
+        
+        # 只有重命名成功后才更新list文件
+        with open(list_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # 更新对应行的路径
+        parts = lines[line_number].rstrip('\n').split('|')
+        parts[0] = new_path_str
+        lines[line_number] = '|'.join(parts) + '\n'
+        
+        with open(list_file, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+            
+        return True
+    except Exception as e:
+        print(f"重命名失败: {e}")
+        return False
+
+
+def rename_wav_from_list(list_file_path):
+    list_file_path = my_utils.clean_path(list_file_path)
+    if not Path(list_file_path).exists():
+        return "list文件不存在"
+    
+    renamed_count = 0
+    updated_lines = []
+    
+    with open(list_file_path, "r", encoding="utf8") as f:
+        lines = [line.rstrip('\n') for line in f]  # 保留原始行内容
+    
+    for line_number, line in enumerate(lines):
+        try:
+            if not line.strip():
+                updated_lines.append(line)
+                continue
+                
+            wav_path, speaker, language, text = line.split("|")
+            original_path = Path(my_utils.clean_path(wav_path))
+            
+            if not original_path.exists():
+                print(f"文件不存在: {original_path}")
+                updated_lines.append(line)
+                continue
+                
+            # 处理文本作为文件名（保留中文标点）
+            safe_text = "".join(c for c in text if c.isalnum() or c in (' ', '_', '-') or '\u4e00' <= c <= '\u9fff' or c in '，。！？、；：""（）《》【】')
+            safe_text = safe_text.strip()[:50]  # 限制文件名长度
+            
+            # 生成新路径
+            new_path = original_path.parent / f"{safe_text}.wav"
+            
+            # 避免文件名冲突
+            counter = 1
+            while new_path.exists():
+                new_path = original_path.parent / f"{safe_text}_{counter}.wav"
+                counter += 1
+                
+            # 重命名文件
+            success = rename_audio_and_update_list(list_file_path, original_path, new_path, line_number)
+            if not success:
+                print(f"跳过更新 {list_file_path} 的第 {line_number+1} 行")
+                updated_lines.append(line)  # 保留原行
+                continue
+            
+            renamed_count += 1
+            
+            # 更新list中的路径
+            updated_line = f"{new_path}|{speaker}|{language}|{text}"
+            updated_lines.append(updated_line)
+            
+        except Exception as e:
+            print(f"处理行出错: {line}, 错误: {str(e)}")
+            updated_lines.append(line)  # 出错时保留原行
+    
+    # 更新list文件
+    with open(list_file_path, "w", encoding="utf8") as f:
+        f.write("\n".join(updated_lines))
+    
+    return f"已完成重命名 {renamed_count}/{len(lines)} 个文件，并更新list文件"
+
+
 def main():
     with gr.Blocks(title="字幕切分工具") as app:
         gr.Markdown(value="根据srt字幕进行音频切分，过滤指定长度")
@@ -294,6 +383,22 @@ def main():
             generate_list_from_wav,
             [wav_dir_input],
             [list_output]
+        )
+
+        gr.Markdown(value="根据list文件重命名wav文件")
+        with gr.Row():
+            rename_list_input = gr.Textbox(
+                label="list文件路径",
+                value=r"D:\aisound\sound_data\简一\raw_cut.list",
+                interactive=True
+            )
+            rename_button = gr.Button("重命名wav", variant="primary")
+            rename_output = gr.Textbox(label="输出信息")
+        
+        rename_button.click(
+            rename_wav_from_list,
+            [rename_list_input],
+            [rename_output]
         )
 
     app.queue().launch(
