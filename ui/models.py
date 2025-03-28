@@ -81,19 +81,25 @@ def get_model_lists() -> Tuple[List[str], List[str]]:
     # GPT模型列表
     gpt_models = []
     gpt_roots = ["GPT_weights", "GPT_weights_v2", "GPT_weights_v3"]
+    gpt_default_model = "GPT_SoVITS/pretrained_models/s1v3.ckpt"
     for root in gpt_roots:
         if os.path.exists(root):
             for name in os.listdir(root):
                 if name.endswith(".ckpt"):
                     gpt_models.append(f"{root}/{name}")
     
+    gpt_models.insert(0, gpt_default_model)
+
     # SoVITS模型列表
     sovits_models = []
     sovits_roots = ["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3"]
+    sovits_default_model = "GPT_SoVITS/pretrained_models/s2Gv3.pth"
     for root in sovits_roots:
         if os.path.exists(root):
             for name in os.listdir(root):
                 if name.endswith(".pth"):
                     sovits_models.append(f"{root}/{name}")
+
+    sovits_models.insert(0, sovits_default_model)
     
     return sorted(gpt_models), sorted(sovits_models) 
