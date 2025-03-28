@@ -191,9 +191,12 @@ def save_role_config(
                     aux_filename = os.path.basename(line)
                     target_aux_ref = str(ref_audio_dir / aux_filename)
                     try:
-                        shutil.copy2(line, target_aux_ref)
-                        aux_refs_copied.append(target_aux_ref)
-                        print(f"复制辅助参考音频: {line} -> {target_aux_ref}")
+                        if not os.path.exists(target_aux_ref):
+                            shutil.copy2(line, target_aux_ref)
+                            aux_refs_copied.append(target_aux_ref)
+                            print(f"复制辅助参考音频: {line} -> {target_aux_ref}")
+                        else:
+                            print(f"辅助参考音频已存在: {target_aux_ref}")
                     except Exception as e:
                         print(f"复制辅助参考音频失败: {str(e)}")
         # 兼容列表形式（旧格式或从process_aux_refs函数处理后的结果）
