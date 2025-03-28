@@ -23,7 +23,6 @@ def call_api(text: str, role_config: Dict[str, Any], role_name: str, cut_punc: s
     """
     # 清理文本，进行字符替换
     text = clean_text(text)
-    print(text)
     
     # 检查必要的配置
     if "ref_audio" not in role_config:
