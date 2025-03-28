@@ -423,12 +423,16 @@ def load_and_process_role_config(role, process_aux_refs_func=None):
         if warning_msg:
             status = warning_msg + status
         
+        # 将辅助参考音频列表直接转换为文本格式（每行一个路径）
+        # 这样就不需要依赖后续的.then处理
+        aux_refs_text = "\n".join(aux_refs_to_use) if aux_refs_to_use else ""
+        
         return [
             gr.update(value=gpt_path),
             gr.update(value=sovits_path),
             gr.update(value=ref_audio),
             gr.update(value=prompt_text),
-            gr.update(value=aux_refs_to_use),
+            gr.update(value=aux_refs_text),  # 直接返回文本格式
             gr.update(value=prompt_lang),
             gr.update(value=text_lang),
             gr.update(value=speed),

@@ -324,11 +324,6 @@ def create_role_management_tab():
             top_k, top_p, temperature, sample_steps, pause_second,
             description, status_text
         ]
-    ).then(
-        # 将辅助参考音频列表格式化为文本框格式（每行一个路径）
-        fn=lambda aux_refs_list: gr.update(value="\n".join(aux_refs_list) if isinstance(aux_refs_list, list) else ""),
-        inputs=[aux_refs],
-        outputs=[aux_refs]
     )
     
     # 删除角色配置
