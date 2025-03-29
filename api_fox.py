@@ -1025,9 +1025,11 @@ def get_tts_wav(
     # 秒数
     blank_duration = 0.2
     for text in texts:
-        if text == "<br>":
-            print(f"插入{blank_duration}秒的空白")           
-            silence_duration = int(hps.data.sampling_rate * blank_duration)
+        if text == "<br>" or text == "<bt>":
+            # 根据不同标记设置不同的停顿时长
+            pause_duration = 0.6 if text == "<bt>" else blank_duration
+            print(f"插入{pause_duration}秒的空白")           
+            silence_duration = int(hps.data.sampling_rate * pause_duration)
             silence_audio = np.zeros(
                 silence_duration,
                 dtype=np.float16 if is_half == True else np.float32,
