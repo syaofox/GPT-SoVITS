@@ -1094,10 +1094,10 @@ def get_tts_wav(
     audio_bytes = BytesIO()
 
     for text in texts:
-        # 处理 <br> 标签，插入0.6秒的空白
+        # 处理 <br> 标签，插入0.3秒的空白
         if text == "<br>":
-            print("插入0.6秒的空白")
-            # 生成0.6秒的静音
+            print("插入0.3秒的空白")
+            # 生成0.3秒的静音
             silence_duration = int(hps.data.sampling_rate * 0.6)
             silence_audio = np.zeros(
                 silence_duration,
