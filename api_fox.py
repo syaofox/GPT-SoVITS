@@ -1205,13 +1205,14 @@ def get_tts_wav(
 
         sr = hps.data.sampling_rate if version != "v3" else 24000
         if if_sr and sr == 24000:
+            print("开始音频重采样")
             audio_opt = torch.from_numpy(audio_opt).float().to(device)
             audio_opt, sr = audio_sr(audio_opt.unsqueeze(0), sr)
             max_audio = np.abs(audio_opt).max()
             if max_audio > 1:
                 audio_opt /= max_audio
             sr = 48000
-
+            print("音频重采样完成")
         if is_int32:
             audio_bytes = pack_audio(
                 audio_bytes, (audio_opt * 2147483647).astype(np.int32), sr
