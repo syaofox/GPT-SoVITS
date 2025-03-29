@@ -1094,6 +1094,28 @@ def get_tts_wav(
     audio_bytes = BytesIO()
 
     for text in texts:
+        # 处理 <br> 标签，插入0.6秒的空白
+        if text == "<br>":
+            print("插入0.6秒的空白")
+            # 生成0.6秒的静音
+            silence_duration = int(hps.data.sampling_rate * 0.6)
+            silence_audio = np.zeros(
+                silence_duration,
+                dtype=np.float16 if is_half == True else np.float32,
+            )
+            if is_int32:
+                audio_bytes = pack_audio(
+                    audio_bytes, (silence_audio * 2147483647).astype(np.int32), hps.data.sampling_rate if version != "v3" else 24000
+                )
+            else:
+                audio_bytes = pack_audio(
+                    audio_bytes, (silence_audio * 32768).astype(np.int16), hps.data.sampling_rate if version != "v3" else 24000
+                )
+            if stream_mode == "normal":
+                audio_bytes, audio_chunk = read_clean_buffer(audio_bytes)
+                yield audio_chunk
+            continue
+            
         # 简单防止纯符号引发参考音频泄露
         if only_punc(text):
             continue
