@@ -164,7 +164,8 @@ def test_role_synthesis(
     sample_steps: int,
     cut_punc: str,
     role_name: str = "临时角色",
-    aux_refs: List[str] = None
+    aux_refs: List[str] = None,
+    emotion: str = None
 ) -> str:
     """测试角色合成"""
     import gradio as gr
@@ -236,7 +237,7 @@ def test_role_synthesis(
         raise gr.Error(f"SoVITS模型文件不存在: {sovits_model}")
     
     os.makedirs("output", exist_ok=True)
-    output_path = os.path.join("output", f"output_{role_name}_{int(time.time())}.wav")
+    output_path = os.path.join("output", f"output_{role_name}_{emotion or ''}_{int(time.time())}.wav")
     
     try:
         # 设置模型
@@ -278,6 +279,10 @@ def test_role_synthesis(
         # 添加辅助参考音频
         if valid_aux_refs:
             role_config["aux_refs"] = valid_aux_refs
+        
+        # 添加情绪信息
+        if emotion:
+            role_config["emotion"] = emotion
             
         # 调用现有的API函数，避免代码重复
         audio_data = call_api(text, role_config, role_name, cut_punc=cut_punc)
