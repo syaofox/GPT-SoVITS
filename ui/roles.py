@@ -307,7 +307,7 @@ def delete_role_config(role_name: str) -> str:
         return f"删除配置失败: {str(e)}"
 
 
-def load_and_process_role_config(role, process_aux_refs_func=None):
+def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None):
     """加载角色配置并处理辅助参考音频"""
     if not role:
         return [gr.update()] * 16 + ["请选择角色"]
@@ -320,18 +320,26 @@ def load_and_process_role_config(role, process_aux_refs_func=None):
         with open(role_path, "r", encoding="utf-8") as f:
             config = json.load(f)
         
-        # 获取第一个情绪配置
+        # 检查角色是否有情绪配置
         if "emotions" not in config or not config["emotions"]:
             return [gr.update()] * 16 + [f"角色 {role} 没有情绪配置"]
         
-        first_emotion = next(iter(config["emotions"].values()))
+        emotions = config["emotions"]
+        
+        # 如果没有指定情绪，或者指定的情绪不存在，使用第一个情绪
+        if not emotion or emotion not in emotions:
+            emotion_key = next(iter(emotions.keys()))
+        else:
+            emotion_key = emotion
+            
+        emotion_config = emotions[emotion_key]
         
         # 提取配置参数
         gpt_path = config.get("gpt_path", "")
         sovits_path = config.get("sovits_path", "")
-        ref_audio = first_emotion.get("ref_audio", "")
-        prompt_text = first_emotion.get("prompt_text", "")
-        aux_refs = first_emotion.get("aux_refs", [])
+        ref_audio = emotion_config.get("ref_audio", "")
+        prompt_text = emotion_config.get("prompt_text", "")
+        aux_refs = emotion_config.get("aux_refs", [])
         prompt_lang = config.get("prompt_lang", "中文")
         text_lang = config.get("text_lang", "中文")
         speed = config.get("speed", 1.0)
@@ -428,7 +436,7 @@ def load_and_process_role_config(role, process_aux_refs_func=None):
                         warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
         
         # 构建状态消息
-        status = f"角色 {role} 配置已加载"
+        status = f"角色 {role} 的情绪 {emotion_key} 配置已加载"
         if warning_msg:
             status = warning_msg + status
         

@@ -5,7 +5,7 @@ from ui.utils import LANGUAGE_OPTIONS, g_default_role, clean_file_path
 from ui.models import get_model_lists
 from ui.roles import (
     list_roles, save_role_config, delete_role_config, 
-    load_and_process_role_config
+    load_and_process_role_config, get_emotions
 )
 from ui.api_client import test_role_synthesis
 
@@ -243,6 +243,14 @@ def create_role_management_tab():
                         value=g_default_role if g_default_role in list_roles() else None,
                         type="value"
                     )
+                    # 添加情绪选择下拉框
+                    emotion_list = gr.Dropdown(
+                        label="情绪选择",
+                        choices=[],
+                        value=None,
+                        type="value",
+                        interactive=True
+                    )
                     with gr.Row():
                         load_role_btn = gr.Button("加载角色")
                         delete_role_btn = gr.Button("删除角色", variant="stop")
@@ -300,30 +308,47 @@ def create_role_management_tab():
     synthesis_btn.click(
         fn=lambda target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
                 prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
-                temperature, sample_steps, cut_punc, role_name, aux_refs: test_role_synthesis(
+                temperature, sample_steps, cut_punc, role_name, aux_refs, emotion: test_role_synthesis(
             target_text, gpt_model, sovits_model, clean_file_path(ref_audio), prompt_text, 
             prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
-            temperature, sample_steps, cut_punc, role_name, process_aux_refs(aux_refs)
+            temperature, sample_steps, cut_punc, role_name, process_aux_refs(aux_refs),
+            emotion=emotion
         ),
         inputs=[
             target_text, gpt_model, sovits_model,
             ref_audio, prompt_text, prompt_lang, text_lang,
             speed, ref_free, if_sr, top_k, top_p,
-            temperature, sample_steps, cut_punc, role_name, aux_refs
+            temperature, sample_steps, cut_punc, role_name, aux_refs, emotion_list
         ],
         outputs=[synthesis_output]
     )
 
     # 加载角色配置
     load_role_btn.click(
-        fn=lambda role: load_and_process_role_config(role, process_aux_refs),
-        inputs=[role_list],
+        fn=lambda role, emotion: load_and_process_role_config(role, emotion, process_aux_refs),
+        inputs=[role_list, emotion_list],
         outputs=[
             gpt_model, sovits_model, ref_audio, prompt_text, aux_refs,
             prompt_lang, text_lang, speed, ref_free, if_sr,
             top_k, top_p, temperature, sample_steps, pause_second,
             description, status_text
         ]
+    )
+    
+    # 角色选择时更新情绪列表
+    def update_emotion_choices(role):
+        if not role:
+            return gr.update(choices=[], value=None)
+        emotions = get_emotions(role)
+        if not emotions:
+            return gr.update(choices=[], value=None)
+        return gr.update(choices=[(e, e) for e in emotions], value=emotions[0])
+    
+    # 角色选择变化时，更新情绪列表
+    role_list.change(
+        fn=update_emotion_choices,
+        inputs=[role_list],
+        outputs=[emotion_list]
     )
     
     # 删除角色配置
@@ -350,6 +375,7 @@ def create_role_management_tab():
     
     return {
         "role_list": role_list,
+        "emotion_list": emotion_list,
         "gpt_model": gpt_model,
         "sovits_model": sovits_model,
         "ref_audio": ref_audio,
