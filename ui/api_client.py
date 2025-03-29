@@ -114,6 +114,31 @@ def merge_audio_segments(
     return np.concatenate(merged), target_sr
 
 
+def get_formatted_filename(role_name: str, text: str, emotion: str = "") -> str:
+    """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
+    
+    Args:
+        role_name: 角色名称
+        text: 文本内容
+        emotion: 情绪（可选）
+    
+    Returns:
+        格式化的文件名
+    """
+    # 提取前20个字符，去除可能导致文件名问题的字符
+    if text:
+        short_text = text[:20].strip()
+        # 替换不适合作为文件名的字符
+        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
+            short_text = short_text.replace(char, '_')
+    else:
+        short_text = "无文本"
+    
+    # 生成文件名
+    emotion_part = f"_{emotion}" if emotion else ""
+    return f"{role_name}{emotion_part}_{int(time.time())}_{short_text}"
+
+
 def process_text(
     text: str,
     role: str,
@@ -127,9 +152,10 @@ def process_text(
     from ui.roles import get_role_config
     
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(
-        output_dir, f"output_{role}_{emotion}_{int(time.time())}.wav"
-    )
+    
+    # 使用新的文件名格式
+    filename = get_formatted_filename(role, text, emotion)
+    output_path = os.path.join(output_dir, f"{filename}.wav")
 
     try:
         # 确保使用正确的模型
@@ -237,7 +263,10 @@ def test_role_synthesis(
         raise gr.Error(f"SoVITS模型文件不存在: {sovits_model}")
     
     os.makedirs("output", exist_ok=True)
-    output_path = os.path.join("output", f"output_{role_name}_{emotion or ''}_{int(time.time())}.wav")
+    
+    # 使用新的文件名格式
+    filename = get_formatted_filename(role_name, text, emotion)
+    output_path = os.path.join("output", f"{filename}.wav")
     
     try:
         # 设置模型
