@@ -11,6 +11,42 @@ from ui.models import init_models
 from ui.roles import get_role_config
 
 
+def get_formatted_filename(role_name: str, text_content: str) -> str:
+    """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
+    
+    Args:
+        role_name: 角色名称
+        text_content: 文本内容
+    
+    Returns:
+        格式化的文件名
+    """
+    # 获取第一个非空行的前20个字符
+    first_text = ""
+    for line in text_content.strip().split("\n"):
+        line = line.strip()
+        if line:
+            # 如果有角色标记，提取实际文本内容
+            if line.startswith("(") and ")" in line:
+                _, text = line.split(")", 1)
+                first_text = text.strip()
+            else:
+                first_text = line
+            break
+    
+    # 提取前20个字符，去除可能导致文件名问题的字符
+    if first_text:
+        short_text = first_text[:20].strip()
+        # 替换不适合作为文件名的字符
+        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
+            short_text = short_text.replace(char, '_')
+    else:
+        short_text = "无文本"
+        
+    # 生成文件名
+    return f"{role_name}_{int(time.time())}_{short_text}"
+
+
 def process_text_content(
     text_content: str,
     force_role: str = "",
@@ -24,7 +60,13 @@ def process_text_content(
 ) -> str:
     """处理文本内容"""
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"output_{int(time.time())}.wav")
+    
+    # 预先确定角色，用于文件名
+    role_name = force_role if force_role and force_role != "无" else default_role
+    
+    # 使用新的文件名格式
+    filename = get_formatted_filename(role_name, text_content)
+    output_path = os.path.join(output_dir, f"{filename}.wav")
 
     try:
         # 如果禁用解析，直接使用默认角色和情绪处理整个文本
@@ -74,6 +116,7 @@ def process_text_content(
         lines = text_content.strip().split("\n")
         audio_segments = []
         current_role = None
+        last_role_name = None  # 记录最后使用的角色名
 
         for i, line in enumerate(lines):
             role_name, emotion, text = parse_line(line)
@@ -86,6 +129,9 @@ def process_text_content(
 
             if not role_name:
                 raise gr.Error("未指定角色且未设置默认角色")
+                
+            # 记录角色名，用于生成文件名
+            last_role_name = role_name
 
             # 使用强制情绪或原始解析的情绪或默认情绪
             if force_emotion and force_emotion != "" and force_emotion != "无":
@@ -114,6 +160,11 @@ def process_text_content(
 
         if not audio_segments:
             raise gr.Error("没有可处理的文本")
+            
+        # 更新文件名，使用最后使用的角色名
+        if last_role_name and last_role_name != role_name:
+            filename = get_formatted_filename(last_role_name, text_content)
+            output_path = os.path.join(output_dir, f"{filename}.wav")
 
         # 合并音频
         merged_audio, sample_rate = merge_audio_segments(audio_segments)
