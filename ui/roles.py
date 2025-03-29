@@ -175,8 +175,11 @@ def save_role_config(
     # 复制参考音频文件到角色目录
     target_ref_audio = str(ref_audio_dir / orig_audio_filename)
     try:
-        shutil.copy2(ref_audio, target_ref_audio)
-        print(f"复制参考音频: {ref_audio} -> {target_ref_audio}")
+        if not os.path.exists(target_ref_audio):
+            shutil.copy2(ref_audio, target_ref_audio)
+            print(f"复制参考音频: {ref_audio} -> {target_ref_audio}")
+        else:
+            print(f"参考音频已存在: {target_ref_audio}")
     except Exception as e:
         return f"复制参考音频失败: {str(e)}"
     
@@ -207,9 +210,12 @@ def save_role_config(
                     aux_filename = os.path.basename(aux_ref)
                     target_aux_ref = str(ref_audio_dir / aux_filename)
                     try:
-                        shutil.copy2(aux_ref, target_aux_ref)
                         aux_refs_copied.append(target_aux_ref)
-                        print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
+                        if not os.path.exists(target_aux_ref):
+                            shutil.copy2(aux_ref, target_aux_ref)
+                            print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
+                        else:
+                            print(f"辅助参考音频已存在: {target_aux_ref}")
                     except Exception as e:
                         print(f"复制辅助参考音频失败: {str(e)}")
         elif aux_refs and os.path.exists(aux_refs):  # 处理单个文件情况
@@ -217,9 +223,12 @@ def save_role_config(
             aux_filename = os.path.basename(aux_refs)
             target_aux_ref = str(ref_audio_dir / aux_filename)
             try:
-                shutil.copy2(aux_refs, target_aux_ref)
                 aux_refs_copied.append(target_aux_ref)
-                print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
+                if not os.path.exists(target_aux_ref):
+                    shutil.copy2(aux_refs, target_aux_ref)
+                    print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
+                else:
+                    print(f"辅助参考音频已存在: {target_aux_ref}")
             except Exception as e:
                 print(f"复制辅助参考音频失败: {str(e)}")
     
