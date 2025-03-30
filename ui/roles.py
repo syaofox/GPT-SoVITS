@@ -11,11 +11,21 @@ def list_roles() -> List[str]:
     """获取所有可用的角色列表"""
     roles_dir = Path("configs/roles")
     roles = []
-    for file in roles_dir.glob("*.json"):
-        roles.append(file.stem)
+    
+    # 确保目录存在
+    if not roles_dir.exists():
+        roles_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 查找所有子目录作为角色
+    for item in roles_dir.iterdir():
+        if item.is_dir():
+            # 检查config.json是否存在
+            if (item / "config.json").exists():
+                roles.append(item.name)
+    
     roles = sorted(roles)
     if not roles:
-        raise gr.Error("未找到任何角色配置文件，请确保 configs/roles 目录下有角色配置")
+        raise gr.Error("未找到任何角色配置文件，请确保 configs/roles 目录下有角色子目录，且包含config.json文件")
     return roles
 
 
@@ -25,7 +35,7 @@ def get_emotions(role: str = "") -> List[str]:
         return []
 
     # 读取角色配置
-    role_path = Path("configs/roles") / f"{role}.json"
+    role_path = Path("configs/roles") / role / "config.json"
     if not role_path.exists():
         return []
 
@@ -41,7 +51,9 @@ def get_emotions(role: str = "") -> List[str]:
 
 def get_role_config(role: str, emotion: str = "", text_lang: str = "中文") -> Dict[str, Any]:
     """获取角色配置"""
-    role_path = Path("configs/roles") / f"{role}.json"
+    role_dir = Path("configs/roles") / role
+    role_path = role_dir / "config.json"
+    
     if not role_path.exists():
         raise ValueError(f"找不到角色配置文件: {role}")
 
@@ -78,6 +90,33 @@ def get_role_config(role: str, emotion: str = "", text_lang: str = "中文") -> 
     result_config.setdefault("temperature", 1.0)
     result_config.setdefault("sample_steps", 32)
     result_config.setdefault("if_sr", False)
+
+    # 处理参考音频路径 - 如果是相对路径，则相对于角色目录
+    if "ref_audio" in result_config:
+        ref_audio = result_config["ref_audio"]
+        ref_path = Path(ref_audio)
+        
+        # 如果是相对路径或只是文件名，则视为相对于角色目录
+        if not ref_path.is_absolute() and not ref_path.exists():
+            role_ref_path = role_dir / ref_audio
+            if role_ref_path.exists():
+                result_config["ref_audio"] = str(role_ref_path)
+            
+    # 处理辅助参考音频路径
+    if "aux_refs" in result_config and isinstance(result_config["aux_refs"], list):
+        resolved_aux_refs = []
+        for aux_ref in result_config["aux_refs"]:
+            aux_path = Path(aux_ref)
+            # 如果是相对路径或只是文件名，则视为相对于角色目录
+            if not aux_path.is_absolute() and not aux_path.exists():
+                role_aux_path = role_dir / aux_ref
+                if role_aux_path.exists():
+                    resolved_aux_refs.append(str(role_aux_path))
+                else:
+                    resolved_aux_refs.append(aux_ref)  # 保持原始路径
+            else:
+                resolved_aux_refs.append(aux_ref)
+        result_config["aux_refs"] = resolved_aux_refs
 
     # 检查必要的配置
     if "ref_audio" not in result_config:
@@ -141,7 +180,7 @@ def save_role_config(
     description: str = "",
     aux_refs: List[str] = None
 ) -> str:
-    """保存角色配置到JSON文件"""
+    """保存角色配置到角色目录的config.json文件"""
     if not role_name:
         return "请输入角色名称"
     
@@ -160,9 +199,9 @@ def save_role_config(
     elif "GPT_weights/" in gpt_model or "SoVITS_weights/" in sovits_model:
         version = "v1"
     
-    # 创建角色参考音频目录
-    ref_audio_dir = Path("configs/ref_audio") / role_name
-    ref_audio_dir.mkdir(parents=True, exist_ok=True)
+    # 创建角色目录
+    role_dir = Path("configs/roles") / role_name
+    role_dir.mkdir(parents=True, exist_ok=True)
     
     # 提取参考音频文件名作为情绪名称和目标文件名
     orig_audio_filename = os.path.basename(ref_audio)
@@ -173,7 +212,7 @@ def save_role_config(
         short_emotion_name = emotion_name
     
     # 复制参考音频文件到角色目录
-    target_ref_audio = str(ref_audio_dir / orig_audio_filename)
+    target_ref_audio = str(role_dir / orig_audio_filename)
     try:
         if not os.path.exists(target_ref_audio):
             shutil.copy2(ref_audio, target_ref_audio)
@@ -183,8 +222,12 @@ def save_role_config(
     except Exception as e:
         return f"复制参考音频失败: {str(e)}"
     
+    # 使用相对路径保存到配置文件中
+    rel_ref_audio = orig_audio_filename
+    
     # 处理辅助参考音频
     aux_refs_copied = []
+    rel_aux_refs = []
     if aux_refs:
         # 处理aux_refs为字符串的情况（来自文本框，每行一个路径）
         if isinstance(aux_refs, str):
@@ -192,14 +235,17 @@ def save_role_config(
                 line = line.strip()
                 if line and os.path.exists(line):
                     aux_filename = os.path.basename(line)
-                    target_aux_ref = str(ref_audio_dir / aux_filename)
+                    target_aux_ref = str(role_dir / aux_filename)
                     try:
-                        aux_refs_copied.append(target_aux_ref)
                         if not os.path.exists(target_aux_ref):
                             shutil.copy2(line, target_aux_ref)                            
                             print(f"复制辅助参考音频: {line} -> {target_aux_ref}")
                         else:
                             print(f"辅助参考音频已存在: {target_aux_ref}")
+                        # 保存相对路径
+                        rel_aux_refs.append(aux_filename)
+                        # 保存绝对路径用于写入配置
+                        aux_refs_copied.append(target_aux_ref)
                     except Exception as e:
                         print(f"复制辅助参考音频失败: {str(e)}")
         # 兼容列表形式（旧格式或从process_aux_refs函数处理后的结果）
@@ -208,27 +254,33 @@ def save_role_config(
             for aux_ref in aux_refs:
                 if aux_ref and os.path.exists(aux_ref):
                     aux_filename = os.path.basename(aux_ref)
-                    target_aux_ref = str(ref_audio_dir / aux_filename)
+                    target_aux_ref = str(role_dir / aux_filename)
                     try:
-                        aux_refs_copied.append(target_aux_ref)
                         if not os.path.exists(target_aux_ref):
                             shutil.copy2(aux_ref, target_aux_ref)
                             print(f"复制辅助参考音频: {aux_ref} -> {target_aux_ref}")
                         else:
                             print(f"辅助参考音频已存在: {target_aux_ref}")
+                        # 保存相对路径
+                        rel_aux_refs.append(aux_filename)
+                        # 保存绝对路径用于写入配置
+                        aux_refs_copied.append(target_aux_ref)
                     except Exception as e:
                         print(f"复制辅助参考音频失败: {str(e)}")
         elif aux_refs and os.path.exists(aux_refs):  # 处理单个文件情况
             # 处理单个辅助参考音频
             aux_filename = os.path.basename(aux_refs)
-            target_aux_ref = str(ref_audio_dir / aux_filename)
+            target_aux_ref = str(role_dir / aux_filename)
             try:
-                aux_refs_copied.append(target_aux_ref)
                 if not os.path.exists(target_aux_ref):
                     shutil.copy2(aux_refs, target_aux_ref)
                     print(f"复制辅助参考音频: {aux_refs} -> {target_aux_ref}")
                 else:
                     print(f"辅助参考音频已存在: {target_aux_ref}")
+                # 保存相对路径
+                rel_aux_refs.append(aux_filename)
+                # 保存绝对路径用于写入配置
+                aux_refs_copied.append(target_aux_ref)
             except Exception as e:
                 print(f"复制辅助参考音频失败: {str(e)}")
     
@@ -237,7 +289,7 @@ def save_role_config(
         "version": version,
         "emotions": {
             short_emotion_name: {
-                "ref_audio": target_ref_audio,
+                "ref_audio": rel_ref_audio,  # 使用相对路径
                 "prompt_text": prompt_text
             }
         },
@@ -257,14 +309,11 @@ def save_role_config(
     }
     
     # 添加辅助参考音频
-    if aux_refs_copied:
-        config["emotions"][short_emotion_name]["aux_refs"] = aux_refs_copied
+    if rel_aux_refs:
+        config["emotions"][short_emotion_name]["aux_refs"] = rel_aux_refs
     
-    # 保存配置文件
-    config_dir = Path("configs/roles")
-    config_dir.mkdir(parents=True, exist_ok=True)
-    
-    config_path = config_dir / f"{role_name}.json"
+    # 配置文件路径
+    config_path = role_dir / "config.json"
     
     # 如果文件已存在，读取已有配置并合并情绪
     if config_path.exists():
@@ -295,16 +344,17 @@ def save_role_config(
 
 
 def delete_role_config(role_name: str) -> str:
-    """删除角色配置文件"""
-    config_path = Path("configs/roles") / f"{role_name}.json"
-    if not config_path.exists():
-        return f"角色 {role_name} 配置文件不存在"
+    """删除角色配置及相关文件"""
+    role_dir = Path("configs/roles") / role_name
+    if not role_dir.exists():
+        return f"角色 {role_name} 目录不存在"
     
     try:
-        os.remove(config_path)
-        return f"角色 {role_name} 配置已删除"
+        # 删除整个角色目录及其中的所有文件
+        shutil.rmtree(role_dir)
+        return f"角色 {role_name} 配置及相关文件已删除"
     except Exception as e:
-        return f"删除配置失败: {str(e)}"
+        return f"删除角色失败: {str(e)}"
 
 
 def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None):
@@ -313,9 +363,16 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
         return [gr.update()] * 16 + ["请选择角色"]
     
     try:
-        role_path = Path("configs/roles") / f"{role}.json"
+        role_dir = Path("configs/roles") / role
+        role_path = role_dir / "config.json"
+        
         if not role_path.exists():
-            return [gr.update()] * 16 + [f"找不到角色配置文件: {role}"]
+            # 尝试使用旧格式路径作为后备
+            old_role_path = Path("configs/roles") / f"{role}.json"
+            if old_role_path.exists():
+                role_path = old_role_path
+            else:
+                return [gr.update()] * 16 + [f"找不到角色配置文件: {role}"]
         
         with open(role_path, "r", encoding="utf-8") as f:
             config = json.load(f)
@@ -351,6 +408,28 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
         sample_steps = config.get("sample_steps", 32)
         pause_second = config.get("pause_second", 0.3)
         description = config.get("description", "")
+        
+        # 处理参考音频路径
+        if not os.path.isabs(ref_audio) and not os.path.exists(ref_audio):
+            # 尝试将相对路径转换为相对于角色目录的绝对路径
+            role_ref_path = role_dir / ref_audio
+            if role_ref_path.exists():
+                ref_audio = str(role_ref_path)
+        
+        # 处理辅助参考音频路径
+        if isinstance(aux_refs, list):
+            resolved_aux_refs = []
+            for aux_ref in aux_refs:
+                # 如果是相对路径，尝试转换为相对于角色目录的绝对路径
+                if not os.path.isabs(aux_ref) and not os.path.exists(aux_ref):
+                    role_aux_path = role_dir / aux_ref
+                    if role_aux_path.exists():
+                        resolved_aux_refs.append(str(role_aux_path))
+                    else:
+                        resolved_aux_refs.append(aux_ref)
+                else:
+                    resolved_aux_refs.append(aux_ref)
+            aux_refs = resolved_aux_refs
         
         # 检查文件是否存在
         warning_msg = ""
@@ -397,16 +476,18 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
                         old_aux_ref = aux_ref
                         filename = os.path.basename(aux_ref)
                         aux_ref_alternatives = [
+                            role_dir / filename,  # 首先检查角色目录
                             os.path.join("configs/ref_audio", role, filename),
                             os.path.join("configs/refsounds", filename)
                         ]
                         
                         found = False
                         for alt_path in aux_ref_alternatives:
-                            if os.path.exists(alt_path):
-                                aux_refs_to_use.append(alt_path)
+                            alt_path_str = str(alt_path)
+                            if os.path.exists(alt_path_str):
+                                aux_refs_to_use.append(alt_path_str)
                                 found = True
-                                warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path}\n"
+                                warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path_str}\n"
                                 break
                         
                         if not found:
@@ -420,16 +501,18 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
                     old_aux_ref = aux_refs
                     filename = os.path.basename(aux_refs)
                     aux_ref_alternatives = [
+                        role_dir / filename,  # 首先检查角色目录
                         os.path.join("configs/ref_audio", role, filename),
                         os.path.join("configs/refsounds", filename)
                     ]
                     
                     found = False
                     for alt_path in aux_ref_alternatives:
-                        if os.path.exists(alt_path):
-                            aux_refs_to_use.append(alt_path)
+                        alt_path_str = str(alt_path)
+                        if os.path.exists(alt_path_str):
+                            aux_refs_to_use.append(alt_path_str)
                             found = True
-                            warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path}\n"
+                            warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path_str}\n"
                             break
                     
                     if not found:
