@@ -13,7 +13,7 @@ def get_model_paths_from_role(role: str) -> Tuple[str, str]:
     """从角色配置文件中获取模型路径"""
     from ui.utils import g_config  # 避免循环导入
     
-    role_path = Path("configs/roles") / f"{role}.json"
+    role_path = Path("configs/roles") / role / "config.json"
     if not role_path.exists():
         raise ValueError(f"找不到角色配置文件: {role}")
 
