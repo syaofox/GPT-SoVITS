@@ -343,18 +343,18 @@ def create_text_file_tab():
         fn=lambda: gr.update(choices=[(role, role) for role in list_roles()]),
         inputs=[],
         outputs=[default_role]
-    )
-
-    # 更新角色切换事件
-    default_role.change(
-        update_default_emotions,
+    ).then(
+        fn=update_default_emotions,
         inputs=[default_role],
-        outputs=[default_emotion],
-    )
-    force_role.change(
-        update_force_emotions,
+        outputs=[default_emotion]
+    ).then(
+        fn=lambda: gr.update(choices=[("", "无")] + [(role, role) for role in list_roles()]),
+        inputs=[],
+        outputs=[force_role]
+    ).then(
+        fn=update_force_emotions,
         inputs=[force_role],
-        outputs=[force_emotion],
+        outputs=[force_emotion]
     )
     
     return {
