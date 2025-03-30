@@ -371,6 +371,10 @@ def create_role_management_tab():
         ),
         inputs=[],
         outputs=[role_list]
+    ).then(
+        fn=update_emotion_choices,
+        inputs=[role_list],
+        outputs=[emotion_list]
     )
     
     return {
