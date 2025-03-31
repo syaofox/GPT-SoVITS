@@ -436,24 +436,7 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
         
         # 检查参考音频
         if not os.path.exists(ref_audio):
-            # 尝试在旧目录中查找文件
-            old_ref_audio = ref_audio
-            filename = os.path.basename(ref_audio)
-            ref_audio_alternatives = [
-                os.path.join("configs/ref_audio", role, filename),
-                os.path.join("configs/refsounds", filename)
-            ]
-            
-            ref_audio = None
-            for alt_path in ref_audio_alternatives:
-                if os.path.exists(alt_path):
-                    ref_audio = alt_path
-                    warning_msg += f"已重定向参考音频: {old_ref_audio} → {ref_audio}\n"
-                    break
-            
-            if not ref_audio:
-                warning_msg += f"警告: 参考音频文件不存在: {old_ref_audio}\n"
-                ref_audio = old_ref_audio  # 保留原路径，即使不存在
+            warning_msg += f"警告: 参考音频文件不存在: {ref_audio}\n"            
         
         # 检查GPT模型
         if not os.path.exists(gpt_path):
@@ -471,53 +454,14 @@ def load_and_process_role_config(role, emotion=None, process_aux_refs_func=None)
                 for aux_ref in aux_refs:
                     if os.path.exists(aux_ref):
                         aux_refs_to_use.append(aux_ref)
-                    else:
-                        # 尝试重定向
-                        old_aux_ref = aux_ref
-                        filename = os.path.basename(aux_ref)
-                        aux_ref_alternatives = [
-                            role_dir / filename,  # 首先检查角色目录
-                            os.path.join("configs/ref_audio", role, filename),
-                            os.path.join("configs/refsounds", filename)
-                        ]
+                    
                         
-                        found = False
-                        for alt_path in aux_ref_alternatives:
-                            alt_path_str = str(alt_path)
-                            if os.path.exists(alt_path_str):
-                                aux_refs_to_use.append(alt_path_str)
-                                found = True
-                                warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path_str}\n"
-                                break
-                        
-                        if not found:
-                            warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
+                       
             elif aux_refs and isinstance(aux_refs, str):
                 # 处理单个辅助参考音频
                 if os.path.exists(aux_refs):
                     aux_refs_to_use.append(aux_refs)
-                else:
-                    # 尝试重定向
-                    old_aux_ref = aux_refs
-                    filename = os.path.basename(aux_refs)
-                    aux_ref_alternatives = [
-                        role_dir / filename,  # 首先检查角色目录
-                        os.path.join("configs/ref_audio", role, filename),
-                        os.path.join("configs/refsounds", filename)
-                    ]
-                    
-                    found = False
-                    for alt_path in aux_ref_alternatives:
-                        alt_path_str = str(alt_path)
-                        if os.path.exists(alt_path_str):
-                            aux_refs_to_use.append(alt_path_str)
-                            found = True
-                            warning_msg += f"已重定向辅助参考音频: {old_aux_ref} → {alt_path_str}\n"
-                            break
-                    
-                    if not found:
-                        warning_msg += f"警告: 辅助参考音频文件不存在: {old_aux_ref}\n"
-        
+                
         # 构建状态消息
         status = f"角色 {role} 的情绪 {emotion_key} 配置已加载"
         if warning_msg:

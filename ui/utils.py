@@ -37,7 +37,6 @@ g_default_role: str = "小俪"
 
 # 确保必要的目录存在
 os.makedirs("configs/roles", exist_ok=True)
-os.makedirs("configs/ref_audio", exist_ok=True)
 os.makedirs("output", exist_ok=True)
 
 # 全局替换字典
