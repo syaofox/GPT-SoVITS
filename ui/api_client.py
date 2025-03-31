@@ -207,23 +207,7 @@ def test_role_synthesis(
     
     # 检查参考音频是否存在
     if not os.path.exists(ref_audio):
-        # 尝试查找可能的位置
-        filename = os.path.basename(ref_audio)
-        possible_locations = [
-            os.path.join("configs/ref_audio", role_name, filename),
-            os.path.join("configs/refsounds", filename)
-        ]
-        
-        found = False
-        for location in possible_locations:
-            if os.path.exists(location):
-                ref_audio = location
-                found = True
-                print(f"找到参考音频: {ref_audio}")
-                break
-                
-        if not found:
-            raise gr.Error(f"参考音频文件不存在: {ref_audio}")
+        raise gr.Error(f"参考音频文件不存在: {ref_audio}")
     
     # 检查辅助参考音频
     valid_aux_refs = []
@@ -236,24 +220,9 @@ def test_role_synthesis(
         for aux_ref in aux_refs:
             if aux_ref and os.path.exists(aux_ref):
                 valid_aux_refs.append(aux_ref)
-            else:
-                # 尝试查找可能的位置
-                filename = os.path.basename(aux_ref)
-                possible_locations = [
-                    os.path.join("configs/ref_audio", role_name, filename),
-                    os.path.join("configs/refsounds", filename)
-                ]
-                
-                found = False
-                for location in possible_locations:
-                    if os.path.exists(location):
-                        valid_aux_refs.append(location)
-                        found = True
-                        print(f"找到辅助参考音频: {location}")
-                        break
-                        
-                if not found and aux_ref:
-                    print(f"警告: 辅助参考音频文件不存在: {aux_ref}")
+           
+    if not valid_aux_refs:
+        print(f"没有找到辅助参考音频: {aux_refs}")
     
     # 检查模型文件是否存在
     if not os.path.exists(gpt_model):
