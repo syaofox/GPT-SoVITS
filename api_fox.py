@@ -666,7 +666,13 @@ def get_phones_and_bert(text, language, version, final=False):
         formattext = text
         while "  " in formattext:
             formattext = formattext.replace("  ", " ")
-        if language == "all_zh" and "<tone" not in formattext:
+
+        # 如果语言是all_zh，并且文本中包含<tone>，则将文本中的<tone>替换为空字符串
+        if language == "all_zh" and "<tone" in formattext:
+            phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
+            bert = get_bert_feature(norm_text, word2ph).to(device)
+
+        elif language == "all_zh":
             if re.search(r"[A-Za-z]", formattext):
                 formattext = re.sub(r"[a-z]", lambda x: x.group(0).upper(), formattext)
                 formattext = chinese.mix_text_normalize(formattext)
