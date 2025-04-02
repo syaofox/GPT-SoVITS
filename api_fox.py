@@ -958,6 +958,7 @@ def get_tts_wav(
     sample_steps=32,
     if_sr=False,
     spk="default",
+    pause_second=0.3,
 ):
     # text = convert_text(text)
     infer_sovits = speaker_list[spk].sovits
@@ -976,7 +977,7 @@ def get_tts_wav(
     prompt_language, text = prompt_language, text.strip("\n")
     dtype = torch.float16 if is_half == True else torch.float32
     zero_wav = np.zeros(
-        int(hps.data.sampling_rate * 0.3),
+        int(hps.data.sampling_rate * pause_second),
         dtype=np.float16 if is_half == True else np.float32,
     )
     with torch.no_grad():
@@ -1015,7 +1016,7 @@ def get_tts_wav(
     # os.environ['version'] = version
     prompt_language = dict_language[prompt_language.lower()]
     text_language = dict_language[text_language.lower()]
-    print(f"prompt_language: {prompt_language}: text_language: {text_language}, version: {version},ref_wav_path: {ref_wav_path},inp_refs: {inp_refs},spk: {spk},prompt_text: {prompt_text},text: {text},top_k: {top_k},top_p: {top_p},temperature: {temperature},speed: {speed},sample_steps: {sample_steps},if_sr: {if_sr}")
+    print(f"prompt_language: {prompt_language}: text_language: {text_language}, version: {version},ref_wav_path: {ref_wav_path},inp_refs: {inp_refs},spk: {spk},prompt_text: {prompt_text},text: {text},top_k: {top_k},top_p: {top_p},temperature: {temperature},speed: {speed},sample_steps: {sample_steps},if_sr: {if_sr},pause_second: {pause_second}")
     phones1, bert1, norm_text1 = get_phones_and_bert(
         prompt_text, prompt_language, version
     )
@@ -1027,7 +1028,7 @@ def get_tts_wav(
     for text in texts:
         if text == "<br>" or text == "<bt>":
             # 根据不同标记设置不同的停顿时长
-            pause_duration = 0.6 if text == "<bt>" else blank_duration
+            pause_duration = 0.4 if text == "<bt>" else blank_duration
             print(f"插入{pause_duration}秒的空白")           
             silence_duration = int(hps.data.sampling_rate * pause_duration)
             silence_audio = np.zeros(
@@ -1234,6 +1235,7 @@ def handle(
     inp_refs,
     sample_steps,
     if_sr,
+    pause_second,
 ):
     if (
         refer_wav_path == ""
@@ -1275,6 +1277,7 @@ def handle(
             inp_refs,
             sample_steps,
             if_sr,
+            pause_second=pause_second,
         ),
         media_type="audio/" + media_type,
     )
@@ -1544,6 +1547,7 @@ async def tts_endpoint(request: Request):
         json_post_raw.get("inp_refs", []),
         json_post_raw.get("sample_steps", 32),
         json_post_raw.get("if_sr", False),
+        json_post_raw.get("pause_second", 0.3),
     )
 
 
@@ -1562,6 +1566,7 @@ async def tts_endpoint(
     inp_refs: list = Query(default=[]),
     sample_steps: int = 32,
     if_sr: bool = False,
+    pause_second: float = 0.3,
 ):
     return handle(
         refer_wav_path,
@@ -1577,6 +1582,7 @@ async def tts_endpoint(
         inp_refs,
         sample_steps,
         if_sr,
+        pause_second,
     )
 
 

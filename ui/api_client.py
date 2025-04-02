@@ -45,6 +45,7 @@ def call_api(text: str, role_config: Dict[str, Any], role_name: str, cut_punc: s
         "if_sr": role_config.get("if_sr", False),
         "cut_punc": cut_punc,
         "spk": role_name,  # 添加角色名称
+        "pause_second": role_config.get("pause_second", 0.3),  # 添加停顿秒数参数
     }
 
     if "aux_refs" in role_config:
@@ -68,13 +69,14 @@ def call_api(text: str, role_config: Dict[str, Any], role_name: str, cut_punc: s
 
 
 def merge_audio_segments(
-    audio_segments: List[bytes], target_sr: int = 32000
+    audio_segments: List[bytes], target_sr: int = 32000, add_silence: bool = True
 ) -> Tuple[NDArray[np.float64], int]:
     """合并多个音频片段
 
     Args:
         audio_segments: 音频数据列表
         target_sr: 目标采样率，默认32000Hz
+        add_silence: 是否在音频片段之间添加静音，默认True
     """
     audio_arrays: List[NDArray[np.float64]] = []
 
@@ -99,17 +101,24 @@ def merge_audio_segments(
     if not audio_arrays:
         raise ValueError("没有有效的音频数据")
 
-    # 在音频片段之间添加短暂的静音
-    silence_duration = 0.3  # 秒
-    silence_samples = int(target_sr * silence_duration)
-    silence = np.zeros(silence_samples, dtype=np.float64)
-
-    # 合并所有音频片段，中间加入静音
+    # 合并所有音频片段，根据add_silence决定是否在片段之间添加静音
     merged: List[NDArray[np.float64]] = []
-    for i, audio in enumerate(audio_arrays):
-        merged.append(audio)
-        if i < len(audio_arrays) - 1:  # 最后一个片段后不加静音
-            merged.append(silence)
+    
+    if add_silence:
+        print("添加静音")
+        # 在音频片段之间添加短暂的静音
+        silence_duration = 0.3  # 秒，与服务端默认值保持一致
+        silence_samples = int(target_sr * silence_duration)
+        silence = np.zeros(silence_samples, dtype=np.float64)
+        
+        for i, audio in enumerate(audio_arrays):
+            merged.append(audio)
+            if i < len(audio_arrays) - 1:  # 最后一个片段后不加静音
+                merged.append(silence)
+    else:
+        print("不添加静音")
+        # 不添加静音，直接连接
+        merged = audio_arrays
 
     return np.concatenate(merged), target_sr
 
@@ -191,7 +200,8 @@ def test_role_synthesis(
     cut_punc: str,
     role_name: str = "临时角色",
     aux_refs: List[str] = None,
-    emotion: str = None
+    emotion: str = None,
+    pause_second: float = 0.3,
 ) -> str:
     """测试角色合成"""
     import gradio as gr
@@ -271,7 +281,8 @@ def test_role_synthesis(
             "top_p": top_p,
             "temperature": temperature,
             "sample_steps": sample_steps,
-            "if_sr": if_sr
+            "if_sr": if_sr,
+            "pause_second": pause_second,
         }
         
         # 添加辅助参考音频

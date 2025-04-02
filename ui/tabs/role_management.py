@@ -308,17 +308,17 @@ def create_role_management_tab():
     synthesis_btn.click(
         fn=lambda target_text, gpt_model, sovits_model, ref_audio, prompt_text, 
                 prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
-                temperature, sample_steps, cut_punc, role_name, aux_refs, emotion: test_role_synthesis(
+                temperature, sample_steps, cut_punc, role_name, aux_refs, emotion, pause_second: test_role_synthesis(
             target_text, gpt_model, sovits_model, clean_file_path(ref_audio), prompt_text, 
             prompt_lang, text_lang, speed, ref_free, if_sr, top_k, top_p,
             temperature, sample_steps, cut_punc, role_name, process_aux_refs(aux_refs),
-            emotion=emotion
+            emotion=emotion, pause_second=pause_second
         ),
         inputs=[
             target_text, gpt_model, sovits_model,
             ref_audio, prompt_text, prompt_lang, text_lang,
             speed, ref_free, if_sr, top_k, top_p,
-            temperature, sample_steps, cut_punc, role_name, aux_refs, emotion_list
+            temperature, sample_steps, cut_punc, role_name, aux_refs, emotion_list, pause_second
         ],
         outputs=[synthesis_output]
     )
