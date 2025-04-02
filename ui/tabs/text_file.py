@@ -167,7 +167,7 @@ def process_text_content(
             output_path = os.path.join(output_dir, f"{filename}.wav")
 
         # 合并音频
-        merged_audio, sample_rate = merge_audio_segments(audio_segments)
+        merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=disable_parsing)
 
         # 保存合并后的音频
         import soundfile as sf
