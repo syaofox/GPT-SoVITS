@@ -321,7 +321,7 @@ def create_text_file_tab():
             process_mode = gr.Radio(
                 label="",
                 choices=["逐行处理", "全文本处理", "分段处理"],
-                value="逐行处理",
+                value="全文本处理",
                 elem_id="process_mode_radio"
             )
         
