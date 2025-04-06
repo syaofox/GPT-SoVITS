@@ -55,7 +55,7 @@ def process_text_content(
     default_emotion: str = "",
     text_lang: str = "中文",
     cut_punc: str = "",
-    disable_parsing: bool = False,
+    process_mode: str = "逐行处理",
     output_dir: str = "output",
 ) -> str:
     """处理文本内容"""
@@ -69,10 +69,10 @@ def process_text_content(
     output_path = os.path.join(output_dir, f"{filename}.wav")
 
     try:
-        # 如果禁用解析，直接使用默认角色和情绪处理整个文本
-        if disable_parsing:
+        # 如果是全文本处理或分段处理模式，使用默认角色和情绪处理整个文本
+        if process_mode in ["全文本处理", "分段处理"]:
             if not default_role:
-                raise gr.Error("禁用解析时必须设置默认角色")
+                raise gr.Error("全文本或分段处理模式必须设置默认角色")
 
             # 如果没有指定情绪，使用角色配置中的第一个情绪
             if not default_emotion or default_emotion == "无":
@@ -86,7 +86,7 @@ def process_text_content(
                 else:
                     raise gr.Error(f"角色 {default_role} 配置缺少情绪配置")
 
-            print(f"禁用解析模式 - 角色: {default_role} 情绪: {default_emotion}")
+            print(f"{process_mode}模式 - 角色: {default_role} 情绪: {default_emotion}")
             
             # 处理文本，移除所有角色和情绪标记
             processed_text = ""
@@ -99,20 +99,110 @@ def process_text_content(
                 else:
                     processed_text += line.strip() + "\n"
             
+            processed_text = processed_text.strip()
+            
             # 初始化默认角色的模型
             init_models(default_role)
-            # 获取配置并调用API
+            
+            # 获取配置
             role_config = get_role_config(default_role, default_emotion, text_lang)
-            audio_data = call_api(
-                processed_text.strip(), role_config, default_role, cut_punc=cut_punc
-            )
+            
+            # 根据处理模式选择不同的处理方法
+            if process_mode == "全文本处理":
+                # 全文本处理模式，整个文本一次性处理
+                audio_data = call_api(
+                    processed_text, role_config, default_role, cut_punc=cut_punc
+                )
+                
+                # 保存音频
+                with open(output_path, "wb") as f:
+                    f.write(audio_data)
+                return output_path
+            
+            elif process_mode == "分段处理":
+                # 分段处理模式，文本按段落分割，每段尽量不超过500字
+                audio_segments = []
+                
+                # 保持段落完整性的分段处理
+                paragraphs = processed_text.split("\n")
+                current_segment = ""
+                
+                for paragraph in paragraphs:
+                    # 如果当前段落加上当前片段会超过500字，先处理当前片段
+                    if len(current_segment) + len(paragraph) > 500 and current_segment:
+                        print(f"处理分段: {current_segment[:50]}... ({len(current_segment)}字)")
+                        try:
+                            audio_data = call_api(
+                                current_segment, role_config, default_role, cut_punc=cut_punc
+                            )
+                            audio_segments.append(audio_data)
+                        except Exception as e:
+                            print(f"处理分段失败: {current_segment[:50]}..., 错误: {str(e)}")
+                        current_segment = ""
+                    
+                    # 如果单个段落本身就超过500字，需要进一步分割
+                    if len(paragraph) > 500:
+                        # 尽量在标点符号处分割
+                        sentence_endings = ["。", "！", "？", ".", "!", "?", ";", "；"]
+                        last_cut = 0
+                        for i in range(min(500, len(paragraph) - 1), 0, -1):
+                            if i < len(paragraph) and paragraph[i] in sentence_endings:
+                                last_cut = i + 1
+                                break
+                        
+                        # 如果没有找到合适的分割点，就在500字处截断
+                        if last_cut == 0:
+                            last_cut = min(500, len(paragraph))
+                        
+                        # 处理分割的前半部分
+                        if current_segment:
+                            segment_to_process = current_segment + paragraph[:last_cut]
+                        else:
+                            segment_to_process = paragraph[:last_cut]
+                            
+                        print(f"处理分段: {segment_to_process[:50]}... ({len(segment_to_process)}字)")
+                        try:
+                            audio_data = call_api(
+                                segment_to_process, role_config, default_role, cut_punc=cut_punc
+                            )
+                            audio_segments.append(audio_data)
+                        except Exception as e:
+                            print(f"处理分段失败: {segment_to_process[:50]}..., 错误: {str(e)}")
+                        
+                        # 将剩余部分作为新片段
+                        current_segment = paragraph[last_cut:]
+                    else:
+                        # 将段落添加到当前片段
+                        if current_segment:
+                            current_segment += "\n" + paragraph
+                        else:
+                            current_segment = paragraph
+                
+                # 处理最后剩余的片段
+                if current_segment:
+                    print(f"处理最后分段: {current_segment[:50]}... ({len(current_segment)}字)")
+                    try:
+                        audio_data = call_api(
+                            current_segment, role_config, default_role, cut_punc=cut_punc
+                        )
+                        audio_segments.append(audio_data)
+                    except Exception as e:
+                        print(f"处理分段失败: {current_segment[:50]}..., 错误: {str(e)}")
+                
+                if not audio_segments:
+                    raise gr.Error("没有可处理的文本段落")
+                
+                # 合并音频段
+                print("合并所有分段音频...")
+                merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=True)
+                
+                # 保存合并后的音频
+                import soundfile as sf
+                sf.write(output_path, merged_audio, sample_rate)
+                
+                return output_path
 
-            # 保存音频
-            with open(output_path, "wb") as f:
-                f.write(audio_data)
-            return output_path
-
-        # 原有的处理逻辑
+        # 逐行处理模式（原有的处理逻辑）
         lines = text_content.strip().split("\n")
         audio_segments = []
         current_role = None
@@ -167,7 +257,7 @@ def process_text_content(
             output_path = os.path.join(output_dir, f"{filename}.wav")
 
         # 合并音频
-        merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=disable_parsing)
+        merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=(process_mode != "逐行处理"))
 
         # 保存合并后的音频
         import soundfile as sf
@@ -186,7 +276,7 @@ def process_file(
     default_emotion: str = "",
     text_lang: str = "中文",
     cut_punc: str = "",
-    disable_parsing: bool = False,
+    process_mode: str = "逐行处理",
     output_dir: str = "output",
 ) -> str:
     """处理文本文件"""
@@ -204,7 +294,7 @@ def process_file(
         default_emotion,
         text_lang,
         cut_punc,
-        disable_parsing,
+        process_mode,
         output_dir,
     )
 
@@ -223,6 +313,25 @@ def create_text_file_tab():
             with gr.Column(scale=1):
                 file_input = gr.File(label="或上传文本文件", file_types=[".txt"])
                 file_output = gr.Audio(label="输出音频")
+    
+    # 处理模式选择区域（放在上方突出显示）
+    with gr.Group(elem_id="process_mode_group"):
+        gr.Markdown("### 选择处理模式")
+        with gr.Row():
+            process_mode = gr.Radio(
+                label="",
+                choices=["逐行处理", "全文本处理", "分段处理"],
+                value="逐行处理",
+                elem_id="process_mode_radio"
+            )
+        
+        with gr.Group(elem_id="process_mode_info"):
+            mode_info = gr.Markdown("""
+            **当前模式说明**：
+            - **逐行处理**：逐行分析角色和情绪标记，适用于对话场景，每行文本单独处理
+            - **全文本处理**：使用默认角色和情绪处理整个文本，适用于大段独白
+            - **分段处理**：将文本分成多个段落（不超过500字），分别处理后合并，解决长文本问题
+            """)
 
     with gr.Group():
         with gr.Row():
@@ -272,11 +381,6 @@ def create_text_file_tab():
                     placeholder="例如：,.。，",
                     value="。！？：.!?:",
                 )
-                disable_parsing = gr.Checkbox(
-                    label="禁用角色情绪解析",
-                    value=True,
-                    info="开启后将使用默认角色和情绪处理整个文本，不进行逐行解析",
-                )
 
     with gr.Group():
         with gr.Row():            
@@ -291,14 +395,52 @@ def create_text_file_tab():
     1. **文本文件**：可以选择以下两种方式之一：
         - 上传文本文件
         - 直接在文本框中输入多行文本
-        支持以下格式：
-        - `(角色)文本内容`
-        - `(角色|情绪)文本内容`
-        - 直接输入文本（需要设置默认角色）
-    2. **强制角色**：忽略文本中的角色标记，全部使用指定角色
-    3. **默认角色**：当文本没有指定角色时使用的角色
-    4. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
+    2. **处理模式**：
+        - **逐行处理**：每行文本单独处理，支持行内角色和情绪标记
+            - 格式：`(角色)文本内容` 或 `(角色|情绪)文本内容`
+            - 适用场景：对话、剧本等多角色文本
+        - **全文本处理**：使用默认角色和情绪处理整个文本
+            - 适用场景：单一角色的大段文本，如小说、文章等
+        - **分段处理**：将文本分段（每段不超过500字）处理后合并
+            - 适用场景：大段文本，但想保持更好的语音连贯性
+    3. **强制角色**：忽略文本中的角色标记，全部使用指定角色
+    4. **默认角色**：当文本没有指定角色时使用的角色
+    5. **预处理文本**：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
     """)
+
+    # 添加处理模式切换时的提示信息更新
+    def update_mode_tips(mode):
+        if mode == "逐行处理":
+            return """
+            **当前模式**：逐行处理
+            - 每行文本独立处理，支持行内角色和情绪标记
+            - 格式：`(角色)文本内容` 或 `(角色|情绪)文本内容`
+            - 适用于对话、剧本等多角色文本
+            - 提示：每行尽量保持在一句话以内，行与行之间会有停顿
+            """
+        elif mode == "全文本处理":
+            return """
+            **当前模式**：全文本处理
+            - 使用默认角色和默认情绪处理整个文本
+            - 系统会忽略文本中的角色和情绪标记
+            - 适用于单一角色的大段独白文本
+            - 提示：请确保已选择默认角色和情绪
+            """
+        else:  # 分段处理
+            return """
+            **当前模式**：分段处理
+            - 将文本按段落分割，每段不超过500字
+            - 使用默认角色和默认情绪处理
+            - 系统会忽略文本中的角色和情绪标记
+            - 适用于长文本处理，解决长文本处理问题
+            - 提示：分段处理会保持段落完整性，并在自然停顿处分割
+            """
+    
+    process_mode.change(
+        fn=update_mode_tips,
+        inputs=[process_mode],
+        outputs=[mode_info]
+    )
 
     process_text_btn.click(
         process_text_content,
@@ -310,7 +452,7 @@ def create_text_file_tab():
             default_emotion,
             text_lang,
             cut_punc_input,
-            disable_parsing,
+            process_mode,
         ],
         outputs=file_output,
     )
@@ -364,7 +506,7 @@ def create_text_file_tab():
         "force_emotion": force_emotion,
         "text_lang": text_lang,
         "cut_punc": cut_punc_input,
-        "disable_parsing": disable_parsing,
+        "process_mode": process_mode,
         "text_content": text_content,
         "file_input": file_input
     } 
