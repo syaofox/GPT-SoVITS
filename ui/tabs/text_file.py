@@ -1,7 +1,9 @@
 import os
 import time
 import gradio as gr
+import gc
 
+import soundfile as sf
 from ui.utils import LANGUAGE_OPTIONS, g_default_role
 from ui.roles import list_roles, update_default_emotions, update_force_emotions, get_emotions
 from ui.text_processing import preprocess_text
@@ -197,8 +199,10 @@ def process_text_content(
                 merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=True)
                 
                 # 保存合并后的音频
-                import soundfile as sf
+                
                 sf.write(output_path, merged_audio, sample_rate)
+                del merged_audio, audio_segments  # 手动释放内存
+                gc.collect()
                 
                 return output_path
 
@@ -260,8 +264,9 @@ def process_text_content(
         merged_audio, sample_rate = merge_audio_segments(audio_segments, add_silence=(process_mode != "逐行处理"))
 
         # 保存合并后的音频
-        import soundfile as sf
         sf.write(output_path, merged_audio, sample_rate)
+        del merged_audio, audio_segments  # 手动释放内存
+        gc.collect()
 
         return output_path
     except Exception as e:
@@ -312,7 +317,7 @@ def create_text_file_tab():
                 )
             with gr.Column(scale=1):
                 file_input = gr.File(label="或上传文本文件", file_types=[".txt"])
-                file_output = gr.Audio(label="输出音频")
+                file_output = gr.Audio(label="输出音频",streaming=False)
     
     # 处理模式选择区域（放在上方突出显示）
     with gr.Group(elem_id="process_mode_group"):
