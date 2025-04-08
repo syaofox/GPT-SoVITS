@@ -1264,6 +1264,13 @@ def handle(
     if not sample_steps in [4, 8, 16, 32, 64, 128]:
         sample_steps = 32
 
+    # 先处理文本中的空行，将连续的换行符替换为<br>标记
+    temp_text = text.split("\n")
+    for i in range(len(temp_text)):
+        if temp_text[i] == "":
+            temp_text[i] = "<br>"
+    text = "\n".join(temp_text)
+
     if cut_punc == None:
         text = cut_text(text, default_cut_punc)
     else:
