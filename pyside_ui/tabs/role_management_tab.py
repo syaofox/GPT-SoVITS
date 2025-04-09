@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QTextEdit, QComboBox, QRadioButton, QButtonGroup, QGroupBox,
     QFileDialog, QLineEdit, QProgressBar, QMessageBox, QSplitter,
-    QProgressDialog, QSlider, QCheckBox, QScrollArea, QTabWidget
+    QProgressDialog, QSlider, QCheckBox, QScrollArea, QTabWidget, QSizePolicy
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -283,28 +283,20 @@ class RoleManagementTab(QWidget):
         output_layout.addWidget(self.play_btn)
         listening_scroll_layout.addLayout(output_layout)
         
+        # 创建垂直布局容器
+        vertical_container = QWidget()
+        vertical_layout = QVBoxLayout(vertical_container)
+        vertical_layout.setAlignment(Qt.AlignTop)
+        
         # 角色管理区域
         role_group = QGroupBox("角色管理")
-        role_layout = QHBoxLayout(role_group)
+        role_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        role_group.setMinimumHeight(200)
+        role_layout = QVBoxLayout(role_group)
         
-        # 角色创建/更新区域
-        create_layout = QVBoxLayout()
-        create_layout.addWidget(QLabel("角色名称:"))
-        self.role_name_edit = QLineEdit()
-        create_layout.addWidget(self.role_name_edit)
-        
-        create_layout.addWidget(QLabel("角色描述(可选):"))
-        self.description_edit = QTextEdit()
-        self.description_edit.setMaximumHeight(80)
-        create_layout.addWidget(self.description_edit)
-        
-        self.create_btn = QPushButton("新建/更新角色")
-        create_layout.addWidget(self.create_btn)
-        role_layout.addLayout(create_layout)
-        
-        # 角色选择区域
-        select_layout = QVBoxLayout()
-        select_layout.addWidget(QLabel("现有角色列表:"))
+        # 角色列表行
+        role_list_layout = QHBoxLayout()
+        role_list_layout.addWidget(QLabel("现有角色列表:"))
         self.role_list_combo = QComboBox()
         self.role_list_combo.addItems(self.controller.get_roles())
         
@@ -313,11 +305,15 @@ class RoleManagementTab(QWidget):
         default_index = self.role_list_combo.findText(default_role)
         if default_index >= 0:
             self.role_list_combo.setCurrentIndex(default_index)
-        select_layout.addWidget(self.role_list_combo)
+        role_list_layout.addWidget(self.role_list_combo)
+        role_layout.addLayout(role_list_layout)
         
-        select_layout.addWidget(QLabel("情绪选择:"))
+        # 情绪选择行
+        emotion_layout = QHBoxLayout()
+        emotion_layout.addWidget(QLabel("情绪选择:"))
         self.emotion_list_combo = QComboBox()
-        select_layout.addWidget(self.emotion_list_combo)
+        emotion_layout.addWidget(self.emotion_list_combo)
+        role_layout.addLayout(emotion_layout)
         
         # 角色操作按钮
         role_btn_layout = QHBoxLayout()
@@ -327,14 +323,42 @@ class RoleManagementTab(QWidget):
         role_btn_layout.addWidget(self.load_role_btn)
         role_btn_layout.addWidget(self.delete_role_btn)
         role_btn_layout.addWidget(self.refresh_role_list_btn)
-        select_layout.addLayout(role_btn_layout)
+        role_layout.addLayout(role_btn_layout)
         
         # 状态信息
         self.status_label = QLabel("")
-        select_layout.addWidget(self.status_label)
+        role_layout.addWidget(self.status_label)
         
-        role_layout.addLayout(select_layout)
-        role_management_scroll_layout.addWidget(role_group)
+        # 角色创建/更新区域
+        create_role_group = QGroupBox("角色创建/更新")
+        create_role_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        create_role_group.setMinimumHeight(200)
+        create_layout = QVBoxLayout(create_role_group)
+        
+        # 角色名称行
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("角色名称:"))
+        self.role_name_edit = QLineEdit()
+        name_layout.addWidget(self.role_name_edit)
+        create_layout.addLayout(name_layout)
+        
+        # 角色描述行
+        desc_layout = QHBoxLayout()
+        desc_layout.addWidget(QLabel("角色描述(可选):"))
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(80)
+        desc_layout.addWidget(self.description_edit)
+        create_layout.addLayout(desc_layout)
+        
+        self.create_btn = QPushButton("新建/更新角色")
+        create_layout.addWidget(self.create_btn)
+        
+        # 添加到垂直布局
+        vertical_layout.addWidget(role_group)
+        vertical_layout.addWidget(create_role_group)
+        
+        # 添加到滚动区域
+        role_management_scroll_layout.addWidget(vertical_container)
         
         # 添加滚动区域到各自的标签页
         listening_layout.addWidget(listening_scroll_area)
