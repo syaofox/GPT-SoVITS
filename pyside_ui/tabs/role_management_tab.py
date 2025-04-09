@@ -90,7 +90,42 @@ class RoleManagementTab(QWidget):
         # 添加到试听标签页
         listening_scroll_layout.addWidget(model_group)
         
-        # 参考音频区域
+        # 合成区域 - 移到第二位
+        synth_group = QGroupBox("参数区")
+        synth_layout = QHBoxLayout(synth_group)
+        
+        # 需要合成的文本
+        text_layout = QVBoxLayout()
+        text_layout.addWidget(QLabel("需要合成的文本:"))
+        self.target_text_edit = QTextEdit()
+        text_layout.addWidget(self.target_text_edit)
+        synth_layout.addLayout(text_layout, 3)
+        
+        # 合成参数
+        param_layout = QVBoxLayout()
+        
+        # 断句符号
+        param_layout.addWidget(QLabel("断句符号:"))
+        self.cut_punc_edit = QLineEdit("。！？：.!?:")
+        param_layout.addWidget(self.cut_punc_edit)
+        
+        # 采样步数 - 移到参数区
+        param_layout.addWidget(QLabel("采样步数:"))
+        sample_layout = QHBoxLayout()
+        self.sample_steps_group = QButtonGroup(self)
+        for step in [4, 8, 16, 32, 64, 128]:
+            radio = QRadioButton(str(step))
+            self.sample_steps_group.addButton(radio, step)
+            sample_layout.addWidget(radio)
+            if step == 32:
+                radio.setChecked(True)
+        param_layout.addLayout(sample_layout)
+        
+        # 超采样选项 - 移到参数区
+        self.if_sr_check = QCheckBox("启用超采样提高语音质量(会增加延迟)")
+        param_layout.addWidget(self.if_sr_check)
+        
+        # 参考音频区域 - 移到第三位
         ref_group = QGroupBox("参考音频")
         ref_layout = QVBoxLayout(ref_group)
         
@@ -139,61 +174,13 @@ class RoleManagementTab(QWidget):
         
         ref_layout.addLayout(text_lang_layout)
         
-        # 辅助参考音频和采样设置区域（水平布局）
-        aux_sample_layout = QHBoxLayout()
-        
-        # 左侧：辅助参考音频
+        # 辅助参考音频区域（水平布局）- 移除了采样设置
         aux_layout = QVBoxLayout()
         aux_layout.addWidget(QLabel("辅助参考音频（可选）：每行输入一个音频文件路径，用于融合多个音色"))
         self.aux_refs_edit = QTextEdit()
         self.aux_refs_edit.setMaximumHeight(80)
         aux_layout.addWidget(self.aux_refs_edit)
-        aux_sample_layout.addLayout(aux_layout, 3)  # 设置拉伸因子为3，使辅助参考音频区域占据更多空间
-        
-        # 右侧：采样设置
-        sample_settings_layout = QVBoxLayout()
-        
-        # 采样步数
-        sample_layout = QHBoxLayout()
-        sample_layout.addWidget(QLabel("采样步数:"))
-        self.sample_steps_group = QButtonGroup(self)
-        for step in [4, 8, 16, 32, 64, 128]:
-            radio = QRadioButton(str(step))
-            self.sample_steps_group.addButton(radio, step)
-            sample_layout.addWidget(radio)
-            if step == 32:
-                radio.setChecked(True)
-        sample_settings_layout.addLayout(sample_layout)
-        
-        # 超采样选项
-        self.if_sr_check = QCheckBox("启用超采样提高语音质量(会增加延迟)")
-        sample_settings_layout.addWidget(self.if_sr_check)
-        
-        aux_sample_layout.addLayout(sample_settings_layout, 2)  # 设置拉伸因子为2
-        
-        ref_layout.addLayout(aux_sample_layout)
-        
-        # 添加到试听标签页
-        listening_scroll_layout.addWidget(ref_group)
-        
-        # 合成区域
-        synth_group = QGroupBox("参数区")
-        synth_layout = QHBoxLayout(synth_group)
-        
-        # 需要合成的文本
-        text_layout = QVBoxLayout()
-        text_layout.addWidget(QLabel("需要合成的文本:"))
-        self.target_text_edit = QTextEdit()
-        text_layout.addWidget(self.target_text_edit)
-        synth_layout.addLayout(text_layout, 3)
-        
-        # 合成参数
-        param_layout = QVBoxLayout()
-        
-        # 断句符号
-        param_layout.addWidget(QLabel("断句符号:"))
-        self.cut_punc_edit = QLineEdit("。！？：.!?:")
-        param_layout.addWidget(self.cut_punc_edit)
+        ref_layout.addLayout(aux_layout)
         
         # 语速
         param_layout.addWidget(QLabel("语速:"))
@@ -259,7 +246,10 @@ class RoleManagementTab(QWidget):
         param_layout.addLayout(temperature_layout)
         
         synth_layout.addLayout(param_layout, 2)
+        
+        # 按照要求的顺序添加到试听标签页：模型选择区域(已添加) -> 参数区 -> 参考音频区
         listening_scroll_layout.addWidget(synth_group)
+        listening_scroll_layout.addWidget(ref_group)
         
         # 合成按钮和结果
         synth_btn_layout = QHBoxLayout()
