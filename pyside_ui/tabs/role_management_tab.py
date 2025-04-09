@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QTextEdit, QComboBox, QRadioButton, QButtonGroup, QGroupBox,
     QFileDialog, QLineEdit, QProgressBar, QMessageBox, QSplitter,
-    QProgressDialog, QSlider, QCheckBox, QScrollArea
+    QProgressDialog, QSlider, QCheckBox, QScrollArea, QTabWidget
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -36,14 +36,32 @@ class RoleManagementTab(QWidget):
         # 主布局
         main_layout = QVBoxLayout(self)
         
-        # 创建滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_area.setWidget(scroll_content)
+        # 创建子标签页
+        self.tab_widget = QTabWidget()
         
-        # 模型选择区域
+        # 创建试听标签页
+        self.listening_tab = QWidget()
+        listening_layout = QVBoxLayout(self.listening_tab)
+        
+        # 创建角色管理标签页
+        self.role_management_tab = QWidget()
+        role_management_layout = QVBoxLayout(self.role_management_tab)
+        
+        # 创建滚动区域 - 试听标签页
+        listening_scroll_area = QScrollArea()
+        listening_scroll_area.setWidgetResizable(True)
+        listening_scroll_content = QWidget()
+        listening_scroll_layout = QVBoxLayout(listening_scroll_content)
+        listening_scroll_area.setWidget(listening_scroll_content)
+        
+        # 创建滚动区域 - 角色管理标签页
+        role_management_scroll_area = QScrollArea()
+        role_management_scroll_area.setWidgetResizable(True)
+        role_management_scroll_content = QWidget()
+        role_management_scroll_layout = QVBoxLayout(role_management_scroll_content)
+        role_management_scroll_area.setWidget(role_management_scroll_content)
+        
+        # 模型选择区域 - 两个标签页共用
         model_group = QGroupBox("模型选择")
         model_layout = QHBoxLayout(model_group)
         
@@ -69,7 +87,8 @@ class RoleManagementTab(QWidget):
         refresh_btn = QPushButton("刷新模型列表")
         model_layout.addWidget(refresh_btn)
         
-        scroll_layout.addWidget(model_group)
+        # 添加到试听标签页
+        listening_scroll_layout.addWidget(model_group)
         
         # 参考音频区域
         ref_group = QGroupBox("参考音频")
@@ -136,7 +155,8 @@ class RoleManagementTab(QWidget):
         self.if_sr_check = QCheckBox("启用超采样提高语音质量(会增加延迟)")
         ref_layout.addWidget(self.if_sr_check)
         
-        scroll_layout.addWidget(ref_group)
+        # 添加到试听标签页
+        listening_scroll_layout.addWidget(ref_group)
         
         # 合成区域
         synth_group = QGroupBox("参数区")
@@ -221,14 +241,14 @@ class RoleManagementTab(QWidget):
         param_layout.addLayout(temperature_layout)
         
         synth_layout.addLayout(param_layout, 2)
-        scroll_layout.addWidget(synth_group)
+        listening_scroll_layout.addWidget(synth_group)
         
         # 合成按钮和结果
         synth_btn_layout = QHBoxLayout()
         self.synthesis_btn = QPushButton("合成语音")
         synth_btn_layout.addWidget(self.synthesis_btn)
         
-        scroll_layout.addLayout(synth_btn_layout)
+        listening_scroll_layout.addLayout(synth_btn_layout)
         
         # 音频输出路径
         output_layout = QHBoxLayout()
@@ -238,7 +258,7 @@ class RoleManagementTab(QWidget):
         output_layout.addWidget(self.audio_output_path)
         self.play_btn = QPushButton("播放")
         output_layout.addWidget(self.play_btn)
-        scroll_layout.addLayout(output_layout)
+        listening_scroll_layout.addLayout(output_layout)
         
         # 角色管理区域
         role_group = QGroupBox("角色管理")
@@ -285,10 +305,18 @@ class RoleManagementTab(QWidget):
         select_layout.addWidget(self.status_label)
         
         role_layout.addLayout(select_layout)
-        scroll_layout.addWidget(role_group)
+        role_management_scroll_layout.addWidget(role_group)
         
-        # 添加滚动区域到主布局
-        main_layout.addWidget(scroll_area)
+        # 添加滚动区域到各自的标签页
+        listening_layout.addWidget(listening_scroll_area)
+        role_management_layout.addWidget(role_management_scroll_area)
+        
+        # 添加标签页到标签页控件
+        self.tab_widget.addTab(self.listening_tab, "试听")
+        self.tab_widget.addTab(self.role_management_tab, "角色管理")
+        
+        # 添加标签页控件到主布局
+        main_layout.addWidget(self.tab_widget)
         
         # 保存按钮引用
         self.refresh_models_btn = refresh_btn
@@ -699,4 +727,4 @@ class SynthesisThread(QThread):
             )
             self.finished.emit(output_path)
         except Exception as e:
-            self.error.emit(str(e)) 
+            self.error.emit(str(e))
