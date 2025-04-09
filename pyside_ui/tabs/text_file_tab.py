@@ -128,7 +128,7 @@ class TextFileTab(QWidget):
         self.default_emotion_combo = QComboBox()
         default_layout.addWidget(self.default_emotion_combo)
         
-        roles_layout.addWidget(default_group)
+        roles_layout.addWidget(default_group, 4)  # 设置拉伸因子为4
         
         # 第二列：强制角色和情绪
         force_group = QGroupBox("强制角色和情绪")
@@ -145,12 +145,14 @@ class TextFileTab(QWidget):
         self.force_emotion_combo.addItem("无")
         force_layout.addWidget(self.force_emotion_combo)
         
-        roles_layout.addWidget(force_group)
+        roles_layout.addWidget(force_group, 4)  # 设置拉伸因子为4
         
-        # 第三列：语言和切分符号
+        # 第三列：语言和切分符号（占用更少空间）
         lang_group = QGroupBox("语言和切分设置")
         lang_layout = QVBoxLayout(lang_group)
+        lang_layout.setContentsMargins(6, 6, 6, 6)  # 减小内边距
         
+        # 使用更紧凑的布局
         lang_layout.addWidget(QLabel("文本语言:"))
         self.text_lang_combo = QComboBox()
         self.text_lang_combo.addItems([lang[0] for lang in self.controller.get_language_options()])
@@ -161,7 +163,8 @@ class TextFileTab(QWidget):
         self.cut_punc_edit = QLineEdit("。！？：.!?:")
         lang_layout.addWidget(self.cut_punc_edit)
         
-        roles_layout.addWidget(lang_group)
+        # 设置较小的拉伸因子，使第三列占用更少空间
+        roles_layout.addWidget(lang_group, 2)  # 设置拉伸因子为2，比其他两列小
         
         settings_layout.addLayout(roles_layout)
         main_layout.addWidget(settings_group)
