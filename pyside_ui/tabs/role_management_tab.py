@@ -251,9 +251,9 @@ class RoleManagementTab(QWidget):
         
         synth_layout.addLayout(param_layout, 2)
         
-        # 按照要求的顺序添加到试听标签页：模型选择区域(已添加) -> 参数区 -> 参考音频区
-        listening_scroll_layout.addWidget(synth_group)
+        # 按照要求的顺序添加到试听标签页：模型选择区域(已添加) -> 参考音频区 -> 参数区
         listening_scroll_layout.addWidget(ref_group)
+        listening_scroll_layout.addWidget(synth_group)
         
         # 合成按钮和结果
         synth_btn_layout = QHBoxLayout()
