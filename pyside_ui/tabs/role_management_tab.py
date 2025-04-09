@@ -98,6 +98,10 @@ class RoleManagementTab(QWidget):
         text_layout = QVBoxLayout()
         text_layout.addWidget(QLabel("需要合成的文本:"))
         self.target_text_edit = QTextEdit()
+        self.target_text_edit.setAcceptRichText(False)  # 禁止粘贴带格式文本
+        self.target_text_edit.setFontPointSize(10)  # 设置字体大小为10
+        self.target_text_edit.setLineWrapMode(QTextEdit.WidgetWidth)  # 启用自动换行
+        self.target_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 禁用水平滚动条
         text_layout.addWidget(self.target_text_edit)
         synth_layout.addLayout(text_layout, 3)
         

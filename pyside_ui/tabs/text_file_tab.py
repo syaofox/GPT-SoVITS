@@ -72,7 +72,11 @@ class TextFileTab(QWidget):
         text_layout = QVBoxLayout(text_group)
         
         self.text_content = QTextEdit()
+        self.text_content.setAcceptRichText(False)  # 禁止粘贴带格式文本
         self.text_content.setPlaceholderText("每行一句话，支持以下格式：\n(角色)文本内容\n(角色|情绪)文本内容\n直接输入文本")
+        self.text_content.setFontPointSize(10)  # 设置字体大小为10
+        self.text_content.setLineWrapMode(QTextEdit.WidgetWidth)  # 启用自动换行
+        self.text_content.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 禁用水平滚动条
         text_layout.addWidget(self.text_content)
         
         content_splitter.addWidget(text_group)
