@@ -139,11 +139,19 @@ class RoleManagementTab(QWidget):
         
         ref_layout.addLayout(text_lang_layout)
         
-        # 辅助参考音频
-        ref_layout.addWidget(QLabel("辅助参考音频（可选）：每行输入一个音频文件路径，用于融合多个音色"))
+        # 辅助参考音频和采样设置区域（水平布局）
+        aux_sample_layout = QHBoxLayout()
+        
+        # 左侧：辅助参考音频
+        aux_layout = QVBoxLayout()
+        aux_layout.addWidget(QLabel("辅助参考音频（可选）：每行输入一个音频文件路径，用于融合多个音色"))
         self.aux_refs_edit = QTextEdit()
         self.aux_refs_edit.setMaximumHeight(80)
-        ref_layout.addWidget(self.aux_refs_edit)
+        aux_layout.addWidget(self.aux_refs_edit)
+        aux_sample_layout.addLayout(aux_layout, 3)  # 设置拉伸因子为3，使辅助参考音频区域占据更多空间
+        
+        # 右侧：采样设置
+        sample_settings_layout = QVBoxLayout()
         
         # 采样步数
         sample_layout = QHBoxLayout()
@@ -155,11 +163,15 @@ class RoleManagementTab(QWidget):
             sample_layout.addWidget(radio)
             if step == 32:
                 radio.setChecked(True)
-        ref_layout.addLayout(sample_layout)
+        sample_settings_layout.addLayout(sample_layout)
         
         # 超采样选项
         self.if_sr_check = QCheckBox("启用超采样提高语音质量(会增加延迟)")
-        ref_layout.addWidget(self.if_sr_check)
+        sample_settings_layout.addWidget(self.if_sr_check)
+        
+        aux_sample_layout.addLayout(sample_settings_layout, 2)  # 设置拉伸因子为2
+        
+        ref_layout.addLayout(aux_sample_layout)
         
         # 添加到试听标签页
         listening_scroll_layout.addWidget(ref_group)
