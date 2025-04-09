@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt
 
 from pyside_ui.tabs.text_file_tab import TextFileTab
 from pyside_ui.tabs.config_tab import ConfigTab
+from pyside_ui.tabs.role_management_tab import RoleManagementTab
 
 
 class MainWindow(QMainWindow):
@@ -31,10 +32,12 @@ class MainWindow(QMainWindow):
         
         # 创建各个标签页
         self.text_file_tab = TextFileTab()
+        self.role_management_tab = RoleManagementTab()
         self.config_tab = ConfigTab()
         
         # 添加标签页
         self.central_widget.addTab(self.text_file_tab, "文本文件")
+        self.central_widget.addTab(self.role_management_tab, "角色管理")
         self.central_widget.addTab(self.config_tab, "配置替换音")
 
 
