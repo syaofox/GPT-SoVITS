@@ -217,6 +217,9 @@ class TextFileTab(QWidget):
         # 上传文件按钮
         self.upload_btn.clicked.connect(self.upload_text_file)
         
+        # 添加快捷键事件
+        self.text_content.keyPressEvent = self.handle_key_press
+        
         # 预处理文本按钮
         self.preprocess_btn.clicked.connect(self.preprocess_text)
         
@@ -364,6 +367,16 @@ class TextFileTab(QWidget):
         progress_dialog.close()
         QMessageBox.critical(self, "处理失败", error_msg)
     
+    def handle_key_press(self, event):
+        """处理快捷键事件"""
+        if event.key() == Qt.Key_Y and event.modifiers() == Qt.NoModifier:
+            cursor = self.text_content.textCursor()
+            cursor.insertText("<tone as=\"\"></tone>")
+            return
+        
+        # 调用原始的keyPressEvent
+        QTextEdit.keyPressEvent(self.text_content, event)
+        
     def play_audio(self):
         """播放生成的音频"""
         audio_path = self.audio_output_path.text()
