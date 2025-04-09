@@ -107,14 +107,19 @@ class RoleManagementTab(QWidget):
         self.ref_free_check = QCheckBox("开启无参考文本模式。不填参考文本亦相当于开启。v3暂不支持该模式，使用了会报错。")
         ref_layout.addWidget(self.ref_free_check)
         
-        # 参考音频文本
-        ref_layout.addWidget(QLabel("参考音频的文本:"))
+        # 参考音频文本和语言设置区域（水平布局）
+        text_lang_layout = QHBoxLayout()
+        
+        # 左侧：参考音频文本
+        text_layout = QVBoxLayout()
+        text_layout.addWidget(QLabel("参考音频的文本:"))
         self.prompt_text_edit = QTextEdit()
         self.prompt_text_edit.setMaximumHeight(100)
-        ref_layout.addWidget(self.prompt_text_edit)
+        text_layout.addWidget(self.prompt_text_edit)
+        text_lang_layout.addLayout(text_layout, 3)  # 设置拉伸因子为3，使文本区域占据更多空间
         
-        # 语言设置
-        lang_layout = QHBoxLayout()
+        # 右侧：语言设置（垂直布局）
+        lang_layout = QVBoxLayout()
         
         # 参考音频语种
         lang_layout.addWidget(QLabel("参考音频的语种:"))
@@ -130,7 +135,9 @@ class RoleManagementTab(QWidget):
         self.text_lang_combo.setCurrentText("中文")
         lang_layout.addWidget(self.text_lang_combo)
         
-        ref_layout.addLayout(lang_layout)
+        text_lang_layout.addLayout(lang_layout, 1)  # 设置拉伸因子为1
+        
+        ref_layout.addLayout(text_lang_layout)
         
         # 辅助参考音频
         ref_layout.addWidget(QLabel("辅助参考音频（可选）：每行输入一个音频文件路径，用于融合多个音色"))
