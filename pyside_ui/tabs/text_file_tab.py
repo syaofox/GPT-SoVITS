@@ -102,7 +102,7 @@ class TextFileTab(QWidget):
         content_splitter.addWidget(file_group)
         
         # 设置分割比例
-        content_splitter.setSizes([600, 400])
+        content_splitter.setSizes([800, 200])
         
         main_layout.addWidget(content_splitter)
         
