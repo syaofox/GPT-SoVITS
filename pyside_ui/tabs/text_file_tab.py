@@ -114,6 +114,12 @@ class TextFileTab(QWidget):
         default_layout.addWidget(QLabel("默认角色(必选):"))
         self.default_role_combo = QComboBox()
         self.default_role_combo.addItems(self.controller.get_roles())
+        
+        # 设置默认选中的角色为"凡子霞"
+        default_role = "凡子霞"
+        default_index = self.default_role_combo.findText(default_role)
+        if default_index >= 0:
+            self.default_role_combo.setCurrentIndex(default_index)
         default_layout.addWidget(self.default_role_combo)
         
         default_layout.addWidget(QLabel("默认情绪:"))
@@ -395,4 +401,4 @@ class ProcessThread(QThread):
             )
             self.finished.emit(output_path)
         except Exception as e:
-            self.error.emit(str(e)) 
+            self.error.emit(str(e))

@@ -284,6 +284,12 @@ class RoleManagementTab(QWidget):
         select_layout.addWidget(QLabel("现有角色列表:"))
         self.role_list_combo = QComboBox()
         self.role_list_combo.addItems(self.controller.get_roles())
+        
+        # 设置默认选中的角色为"凡子霞"
+        default_role = "凡子霞"
+        default_index = self.role_list_combo.findText(default_role)
+        if default_index >= 0:
+            self.role_list_combo.setCurrentIndex(default_index)
         select_layout.addWidget(self.role_list_combo)
         
         select_layout.addWidget(QLabel("情绪选择:"))
