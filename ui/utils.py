@@ -33,7 +33,8 @@ LANGUAGE_OPTIONS = [
 ]
 
 # 默认角色
-g_default_role: str = "霞"
+# 默认角色
+g_default_role: str = "凡子霞"
 
 # 确保必要的目录存在
 os.makedirs("configs/roles", exist_ok=True)
@@ -169,4 +170,4 @@ def save_word_replace_config(text):
         return f"保存失败: {e}"
 
 # 初始化全局替换字典
-g_word_replace_dict = load_word_replace_dict() 
+g_word_replace_dict = load_word_replace_dict()
