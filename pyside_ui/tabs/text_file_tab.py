@@ -38,19 +38,21 @@ class TextFileTab(QWidget):
         
         # 处理模式选择区域
         mode_group = QGroupBox("选择处理模式")
-        mode_layout = QVBoxLayout(mode_group)
+        mode_layout = QHBoxLayout(mode_group)
         
-        # 模式选择按钮组
+        # 左侧：模式选择按钮组
+        radio_layout = QVBoxLayout()
         self.mode_button_group = QButtonGroup(self)
         modes = ["逐行处理", "全文本处理", "分段处理"]
         for mode in modes:
             radio = QRadioButton(mode)
             self.mode_button_group.addButton(radio)
-            mode_layout.addWidget(radio)
+            radio_layout.addWidget(radio)
             if mode == "全文本处理":
                 radio.setChecked(True)
+        mode_layout.addLayout(radio_layout)
         
-        # 模式说明文本
+        # 右侧：模式说明文本
         mode_info = QLabel("""
         模式说明:
         - 逐行处理: 逐行分析角色和情绪标记，适用于对话场景，每行文本单独处理
@@ -58,7 +60,7 @@ class TextFileTab(QWidget):
         - 分段处理: 将文本分成多个段落(不超过500字)，分别处理后合并，解决长文本问题
         """)
         mode_info.setWordWrap(True)
-        mode_layout.addWidget(mode_info)
+        mode_layout.addWidget(mode_info, 1)  # 设置拉伸因子为1，使说明文本占据更多空间
         
         main_layout.addWidget(mode_group)
         
