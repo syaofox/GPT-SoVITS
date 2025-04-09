@@ -106,7 +106,6 @@ class RoleManagementTab(QWidget):
         # 无参考文本模式
         self.ref_free_check = QCheckBox("开启无参考文本模式。不填参考文本亦相当于开启。v3暂不支持该模式，使用了会报错。")
         ref_layout.addWidget(self.ref_free_check)
-        ref_layout.addWidget(QLabel("使用无参考文本模式时建议使用微调的GPT\n听不清参考音频说的啥(不晓得写啥)可以开。开启后无视填写的参考文本。"))
         
         # 参考音频文本
         ref_layout.addWidget(QLabel("参考音频的文本:"))
