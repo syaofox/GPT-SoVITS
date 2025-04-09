@@ -92,10 +92,13 @@ class RoleManagementTab(QWidget):
         
         # 合成区域 - 移到第二位
         synth_group = QGroupBox("参数区")
-        synth_layout = QHBoxLayout(synth_group)
         
-        # 需要合成的文本
-        text_layout = QVBoxLayout()
+        # 使用QSplitter进行左右分割
+        content_splitter = QSplitter(Qt.Horizontal)
+        
+        # 左侧文本区域
+        text_widget = QWidget()
+        text_layout = QVBoxLayout(text_widget)
         text_layout.addWidget(QLabel("需要合成的文本:"))
         self.target_text_edit = QTextEdit()
         self.target_text_edit.setAcceptRichText(False)  # 禁止粘贴带格式文本
@@ -103,10 +106,11 @@ class RoleManagementTab(QWidget):
         self.target_text_edit.setLineWrapMode(QTextEdit.WidgetWidth)  # 启用自动换行
         self.target_text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # 禁用水平滚动条
         text_layout.addWidget(self.target_text_edit)
-        synth_layout.addLayout(text_layout, 3)
+        content_splitter.addWidget(text_widget)
         
-        # 合成参数
-        param_layout = QVBoxLayout()
+        # 右侧参数区域
+        param_widget = QWidget()
+        param_layout = QVBoxLayout(param_widget)
         
         # 断句符号
         param_layout.addWidget(QLabel("断句符号:"))
@@ -249,7 +253,14 @@ class RoleManagementTab(QWidget):
         temperature_layout.addWidget(self.temperature_label)
         param_layout.addLayout(temperature_layout)
         
-        synth_layout.addLayout(param_layout, 2)
+        content_splitter.addWidget(param_widget)
+        
+        # 设置分割比例 (80%文本区, 20%参数区)
+        content_splitter.setSizes([800, 200])
+        
+        # 将QSplitter添加到synth_group
+        synth_layout = QVBoxLayout(synth_group)
+        synth_layout.addWidget(content_splitter)
         
         # 按照要求的顺序添加到试听标签页：模型选择区域(已添加) -> 参考音频区 -> 参数区
         listening_scroll_layout.addWidget(ref_group)
