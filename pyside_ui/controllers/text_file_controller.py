@@ -49,6 +49,25 @@ class TextFileController:
         """预处理文本"""
         return preprocess_text(content, default_role, default_emotion)
     
+    def get_tone_wrap_markers(self):
+        """从shortcuts.conf获取前后包围标记
+        
+        Returns:
+            tuple: (前缀, 后缀)
+        """
+        try:
+            with open("configs/shortcuts.conf", "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    parts = line.split('|')
+                    if len(parts) >= 3:
+                        return parts[1].strip(), parts[2].strip()
+        except Exception:
+            pass
+        return "<tone as=\"\">", "</tone>"
+        
     def get_formatted_filename(self, role_name, text_content):
         """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
         
@@ -271,4 +290,4 @@ class TextFileController:
             else:  # Linux
                 subprocess.call(["xdg-open", audio_path])
         except Exception as e:
-            raise Exception(f"播放音频失败: {str(e)}") 
+            raise Exception(f"播放音频失败: {str(e)}")
