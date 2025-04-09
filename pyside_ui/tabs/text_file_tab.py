@@ -371,7 +371,15 @@ class TextFileTab(QWidget):
         """处理快捷键事件"""
         if event.key() == Qt.Key_Y and event.modifiers() == Qt.NoModifier:
             cursor = self.text_content.textCursor()
-            cursor.insertText("<tone as=\"\"></tone>")
+            selected_text = cursor.selectedText()
+            
+            # 从控制器获取前后包围标记
+            prefix, suffix = self.controller.get_tone_wrap_markers()
+            
+            if selected_text:
+                cursor.insertText(f"{prefix}{selected_text}{suffix}")
+            else:
+                cursor.insertText(f"{prefix}{suffix}")
             return
         
         # 调用原始的keyPressEvent
