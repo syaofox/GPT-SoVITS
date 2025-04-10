@@ -95,7 +95,7 @@ class TextFileController:
         if first_text:
             short_text = first_text[:20].strip()
             # 替换不适合作为文件名的字符
-            for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']:
+            for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t']:
                 short_text = short_text.replace(char, '_')
         else:
             short_text = "无文本"
