@@ -4,49 +4,13 @@ import gradio as gr
 import gc
 
 import soundfile as sf
-from ui.utils import LANGUAGE_OPTIONS, g_default_role
+from ui.utils import LANGUAGE_OPTIONS, g_default_role, get_formatted_filename
 from ui.roles import list_roles, update_default_emotions, update_force_emotions, get_emotions
 from ui.text_processing import preprocess_text
 from ui.api_client import call_api, merge_audio_segments
 from ui.utils import parse_line
 from ui.models import init_models
 from ui.roles import get_role_config
-
-
-def get_formatted_filename(role_name: str, text_content: str) -> str:
-    """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
-    
-    Args:
-        role_name: 角色名称
-        text_content: 文本内容
-    
-    Returns:
-        格式化的文件名
-    """
-    # 获取第一个非空行的前20个字符
-    first_text = ""
-    for line in text_content.strip().split("\n"):
-        line = line.strip()
-        if line:
-            # 如果有角色标记，提取实际文本内容
-            if line.startswith("(") and ")" in line:
-                _, text = line.split(")", 1)
-                first_text = text.strip()
-            else:
-                first_text = line
-            break
-    
-    # 提取前20个字符，去除可能导致文件名问题的字符
-    if first_text:
-        short_text = first_text[:20].strip()
-        # 替换不适合作为文件名的字符
-        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t']:
-            short_text = short_text.replace(char, '_')
-    else:
-        short_text = "无文本"
-        
-    # 生成文件名
-    return f"{role_name}_{int(time.time())}_{short_text}"
 
 
 def process_text_content(
@@ -67,7 +31,7 @@ def process_text_content(
     role_name = force_role if force_role and force_role != "无" else default_role
     
     # 使用新的文件名格式
-    filename = get_formatted_filename(role_name, text_content)
+    filename = get_formatted_filename(role_name, text_content, is_multiline=True)
     output_path = os.path.join(output_dir, f"{filename}.wav")
 
     try:
@@ -257,7 +221,7 @@ def process_text_content(
             
         # 更新文件名，使用最后使用的角色名
         if last_role_name and last_role_name != role_name:
-            filename = get_formatted_filename(last_role_name, text_content)
+            filename = get_formatted_filename(last_role_name, text_content, is_multiline=True)
             output_path = os.path.join(output_dir, f"{filename}.wav")
 
         # 合并音频
