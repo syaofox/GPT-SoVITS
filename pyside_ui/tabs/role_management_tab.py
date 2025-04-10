@@ -350,6 +350,14 @@ class RoleManagementTab(QWidget):
         desc_layout.addWidget(self.description_edit)
         create_layout.addLayout(desc_layout)
         
+        # 情绪文本行
+        emotion_text_layout = QHBoxLayout()
+        emotion_text_layout.addWidget(QLabel("情绪文本(可选):"))
+        self.emotion_text_edit = QTextEdit()
+        self.emotion_text_edit.setMaximumHeight(80)
+        emotion_text_layout.addWidget(self.emotion_text_edit)
+        create_layout.addLayout(emotion_text_layout)
+        
         self.create_btn = QPushButton("新建/更新角色")
         create_layout.addWidget(self.create_btn)
         
@@ -442,6 +450,9 @@ class RoleManagementTab(QWidget):
             text = self.controller.extract_text_from_filename(file_path)
             if text:
                 self.prompt_text_edit.setText(text)
+                # 自动填充截短的文本到情绪输入框
+                short_text = text[:50] + "..." if len(text) > 50 else text
+                self.emotion_text_edit.setText(short_text)
     
     def update_speed_label(self, value):
         """更新语速标签"""
