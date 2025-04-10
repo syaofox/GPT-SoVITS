@@ -10,7 +10,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-from ui.utils import LANGUAGE_OPTIONS, g_default_role
+from ui.utils import LANGUAGE_OPTIONS, g_default_role, get_formatted_filename
 from ui.roles import list_roles, get_emotions
 from ui.text_processing import preprocess_text
 from ui.api_client import process_text, merge_audio_segments
@@ -68,41 +68,6 @@ class TextFileController:
             pass
         return "<tone as=\"\">", "</tone>"
         
-    def get_formatted_filename(self, role_name, text_content):
-        """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
-        
-        Args:
-            role_name: 角色名称
-            text_content: 文本内容
-        
-        Returns:
-            格式化的文件名
-        """
-        # 获取第一个非空行的前20个字符
-        first_text = ""
-        for line in text_content.strip().split("\n"):
-            line = line.strip()
-            if line:
-                # 如果有角色标记，提取实际文本内容
-                if line.startswith("(") and ")" in line:
-                    _, text = line.split(")", 1)
-                    first_text = text.strip()
-                else:
-                    first_text = line
-                break
-        
-        # 提取前20个字符，去除可能导致文件名问题的字符
-        if first_text:
-            short_text = first_text[:20].strip()
-            # 替换不适合作为文件名的字符
-            for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t']:
-                short_text = short_text.replace(char, '_')
-        else:
-            short_text = "无文本"
-            
-        # 生成文件名
-        return f"{role_name}_{int(time.time())}_{short_text}"
-    
     def process_text_content(
         self,
         text_content,
@@ -135,7 +100,7 @@ class TextFileController:
         os.makedirs(output_dir, exist_ok=True)
         
         # 生成输出文件名
-        output_filename = self.get_formatted_filename(default_role, text_content)
+        output_filename = get_formatted_filename(default_role, text_content, is_multiline=True)
         output_path = os.path.join(output_dir, f"{output_filename}.wav")
         
         # 根据处理模式处理文本

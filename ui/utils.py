@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -171,3 +172,43 @@ def save_word_replace_config(text):
 
 # 初始化全局替换字典
 g_word_replace_dict = load_word_replace_dict()
+
+def get_formatted_filename(role_name: str, text: str, emotion: str = "", is_multiline: bool = False) -> str:
+    """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
+    
+    Args:
+        role_name: 角色名称
+        text: 文本内容 (可以是单行文本或多行文本)
+        emotion: 情绪（可选）
+        is_multiline: 是否是多行文本，如果是，将提取第一个非空行
+    
+    Returns:
+        格式化的文件名
+    """
+    # 处理多行文本，提取第一个非空行
+    if is_multiline:
+        first_text = ""
+        for line in text.strip().split("\n"):
+            line = line.strip()
+            if line:
+                # 如果有角色标记，提取实际文本内容
+                if line.startswith("(") and ")" in line:
+                    _, extracted_text = line.split(")", 1)
+                    first_text = extracted_text.strip()
+                else:
+                    first_text = line
+                break
+        text = first_text or text
+
+    # 提取前20个字符，去除可能导致文件名问题的字符
+    if text:
+        short_text = text[:20].strip()
+        # 替换不适合作为文件名的字符
+        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t']:
+            short_text = short_text.replace(char, '_')
+    else:
+        short_text = "无文本"
+    
+    # 生成文件名
+    emotion_part = f"_{emotion}" if emotion else ""
+    return f"{role_name}{emotion_part}_{int(time.time())}_{short_text}"

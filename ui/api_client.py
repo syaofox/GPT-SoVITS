@@ -9,7 +9,7 @@ import librosa
 import soundfile as sf
 from numpy.typing import NDArray
 
-from ui.utils import API_URL, clean_text
+from ui.utils import API_URL, clean_text, get_formatted_filename
 
 
 def call_api(text: str, role_config: Dict[str, Any], role_name: str, cut_punc: str = "") -> bytes:
@@ -121,31 +121,6 @@ def merge_audio_segments(
         merged = audio_arrays
 
     return np.concatenate(merged), target_sr
-
-
-def get_formatted_filename(role_name: str, text: str, emotion: str = "") -> str:
-    """生成格式化的文件名：角色名_时间戳_文本内容前20个字符
-    
-    Args:
-        role_name: 角色名称
-        text: 文本内容
-        emotion: 情绪（可选）
-    
-    Returns:
-        格式化的文件名
-    """
-    # 提取前20个字符，去除可能导致文件名问题的字符
-    if text:
-        short_text = text[:20].strip()
-        # 替换不适合作为文件名的字符
-        for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t']:
-            short_text = short_text.replace(char, '_')
-    else:
-        short_text = "无文本"
-    
-    # 生成文件名
-    emotion_part = f"_{emotion}" if emotion else ""
-    return f"{role_name}{emotion_part}_{int(time.time())}_{short_text}"
 
 
 def process_text(
