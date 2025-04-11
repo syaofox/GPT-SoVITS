@@ -5,15 +5,17 @@
 """
 
 import os
+import time
 from pathlib import Path
+from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QTextEdit, QComboBox, QRadioButton, QButtonGroup, QGroupBox,
     QFileDialog, QLineEdit, QProgressBar, QMessageBox, QSplitter,
-    QProgressDialog
+    QProgressDialog, QListWidget, QListWidgetItem
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QDateTime
 
 from pyside_ui.controllers.text_file_controller import TextFileController
 from ui.utils import g_default_role
@@ -99,10 +101,16 @@ class TextFileTab(QWidget):
         play_btn = QPushButton("播放音频")
         file_layout.addWidget(play_btn)
         
+        # 历史音频列表
+        file_layout.addWidget(QLabel("历史音频:"))
+        self.history_list = QListWidget()
+        self.history_list.setMinimumHeight(150)  # 设置最小高度
+        file_layout.addWidget(self.history_list)
+        
         content_splitter.addWidget(file_group)
         
         # 设置分割比例
-        content_splitter.setSizes([800, 200])
+        content_splitter.setSizes([800, 300])  # 调整右侧宽度以适应历史列表
         
         main_layout.addWidget(content_splitter)
         
@@ -183,33 +191,16 @@ class TextFileTab(QWidget):
         
         main_layout.addLayout(button_layout)
         
-        # 使用说明区域
-        help_group = QGroupBox("使用说明")
-        help_layout = QVBoxLayout(help_group)
-        
-        help_text = QLabel("""
-        使用说明:
-        1. 文本输入：可以选择上传文本文件或直接在文本框中输入
-        2. 处理模式：选择合适的处理模式
-           - 逐行处理：每行文本单独处理，支持行内角色和情绪标记
-           - 全文本处理：使用默认角色和情绪处理整个文本
-           - 分段处理：将文本分段处理后合并
-        3. 角色设置：
-           - 默认角色：当文本没有指定角色时使用的角色
-           - 强制角色：忽略文本中的角色标记，全部使用指定角色
-        4. 预处理文本：将双引号内的文本作为对白（使用默认情绪），其他文本作为叙述
-        """)
-        help_text.setWordWrap(True)
-        help_layout.addWidget(help_text)
-        
-        main_layout.addWidget(help_group)
-        
         # 保存按钮引用
         self.upload_btn = upload_btn
         self.preprocess_btn = preprocess_btn
         self.play_btn = play_btn
         self.process_btn = process_btn
         self.refresh_roles_btn = refresh_roles_btn
+        
+        # 初始化历史音频列表
+        self.history_audio_files = []
+        self.load_history_audio_files()
     
     def connect_signals(self):
         """连接信号"""
@@ -234,6 +225,9 @@ class TextFileTab(QWidget):
         # 角色选择变化
         self.default_role_combo.currentTextChanged.connect(self.update_default_emotions)
         self.force_role_combo.currentTextChanged.connect(self.update_force_emotions)
+        
+        # 历史音频列表点击
+        self.history_list.itemClicked.connect(self.on_history_item_clicked)
         
         # 初始化情绪列表
         self.update_default_emotions()
@@ -359,6 +353,8 @@ class TextFileTab(QWidget):
         """处理完成"""
         progress_dialog.close()
         self.audio_output_path.setText(output_path)
+        # 添加到历史记录并更新列表
+        self.add_audio_to_history(output_path)
         QMessageBox.information(self, "处理完成", f"音频已生成：{output_path}")
     
     def process_error(self, error_msg, progress_dialog):
@@ -391,6 +387,69 @@ class TextFileTab(QWidget):
             QMessageBox.warning(self, "错误", "没有可播放的音频文件")
             return
         
+        try:
+            self.controller.play_audio(audio_path)
+        except Exception as e:
+            QMessageBox.critical(self, "播放失败", str(e))
+    
+    def load_history_audio_files(self):
+        """加载历史音频文件列表"""
+        try:
+            output_dir = "output"
+            if not os.path.exists(output_dir):
+                return
+            
+            # 获取所有wav文件
+            audio_files = []
+            for file in os.listdir(output_dir):
+                if file.endswith(".wav"):
+                    file_path = os.path.join(output_dir, file)
+                    # 获取文件修改时间
+                    modified_time = os.path.getmtime(file_path)
+                    audio_files.append((file_path, modified_time))
+            
+            # 按修改时间排序，最新的在前面
+            audio_files.sort(key=lambda x: x[1], reverse=True)
+            
+            # 更新保存的列表
+            self.history_audio_files = [item[0] for item in audio_files]
+            
+            # 更新UI列表
+            self.update_history_list()
+        except Exception as e:
+            print(f"加载历史音频文件失败: {str(e)}")
+    
+    def update_history_list(self):
+        """更新历史音频列表UI"""
+        self.history_list.clear()
+        
+        for audio_path in self.history_audio_files:
+            item = QListWidgetItem(os.path.basename(audio_path))
+            # 存储完整路径作为数据
+            item.setData(Qt.UserRole, audio_path)
+            # 添加修改时间作为提示文本
+            modified_time = datetime.fromtimestamp(os.path.getmtime(audio_path))
+            item.setToolTip(f"生成时间: {modified_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            self.history_list.addItem(item)
+    
+    def add_audio_to_history(self, audio_path):
+        """添加音频到历史记录"""
+        if audio_path in self.history_audio_files:
+            # 如果已存在，移除旧的
+            self.history_audio_files.remove(audio_path)
+        
+        # 添加到列表最前面
+        self.history_audio_files.insert(0, audio_path)
+        
+        # 更新UI列表
+        self.update_history_list()
+    
+    def on_history_item_clicked(self, item):
+        """点击历史列表项"""
+        audio_path = item.data(Qt.UserRole)
+        self.audio_output_path.setText(audio_path)
+        
+        # 自动播放选中的音频
         try:
             self.controller.play_audio(audio_path)
         except Exception as e:
