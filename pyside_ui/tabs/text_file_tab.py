@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 from pyside_ui.controllers.text_file_controller import TextFileController
-
+from ui.utils import g_default_role
 
 class TextFileTab(QWidget):
     def __init__(self):
@@ -121,9 +121,8 @@ class TextFileTab(QWidget):
         self.default_role_combo = QComboBox()
         self.default_role_combo.addItems(self.controller.get_roles())
         
-        # 设置默认选中的角色为"凡子霞"
-        default_role = "凡子霞"
-        default_index = self.default_role_combo.findText(default_role)
+        # 设置默认选中的角色
+        default_index = self.default_role_combo.findText(g_default_role)
         if default_index >= 0:
             self.default_role_combo.setCurrentIndex(default_index)
         default_layout.addWidget(self.default_role_combo)
