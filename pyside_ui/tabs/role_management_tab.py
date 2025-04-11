@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 
 from pyside_ui.controllers.role_management_controller import RoleManagementController
-
+from ui.utils import g_default_role
 
 class RoleManagementTab(QWidget):
     def __init__(self):
@@ -300,9 +300,8 @@ class RoleManagementTab(QWidget):
         self.role_list_combo = QComboBox()
         self.role_list_combo.addItems(self.controller.get_roles())
         
-        # 设置默认选中的角色为"凡子霞"
-        default_role = "凡子霞"
-        default_index = self.role_list_combo.findText(default_role)
+        # 设置默认选中的角色
+        default_index = self.role_list_combo.findText(g_default_role)
         if default_index >= 0:
             self.role_list_combo.setCurrentIndex(default_index)
         role_list_layout.addWidget(self.role_list_combo)
