@@ -1226,7 +1226,16 @@ def handle_change(path, text, language):
 
     return JSONResponse({"code": 0, "message": "Success"}, status_code=200)
 
-
+# 处理文本中的特殊符号
+def handle_special_symbols(text):
+    # 将文本中的特殊符号替换为<br>标记
+    temp_text = text.split("\n")
+    for i in range(len(temp_text)):
+        if temp_text[i] == "":
+            temp_text[i] = "<br>"
+    text = "\n".join(temp_text)
+    return text
+    
 def handle(
     refer_wav_path,
     prompt_text,
@@ -1265,11 +1274,7 @@ def handle(
         sample_steps = 32
 
     # 先处理文本中的空行，将连续的换行符替换为<br>标记
-    temp_text = text.split("\n")
-    for i in range(len(temp_text)):
-        if temp_text[i] == "":
-            temp_text[i] = "<br>"
-    text = "\n".join(temp_text)
+    text = handle_special_symbols(text)
 
     if cut_punc == None:
         text = cut_text(text, default_cut_punc)
