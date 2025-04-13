@@ -476,40 +476,7 @@ def get_bert_feature(text, word2ph):
     return phone_level_feature.T
 
 
-def convert_text(text):
-    print(f"处理前text: {text}")
-    # 创建综合映射表（标点/字母/数字）
-    mapping = {
-        ord(","): "，",
-        ord("."): "。",
-        ord("!"): "！",
-        ord("?"): "？",
-        ord(";"): "；",
-        ord(":"): "：",
-        ord("("): "（",
-        ord(")"): "）",
-    }
 
-    # 添加英文转全角大写
-    for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        mapping[ord(c)] = chr(ord(c.upper()) + 0xFEE0)
-
-    # 添加数字转全角
-    for n in "0123456789":
-        mapping[ord(n)] = chr(ord(n) + 0xFEE0)
-
-    # 分割文本为普通文本和标签
-    parts = re.split(r"(<[^>]+>)", text)
-
-    for i in range(len(parts)):
-        if i % 2 == 0:  # 处理普通文本部分
-            # 字符转换 + 删除所有类型空格
-            processed = parts[i].translate(mapping)
-            processed = re.sub(r"[\s　]", "", processed)  # 正则匹配半角/全角空格
-            parts[i] = processed
-
-    print(f"处理后text: {''.join(parts)}")
-    return "".join(parts)
 
 
 def find_custom_tone(text: str):
@@ -966,7 +933,7 @@ def get_tts_wav(
     spk="default",
     pause_second=0.3,
 ):
-    # text = convert_text(text)
+
     infer_sovits = speaker_list[spk].sovits
     vq_model = infer_sovits.vq_model
     hps = infer_sovits.hps
@@ -1226,16 +1193,25 @@ def handle_change(path, text, language):
 
     return JSONResponse({"code": 0, "message": "Success"}, status_code=200)
 
-# 处理文本中的特殊符号
-def handle_special_symbols(text):
+def convert_text(text):
+    print(f"处理前text: {text}")
+  
     # 将文本中的特殊符号替换为<br>标记
-    temp_text = text.split("\n")
-    for i in range(len(temp_text)):
-        if temp_text[i] == "":
-            temp_text[i] = "<br>"
-    text = "\n".join(temp_text)
+
+    result_list = []
+
+    text_list = text.split("\n")
+    for sub_text in text_list:
+
+        if sub_text == "":
+           sub_text = "<br>"
+        result_list.append(sub_text)
+
+
+    text = "\n".join(result_list)    
+    print(f"处理后text: {text}")
     return text
-    
+
 def handle(
     refer_wav_path,
     prompt_text,
@@ -1273,8 +1249,8 @@ def handle(
     if not sample_steps in [4, 8, 16, 32, 64, 128]:
         sample_steps = 32
 
-    # 先处理文本中的空行，将连续的换行符替换为<br>标记
-    text = handle_special_symbols(text)
+    # 文本预处理
+    text = convert_text(text)
 
     if cut_punc == None:
         text = cut_text(text, default_cut_punc)
