@@ -1196,17 +1196,99 @@ def handle_change(path, text, language):
 def convert_text(text):
     print(f"处理前text: {text}")
   
-    # 将文本中的特殊符号替换为<br>标记
-
+    # 定义字符转换映射
+    # 阿拉伯数字到全角数字的映射
+    digit_map = {str(i): chr(ord('０') + i) for i in range(10)}
+    
+    # 英文标点到中文标点的映射
+    punctuation_map = {
+        ',': '，',
+        '.': '。',
+        ':': '：',
+        ';': '；',
+        '?': '？',
+        '!': '！',
+        '(': '（',
+        ')': '）',
+        '[': '【',
+        ']': '】',
+        '{': '｛',
+        '}': '｝',
+        '<': '＜',
+        '>': '＞',
+        '"': '',
+        "'": '',
+        '@': '＠',
+        '#': '＃',
+        '$': '￥',
+        '%': '％',
+        '&': '＆',
+        '*': '＊',
+        '+': '＋',
+        '-': '－',
+        '=': '＝',
+        '/': '／',
+        '\\': '＼',
+        '|': '｜',
+        '_': '＿',
+        '`': '｀'
+    }
+    
+    # 英文字母到全角字母的映射
+    alpha_map = {}
+    for i in range(26):
+        # 小写字母映射
+        alpha_map[chr(ord('a') + i)] = chr(ord('ａ') + i)
+        # 大写字母映射
+        alpha_map[chr(ord('A') + i)] = chr(ord('Ａ') + i)
+    
     result_list = []
 
     text_list = text.split("\n")
     for sub_text in text_list:
 
+        # 将文本中的特殊符号替换为<br>标记
         if sub_text == "":
            sub_text = "<br>"
-        result_list.append(sub_text)
-
+        else:
+            # 处理非<>标记包裹的文本
+            result = ""
+            i = 0
+            in_tag = False
+            
+            while i < len(sub_text):
+                char = sub_text[i]
+                
+                # 处理标签开始
+                if char == '<':
+                    in_tag = True
+                    result += char
+                
+                # 处理标签结束
+                elif char == '>' and in_tag:
+                    in_tag = False
+                    result += char
+                
+                # 处理标签内部的字符
+                elif in_tag:
+                    result += char
+                
+                # 处理标签外部的字符（应用转换）
+                else:
+                    if char.isdigit():
+                        result += digit_map.get(char, char)
+                    elif char in punctuation_map:
+                        result += punctuation_map.get(char, char)
+                    elif char.isalpha():
+                        result += alpha_map.get(char, char)
+                    else:
+                        result += char
+                
+                i += 1
+                
+            sub_text = result
+        
+        result_list.append(sub_text)       
 
     text = "\n".join(result_list)    
     print(f"处理后text: {text}")
