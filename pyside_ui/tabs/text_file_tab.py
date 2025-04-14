@@ -171,7 +171,7 @@ class TextFileTab(QWidget):
         lang_layout.addWidget(self.text_lang_combo)
         
         lang_layout.addWidget(QLabel("切分符号(可选):"))
-        self.cut_punc_edit = QLineEdit("。！？：.!?:")
+        self.cut_punc_edit = QLineEdit("。！？.!?")
         lang_layout.addWidget(self.cut_punc_edit)
         
         # 设置较小的拉伸因子，使第三列占用更少空间

@@ -114,7 +114,7 @@ class RoleManagementTab(QWidget):
         
         # 断句符号
         param_layout.addWidget(QLabel("断句符号:"))
-        self.cut_punc_edit = QLineEdit("。！？：.!?:")
+        self.cut_punc_edit = QLineEdit("。！？.!?")
         param_layout.addWidget(self.cut_punc_edit)
         
         # 采样步数 - 移到参数区

@@ -1194,8 +1194,7 @@ def handle_change(path, text, language):
     return JSONResponse({"code": 0, "message": "Success"}, status_code=200)
 
 def convert_text(text):
-    print(f"处理前text: {text}")
-  
+ 
     # 定义字符转换映射
     # 阿拉伯数字到全角数字的映射
     digit_map = {str(i): chr(ord('０') + i) for i in range(10)}
@@ -1250,6 +1249,10 @@ def convert_text(text):
         # 将文本中的特殊符号替换为<br>标记
         if sub_text == "":
            sub_text = "<br>"
+        # 如果匹配类似00:00:00.000开头的格式，则不进行转换
+        elif re.match(r'^\d{2}:\d{2}:\d{2}.*', sub_text):
+            print(f"匹配到00:00:00.000开头的格式: {sub_text}, 不进行转换")
+            pass            
         else:
             # 处理非<>标记包裹的文本
             result = ""
@@ -1291,7 +1294,6 @@ def convert_text(text):
         result_list.append(sub_text)       
 
     text = "\n".join(result_list)    
-    print(f"处理后text: {text}")
     return text
 
 def handle(
