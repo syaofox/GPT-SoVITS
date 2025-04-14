@@ -34,7 +34,7 @@ LANGUAGE_OPTIONS = [
 ]
 
 # 默认角色
-g_default_role: str = "霞"
+g_default_role: str = "凡子霞"
 
 # 确保必要的目录存在
 os.makedirs("configs/roles", exist_ok=True)
