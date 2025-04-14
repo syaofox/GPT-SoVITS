@@ -1252,7 +1252,11 @@ def convert_text(text):
         # 如果匹配类似00:00:00.000开头的格式，则不进行转换
         elif re.match(r'^\d{2}:\d{2}:\d{2}.*', sub_text):
             print(f"匹配到00:00:00.000开头的格式: {sub_text}, 不进行转换")
-            pass            
+            pass  
+        # 如果不存在<>标记包裹的文本，则不进行转换
+        elif not re.search(r'<[^>]*>', sub_text):
+            print(f"不存在<>标记包裹的文本: {sub_text}, 不进行转换")
+            pass
         else:
             # 处理非<>标记包裹的文本
             result = ""
