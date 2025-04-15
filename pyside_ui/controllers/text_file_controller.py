@@ -103,58 +103,67 @@ class TextFileController:
         output_filename = get_formatted_filename(default_role, text_content, is_multiline=True)
         output_path = os.path.join(output_dir, f"{output_filename}.wav")
         
-        # 根据处理模式处理文本
-        if process_mode == "逐行处理":
-            # 逐行处理
-            audio_segments = []
+        # 导入需要的库
+        import soundfile as sf
+        import numpy as np
+        from scipy.io import wavfile
+        
+        def process_segment_and_append(text_segment, role, emotion, combined_audio=None, sample_rate=None):
+            """处理单个文本片段并合并到现有音频
             
-            for line in text_content.strip().split("\n"):
-                line = line.strip()
-                if not line:
-                    continue
+            Args:
+                text_segment: 要处理的文本片段
+                role: 角色
+                emotion: 情绪
+                combined_audio: 已合并的音频数据，初始为None
+                sample_rate: 已合并音频的采样率，初始为None
                 
-                # 解析行内容
-                role, emotion, text = self.parse_line(line)
-                
-                # 使用强制角色或解析出的角色
-                current_role = force_role if force_role else (role if role else default_role)
-                
-                # 使用强制情绪或解析出的情绪
-                current_emotion = force_emotion if force_emotion else (emotion if emotion else default_emotion)
-                
+            Returns:
+                tuple: (更新后的合并音频数据, 更新后的采样率)
+            """
+            try:
                 # 处理文本生成音频
                 segment_path = process_text(
-                    text=text,
-                    role=current_role,
-                    emotion=current_emotion,
+                    text=text_segment,
+                    role=role,
+                    emotion=emotion,
                     text_lang=text_lang,
                     cut_punc=cut_punc,
                     output_dir=output_dir
                 )
                 
-                audio_segments.append(segment_path)
-            
-            # 合并音频片段
-            if audio_segments:
-                # 读取所有音频文件
-                audio_data_list = []
-                for segment_path in audio_segments:
-                    with open(segment_path, 'rb') as f:
-                        audio_data_list.append(f.read())
+                # 读取当前片段
+                audio_data = None
+                sr = None
+                try:
+                    sr, audio_data = wavfile.read(segment_path)
+                except:
+                    # 如果wavfile读取失败，尝试用soundfile读取
+                    audio_data, sr = sf.read(segment_path)
                 
-                # 合并音频
-                merged_audio, sr = merge_audio_segments(audio_data_list)
+                # 初始化或更新合并音频
+                if combined_audio is None:
+                    combined_audio = audio_data
+                    sample_rate = sr
+                else:
+                    # 确保采样率一致
+                    if sr != sample_rate:
+                        raise ValueError(f"音频片段采样率不一致: {sr} vs {sample_rate}")
+                    
+                    # 合并音频
+                    combined_audio = np.concatenate((combined_audio, audio_data))
                 
-                # 保存合并后的音频
-                import soundfile as sf
-                sf.write(output_path, merged_audio, sr)
+                # 将当前合并结果写入输出文件，即使中途中断也能保留已处理部分
+                sf.write(output_path, combined_audio, sample_rate)
                 
-                return output_path
-            else:
-                raise ValueError("没有有效的文本内容")
+                return combined_audio, sample_rate
+                
+            except Exception as e:
+                print(f"处理文本片段时出错: {str(e)}")
+                return combined_audio, sample_rate
         
-        elif process_mode == "全文本处理":
-            # 全文本处理
+        # 处理"全文本处理"模式
+        if process_mode == "全文本处理":
             return process_text(
                 text=text_content,
                 role=force_role if force_role else default_role,
@@ -164,10 +173,19 @@ class TextFileController:
                 output_dir=output_dir
             )
         
+        # 分割文本为片段
+        text_segments = []
+        
+        if process_mode == "逐行处理":
+            # 按行分割
+            for line in text_content.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                text_segments.append(line)
+                
         elif process_mode == "分段处理":
-            # 分段处理
             # 按标点符号分段
-            segments = []
             current_segment = ""
             
             for char in text_content:
@@ -175,58 +193,51 @@ class TextFileController:
                 
                 # 如果遇到切分符号且当前段落不为空，则添加到段落列表
                 if char in cut_punc and current_segment.strip():
-                    segments.append(current_segment.strip())
+                    text_segments.append(current_segment.strip())
                     current_segment = ""
             
             # 添加最后一个段落
             if current_segment.strip():
-                segments.append(current_segment.strip())
+                text_segments.append(current_segment.strip())
             
             # 如果分段后为空，则按固定长度分段
-            if not segments:
+            if not text_segments:
                 # 按500字符分段
                 text = text_content.strip()
                 while text:
-                    segments.append(text[:500])
+                    text_segments.append(text[:500])
                     text = text[500:]
-            
-            # 处理每个段落
-            audio_segments = []
-            
-            for i, segment in enumerate(segments):
-                # 处理文本生成音频
-                segment_path = process_text(
-                    text=segment,
-                    role=force_role if force_role else default_role,
-                    emotion=force_emotion if force_emotion else default_emotion,
-                    text_lang=text_lang,
-                    cut_punc=cut_punc,
-                    output_dir=output_dir
-                )
-                
-                audio_segments.append(segment_path)
-            
-            # 合并音频片段
-            if audio_segments:
-                # 读取所有音频文件
-                audio_data_list = []
-                for segment_path in audio_segments:
-                    with open(segment_path, 'rb') as f:
-                        audio_data_list.append(f.read())
-                
-                # 合并音频
-                merged_audio, sr = merge_audio_segments(audio_data_list)
-                
-                # 保存合并后的音频
-                import soundfile as sf
-                sf.write(output_path, merged_audio, sr)
-                
-                return output_path
-            else:
-                raise ValueError("没有有效的文本内容")
-        
         else:
             raise ValueError(f"不支持的处理模式: {process_mode}")
+        
+        # 处理所有文本片段并逐步保存
+        combined_audio = None
+        sample_rate = None
+        
+        for segment in text_segments:
+            # 如果是逐行处理模式，需要解析行内容
+            if process_mode == "逐行处理":
+                role, emotion, text = self.parse_line(segment)
+                current_role = force_role if force_role else (role if role else default_role)
+                current_emotion = force_emotion if force_emotion else (emotion if emotion else default_emotion)
+                segment_text = text
+            else:
+                # 分段处理模式直接使用默认角色和情绪
+                current_role = force_role if force_role else default_role
+                current_emotion = force_emotion if force_emotion else default_emotion
+                segment_text = segment
+            
+            # 处理片段并更新合并结果
+            combined_audio, sample_rate = process_segment_and_append(
+                segment_text, current_role, current_emotion, 
+                combined_audio, sample_rate
+            )
+        
+        # 检查是否有成功处理的片段
+        if combined_audio is None:
+            raise ValueError("没有有效的文本内容或所有处理均失败")
+            
+        return output_path
     
     def parse_line(self, line):
         """解析行内容，提取角色、情绪和文本
