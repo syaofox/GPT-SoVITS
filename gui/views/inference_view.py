@@ -33,27 +33,33 @@ class InferenceView(QWidget):
     
     def init_ui(self):
         """初始化用户界面"""
-        # 主布局 - 三栏水平布局
+        # 主布局 - 四栏水平布局
         main_layout = QHBoxLayout(self)
         
-        # 左侧面板 - 固定宽度
-        left_panel = QVBoxLayout()
-        left_widget = QWidget()
-        left_widget.setLayout(left_panel)
-        left_widget.setFixedWidth(250)
+        # 第1块 - 角色选择列表 (固定宽度)
+        panel1 = QVBoxLayout()
+        panel1_widget = QWidget()
+        panel1_widget.setLayout(panel1)
+        panel1_widget.setFixedWidth(200)
         
-        # 中间面板 - 自适应宽度
-        middle_panel = QVBoxLayout()
-        middle_widget = QWidget()
-        middle_widget.setLayout(middle_panel)
+        # 第2块 - 参考音频、辅助参考音频、合成参数 (固定宽度)
+        panel2 = QVBoxLayout()
+        panel2_widget = QWidget()
+        panel2_widget.setLayout(panel2)
+        panel2_widget.setFixedWidth(250)
         
-        # 右侧面板 - 固定宽度
-        right_panel = QVBoxLayout()
-        right_widget = QWidget()
-        right_widget.setLayout(right_panel)
-        right_widget.setFixedWidth(250)
+        # 第3块 - 待推理文本、开始推理-进度 (自适应宽度)
+        panel3 = QVBoxLayout()
+        panel3_widget = QWidget()
+        panel3_widget.setLayout(panel3)
         
-        # === 左侧面板内容 ===
+        # 第4块 - 结果音频、历史结果 (固定宽度)
+        panel4 = QVBoxLayout()
+        panel4_widget = QWidget()
+        panel4_widget.setLayout(panel4)
+        panel4_widget.setFixedWidth(250)
+        
+        # === 第1块内容 - 角色选择列表 ===
         
         # 角色选择区域
         role_group = QGroupBox("角色选择")
@@ -74,6 +80,12 @@ class InferenceView(QWidget):
         role_layout.addWidget(emotion_label)
         role_layout.addWidget(self.emotion_combo)
         role_group.setLayout(role_layout)
+        
+        # 添加所有组件到第1块
+        panel1.addWidget(role_group)
+        panel1.addStretch(1)
+        
+        # === 第2块内容 - 参考音频、辅助参考音频、合成参数 ===
         
         # 参考音频区域
         ref_group = QGroupBox("参考音频")
@@ -104,6 +116,9 @@ class InferenceView(QWidget):
         ref_layout.addWidget(self.ref_waveform)
         ref_layout.addWidget(self.ref_play_btn)
         ref_group.setLayout(ref_layout)
+        
+        # 保存参考音频区域的高度用于设置结果区域
+        self.ref_height = ref_group.sizeHint().height()
         
         # 辅助参考音频区域
         aux_group = QGroupBox("辅助参考音频")
@@ -181,13 +196,13 @@ class InferenceView(QWidget):
         params_layout.addRow("选项:", options_layout)
         params_group.setLayout(params_layout)
         
-        # 添加所有组件到左侧面板
-        left_panel.addWidget(role_group)
-        left_panel.addWidget(ref_group)
-        left_panel.addWidget(aux_group)
-        left_panel.addWidget(params_group)
+        # 添加所有组件到第2块
+        panel2.addWidget(ref_group)
+        panel2.addWidget(aux_group)
+        panel2.addWidget(params_group)
+        panel2.addStretch(1)
         
-        # === 中间面板内容 ===
+        # === 第3块内容 - 待推理文本、开始推理-进度 ===
         
         # 推理文本区域
         text_group = QGroupBox("待推理文本")
@@ -215,21 +230,18 @@ class InferenceView(QWidget):
         ctrl_layout.addWidget(self.progress_bar)
         ctrl_group.setLayout(ctrl_layout)
         
-        # 添加所有组件到中间面板
-        middle_panel.addWidget(text_group, 1)  # 文本区域占据更多空间
-        middle_panel.addWidget(ctrl_group, 0)  # 控制区域固定高度
+        # 添加所有组件到第3块
+        panel3.addWidget(text_group, 1)  # 文本区域占据更多空间
+        panel3.addWidget(ctrl_group, 0)  # 控制区域固定高度
         
-        # === 右侧面板内容 ===
-        
-        # 获取参考音频区域的高度用于保持一致
-        ref_height = ref_group.sizeHint().height()
+        # === 第4块内容 - 结果音频、历史结果 ===
         
         # 结果音频区域
         result_group = QGroupBox("结果音频")
         result_layout = QVBoxLayout()
         
         # 结果音频波形图
-        self.result_waveform = WaveformCanvas(self, width=5, height=2, dpi=100)
+        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100)
         self.result_waveform.setMinimumHeight(80)
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
@@ -248,6 +260,9 @@ class InferenceView(QWidget):
         result_layout.addWidget(self.result_waveform)
         result_layout.addLayout(result_ctrl_layout)
         result_group.setLayout(result_layout)
+        
+        # 设置结果音频区域的固定高度，与参考音频区域高度一致
+        result_group.setFixedHeight(self.ref_height)
         
         # 历史结果区域
         history_group = QGroupBox("历史结果")
@@ -269,17 +284,15 @@ class InferenceView(QWidget):
         history_layout.addLayout(history_btn_layout)
         history_group.setLayout(history_layout)
         
-        # 添加所有组件到右侧面板
-        right_panel.addWidget(result_group)
-        right_panel.addWidget(history_group, 1)  # 历史区域可以占据剩余空间
+        # 添加所有组件到第4块
+        panel4.addWidget(result_group)
+        panel4.addWidget(history_group, 1)  # 历史区域可以占据剩余空间
         
-        # 设置结果音频区域的最大高度，使其与参考音频区域高度一致
-        result_group.setMaximumHeight(ref_height)
-        
-        # 添加三个面板到主布局
-        main_layout.addWidget(left_widget)
-        main_layout.addWidget(middle_widget, 1)  # 中间部分自适应宽度
-        main_layout.addWidget(right_widget)
+        # 添加四个面板到主布局
+        main_layout.addWidget(panel1_widget)
+        main_layout.addWidget(panel2_widget)
+        main_layout.addWidget(panel3_widget, 1)  # 第3块自适应宽度
+        main_layout.addWidget(panel4_widget)
         
         # 禁用控件，直到选择角色
         self.set_inference_widgets_enabled(False)
