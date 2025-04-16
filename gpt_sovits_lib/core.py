@@ -144,17 +144,26 @@ class GPTSoVITS:
         logger.info(f"加载模型:")
         logger.info(f"GPT 路径: {gpt_path}")
         logger.info(f"SoVITS 路径: {sovits_path}")
+        logger.info(f"说话人名称: {speaker_name}")
+        logger.info(f"设备: {self.device}, 半精度: {self.is_half}")
         
         try:
             # 加载GPT模型
+            logger.info("开始加载GPT模型...")
+            start_time = ttime()
             gpt = self._load_gpt_model(gpt_path)
+            logger.info(f"GPT模型加载完成，耗时 {ttime() - start_time:.2f}s")
             
             # 加载SoVITS模型
+            logger.info("开始加载SoVITS模型...")
+            start_time = ttime()
             sovits = self._load_sovits_model(sovits_path)
+            logger.info(f"SoVITS模型加载完成，耗时 {ttime() - start_time:.2f}s")
             
             # 保存到speakers
             self.speakers[speaker_name] = Speaker(name=speaker_name, gpt=gpt, sovits=sovits)
             self.current_speaker = speaker_name
+            logger.info(f"说话人 {speaker_name} 设置完成，可以开始推理")
             
             return True
         except Exception as e:
@@ -163,17 +172,26 @@ class GPTSoVITS:
     
     def _load_gpt_model(self, gpt_path):
         """加载GPT模型"""
+        logger.info(f"加载GPT模型参数：{gpt_path}")
         dict_s1 = torch.load(gpt_path, map_location="cpu")
         config = dict_s1["config"]
         max_sec = config["data"]["max_sec"]
+        logger.info(f"GPT模型最大推理秒数: {max_sec}s")
+        
+        logger.info("初始化Text2Semantic模型...")
         t2s_model = Text2SemanticLightningModule(config, "****", is_train=False)
+        
+        logger.info("加载权重中...")
         t2s_model.load_state_dict(dict_s1["weight"])
         
         if self.is_half:
+            logger.info("转换为半精度(FP16)模式")
             t2s_model = t2s_model.half()
         
+        logger.info(f"将模型移至设备: {self.device}")
         t2s_model = t2s_model.to(self.device)
         t2s_model.eval()
+        logger.info("GPT模型加载完毕")
         
         return Gpt(max_sec, t2s_model)
     
@@ -181,13 +199,19 @@ class GPTSoVITS:
         """加载SoVITS模型"""
         from process_ckpt import get_sovits_version_from_path_fast, load_sovits_new
         
+        logger.info(f"加载SoVITS模型: {sovits_path}")
         path_sovits_v3 = "GPT_SoVITS/pretrained_models/s2Gv3.pth"
         is_exist_s2gv3 = os.path.exists(path_sovits_v3)
+        logger.info(f"SoVITS V3底模存在: {is_exist_s2gv3}")
 
+        logger.info("检测SoVITS模型版本...")
         version, model_version, if_lora_v3 = get_sovits_version_from_path_fast(sovits_path)
+        logger.info(f"模型版本: {version}, 模型具体版本: {model_version}, LoRA V3: {if_lora_v3}")
+        
         if if_lora_v3 and not is_exist_s2gv3:
             logger.warning("SoVITS V3 底模缺失，无法加载相应 LoRA 权重")
 
+        logger.info("加载模型配置...")
         dict_s2 = load_sovits_new(sovits_path)
         hps = dict_s2["config"]
         hps = DictToAttrRecursive(hps)
@@ -195,16 +219,23 @@ class GPTSoVITS:
         
         if "enc_p.text_embedding.weight" not in dict_s2["weight"]:
             hps.model.version = "v2"  # v3model,v2sybomls
+            logger.info("检测到V2符号")
         elif dict_s2["weight"]["enc_p.text_embedding.weight"].shape[0] == 322:
             hps.model.version = "v1"
+            logger.info("检测到V1符号")
         else:
             hps.model.version = "v2"
+            logger.info("检测到V2符号")
 
         if model_version == "v3":
             hps.model.version = "v3"
+            logger.info("覆盖为V3模型版本")
 
         model_params_dict = vars(hps.model)
+        logger.info(f"初始化SoVITS模型, 版本: {hps.model.version}")
+        
         if model_version != "v3":
+            logger.info("初始化SynthesizerTrn模型")
             vq_model = SynthesizerTrn(
                 hps.data.filter_length // 2 + 1,
                 hps.train.segment_size // hps.data.hop_length,
@@ -212,42 +243,61 @@ class GPTSoVITS:
                 **model_params_dict,
             )
         else:
+            logger.info("初始化SynthesizerTrnV3模型")
             vq_model = SynthesizerTrnV3(
                 hps.data.filter_length // 2 + 1,
                 hps.train.segment_size // hps.data.hop_length,
                 n_speakers=hps.data.n_speakers,
                 **model_params_dict,
             )
+            logger.info("初始化BigVGAN模型")
             self._init_bigvgan()
             
         try:
+            logger.info("移除enc_q组件")
             del vq_model.enc_q
         except:
+            logger.info("模型没有enc_q组件，跳过移除")
             pass
             
         if self.is_half:
+            logger.info("将模型转换为半精度(FP16)")
             vq_model = vq_model.half().to(self.device)
         else:
+            logger.info("使用全精度模型")
             vq_model = vq_model.to(self.device)
             
         vq_model.eval()
         
         if not if_lora_v3:
+            logger.info("加载标准SoVITS权重")
             vq_model.load_state_dict(dict_s2["weight"], strict=False)
         else:
+            logger.info("加载LoRA权重")
+            logger.info(f"先加载V3底模: {path_sovits_v3}")
             vq_model.load_state_dict(load_sovits_new(path_sovits_v3)["weight"], strict=False)
+            
             lora_rank = dict_s2["lora_rank"]
+            logger.info(f"LoRA rank: {lora_rank}")
+            
+            logger.info("配置LoRA模型")
             lora_config = LoraConfig(
                 target_modules=["to_k", "to_q", "to_v", "to_out.0"],
                 r=lora_rank,
                 lora_alpha=lora_rank,
                 init_lora_weights=True,
             )
+            logger.info("应用LoRA配置")
             vq_model.cfm = get_peft_model(vq_model.cfm, lora_config)
+            
+            logger.info("加载LoRA权重")
             vq_model.load_state_dict(dict_s2["weight"], strict=False)
+            
+            logger.info("合并LoRA权重")
             vq_model.cfm = vq_model.cfm.merge_and_unload()
             vq_model.eval()
-
+            
+        logger.info("SoVITS模型加载完成")
         return Sovits(vq_model, hps)
     
     def get_bert_feature(self, text, word2ph):
@@ -440,22 +490,36 @@ class GPTSoVITS:
         bit_depth="int16",
     ):
         """文本转语音"""
+        logger.info("===== TTS 推理开始 =====")
+        logger.info(f"参数：说话人={spk}, 参考音频={ref_wav_path}")
+        logger.info(f"提示文本: '{prompt_text}', 提示语言: {prompt_language}")
+        logger.info(f"要合成的文本: '{text}', 文本语言: {text_language}")
+        logger.info(f"采样参数: top_k={top_k}, top_p={top_p}, temperature={temperature}, 语速={speed}")
+        logger.info(f"额外参数: 超分={if_sr}, 停顿={pause_second}s, 分段标点={cut_punc}")
+        logger.info(f"输出格式: {audio_format}, 位深度: {bit_depth}")
+        
+        tts_start_time = ttime()
+        
         if spk not in self.speakers:
             logger.error(f"未找到说话人 {spk}")
             return None
             
         # 文本预处理
         text = convert_text(text)
+        logger.info("文本预处理完成")
         text = cut_text(text, cut_punc)
+        logger.info(f"文本分段后共有 {len(text.split('\\n'))} 句")
         
         infer_sovits = self.speakers[spk].sovits
         vq_model = infer_sovits.vq_model
         hps = infer_sovits.hps
         version = vq_model.version
+        logger.info(f"使用SoVITS模型版本: {version}")
 
         infer_gpt = self.speakers[spk].gpt
         t2s_model = infer_gpt.t2s_model
         max_sec = infer_gpt.max_sec
+        logger.info(f"GPT模型最大推理秒数: {max_sec}s")
 
         prompt_text = prompt_text.strip("\n")
         if prompt_text[-1] not in splits:
@@ -463,6 +527,7 @@ class GPTSoVITS:
             
         prompt_language = dict_language[prompt_language.lower()]
         text_language = dict_language[text_language.lower()]
+        logger.info(f"标准化后的语言: 提示={prompt_language}, 文本={text_language}")
         
         dtype = torch.float16 if self.is_half else torch.float32
         zero_wav = np.zeros(
@@ -473,6 +538,8 @@ class GPTSoVITS:
         all_audio = []
         
         with torch.no_grad():
+            logger.info("处理参考音频...")
+            start_time = ttime()
             wav16k, sr = librosa.load(ref_wav_path, sr=16000)
             wav16k = torch.from_numpy(wav16k)
             zero_wav_torch = torch.from_numpy(zero_wav)
@@ -492,23 +559,32 @@ class GPTSoVITS:
             codes = vq_model.extract_latent(ssl_content)
             prompt_semantic = codes[0, 0]
             prompt = prompt_semantic.unsqueeze(0).to(self.device)
+            logger.info(f"参考音频处理完成，耗时 {ttime() - start_time:.2f}s")
 
             if version != "v3":
                 refers = []
                 if inp_refs:
+                    logger.info(f"处理额外参考音频，数量: {len(inp_refs)}")
                     for path in inp_refs:
                         try:
                             refer = self.get_spepc(path).to(dtype).to(self.device)
                             refers.append(refer)
                         except Exception as e:
-                            logger.error(e)
+                            logger.error(f"处理参考音频失败: {path}, 错误: {e}")
                 if len(refers) == 0:
+                    logger.info("使用主参考音频作为特征参考")
                     refers = [self.get_spepc(ref_wav_path).to(dtype).to(self.device)]
             else:
+                logger.info("V3模型: 处理参考谱")
                 refer = self.get_spepc(ref_wav_path).to(self.device).to(dtype)
 
+        logger.info("处理提示文本...")
+        start_time = ttime()
         phones1, bert1, norm_text1 = self.get_phones_and_bert(prompt_text, prompt_language, version)
+        logger.info(f"提示文本处理完成，耗时 {ttime() - start_time:.2f}s")
+        
         texts = text.split("\n")
+        logger.info(f"即将处理 {len(texts)} 段文本")
         
         mel_fn = lambda x: mel_spectrogram_torch(
             x,
@@ -524,11 +600,14 @@ class GPTSoVITS:
             },
         )
 
-        for text in texts:
+        for i, text in enumerate(texts):
+            logger.info(f"处理第 {i+1}/{len(texts)} 段文本: '{text}'")
+            seg_start_time = ttime()
+            
             if text == "<br>" or text == "<bt>":
                 # 根据不同标记设置不同的停顿时长
                 pause_duration = 0.4 if text == "<bt>" else 0.2
-                print(f"插入{pause_duration}秒的空白")           
+                logger.info(f"插入{pause_duration}秒的空白")           
                 silence_duration = int(hps.data.sampling_rate * pause_duration)
                 silence_audio = np.zeros(
                     silence_duration,
@@ -539,11 +618,13 @@ class GPTSoVITS:
                 
             # 简单防止纯符号引发参考音频泄露
             if only_punc(text):
+                logger.info("跳过纯符号文本")
                 continue
 
             if text[-1] not in splits:
                 text += "。" if text_language != "en" else "."
-                
+            
+            logger.info("处理文本特征...")
             phones2, bert2, norm_text2 = self.get_phones_and_bert(text, text_language, version)
             bert = torch.cat([bert1, bert2], 1)
 
@@ -552,6 +633,8 @@ class GPTSoVITS:
             all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
             
             with torch.no_grad():
+                logger.info("GPT模型推理中...")
+                gpt_start_time = ttime()
                 pred_semantic, idx = t2s_model.model.infer_panel(
                     all_phoneme_ids,
                     all_phoneme_len,
@@ -563,7 +646,10 @@ class GPTSoVITS:
                     early_stop_num=self.hz * max_sec,
                 )
                 pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
+                logger.info(f"GPT推理完成，耗时 {ttime() - gpt_start_time:.2f}s，生成帧数: {idx}")
 
+            logger.info("SoVITS解码中...")
+            sovits_start_time = ttime()
             if version != "v3":
                 audio = (
                     vq_model.decode(
@@ -576,9 +662,12 @@ class GPTSoVITS:
                     .cpu()
                     .numpy()[0, 0]
                 )
+                logger.info(f"SoVITS v1/v2解码完成，耗时 {ttime() - sovits_start_time:.2f}s")
             else:
+                logger.info("使用SoVITS v3解码...")
                 phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
                 phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                logger.info("生成特征参考...")
                 fea_ref, ge = vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
                 ref_audio, sr = torchaudio.load(ref_wav_path)
                 ref_audio = ref_audio.to(self.device).float()
@@ -599,19 +688,25 @@ class GPTSoVITS:
                 chunk_len = 934 - T_min
                 
                 mel2 = mel2.to(dtype)
+                logger.info("生成待处理特征...")
                 fea_todo, ge = vq_model.decode_encp(
                     pred_semantic, phoneme_ids1, refer, ge, speed
                 )
                 
                 cfm_resss = []
                 idx = 0
+                chunk_count = 0
+                logger.info("分块推理CFM...")
                 while 1:
                     fea_todo_chunk = fea_todo[:, :, idx : idx + chunk_len]
                     if fea_todo_chunk.shape[-1] == 0:
                         break
+                    chunk_count += 1
+                    logger.info(f"处理第 {chunk_count} 块, 特征长度: {fea_todo_chunk.shape[-1]}")
                     idx += chunk_len
                     fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
                     
+                    cfm_start = ttime()
                     cfm_res = vq_model.cfm.inference(
                         fea,
                         torch.LongTensor([fea.size(1)]).to(fea.device),
@@ -619,6 +714,7 @@ class GPTSoVITS:
                         sample_steps,
                         inference_cfg_rate=0,
                     )
+                    logger.info(f"CFM推理完成，耗时 {ttime() - cfm_start:.2f}s")
                     cfm_res = cfm_res[:, :, mel2.shape[2] :]
                     mel2 = cfm_res[:, :, -T_min:]
                     fea_ref = fea_todo_chunk[:, :, -T_min:]
@@ -627,34 +723,47 @@ class GPTSoVITS:
                 cmf_res = torch.cat(cfm_resss, 2)
                 cmf_res = self.denorm_spec(cmf_res)
                 if self.bigvgan_model is None:
+                    logger.info("初始化BigVGAN模型")
                     self._init_bigvgan()
                     
+                logger.info("生成波形...")
                 with torch.inference_mode():
                     wav_gen = self.bigvgan_model(cmf_res)
                     audio = wav_gen[0][0].cpu().detach().numpy()
+                    
+                logger.info(f"SoVITS v3解码完成，耗时 {ttime() - sovits_start_time:.2f}s")
 
             max_audio = np.abs(audio).max()
             if max_audio > 1:
+                logger.info(f"音频归一化，最大值: {max_audio}")
                 audio /= max_audio
                 
+            audio_length = len(audio) / hps.data.sampling_rate if version != "v3" else len(audio) / 24000
+            logger.info(f"音频长度: {audio_length:.2f}s")
             all_audio.append(audio)
             all_audio.append(zero_wav)
+            logger.info(f"第 {i+1} 段处理完成，总耗时 {ttime() - seg_start_time:.2f}s")
             
+        logger.info("合并所有音频段...")
         audio_opt = np.concatenate(all_audio, 0)
+        total_length = len(audio_opt) / (hps.data.sampling_rate if version != "v3" else 24000)
+        logger.info(f"合成完成，总音频长度: {total_length:.2f}s")
         
         sr = hps.data.sampling_rate if version != "v3" else 24000
         if if_sr and sr == 24000:
-            print("开始音频重采样")
+            logger.info("开始音频超分辨率处理")
+            sr_start = ttime()
             audio_opt = torch.from_numpy(audio_opt).float().to(self.device)
             audio_opt, sr = self.audio_sr(audio_opt.unsqueeze(0), sr)
             max_audio = np.abs(audio_opt).max()
             if max_audio > 1:
                 audio_opt /= max_audio
             sr = 48000
-            print("音频重采样完成")
+            logger.info(f"音频超分完成，耗时 {ttime() - sr_start:.2f}s，新采样率: {sr}Hz")
             
         # 打包音频
-        # 注意：现在pack_audio函数已包含完整的类型转换逻辑，无需在此处额外转换
+        logger.info(f"打包音频为 {audio_format} 格式，位深度: {bit_depth}")
         audio_bytes = pack_audio(audio_opt, sr, audio_format, bit_depth)
         
+        logger.info(f"===== TTS 推理完成，总耗时 {ttime() - tts_start_time:.2f}s =====")
         return audio_bytes.getvalue() 
