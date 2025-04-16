@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QInputDialog, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal, Slot
+import os
 
 class RoleConfigView(QWidget):
     """角色配置视图类"""
@@ -29,6 +30,7 @@ class RoleConfigView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+        self.load_model_paths()
     
     def disable_wheel_event(self, widget):
         """禁用控件的滚轮事件"""
@@ -506,4 +508,36 @@ class RoleConfigView(QWidget):
         """浏览参考音频按钮点击事件"""
         file_path, _ = QFileDialog.getOpenFileName(self, "选择参考音频", "", "音频文件 (*.wav)")
         if file_path:
-            self.ref_audio.setCurrentText(file_path) 
+            self.ref_audio.setCurrentText(file_path)
+    
+    def load_model_paths(self):
+        """加载模型路径到下拉框"""
+        # 加载GPT模型
+        gpt_dirs = ["GPT_weights_v2", "GPT_weights_v3"]
+        gpt_models = []
+        
+        # 查找项目根目录中的GPT模型文件
+        for gpt_dir in gpt_dirs:
+            if os.path.exists(gpt_dir):
+                for file in os.listdir(gpt_dir):
+                    if file.endswith(".ckpt") or file.endswith(".pth"):
+                        gpt_models.append(os.path.join(gpt_dir, file))
+        
+        # 添加到GPT模型下拉框
+        self.gpt_path.clear()
+        self.gpt_path.addItems(gpt_models)
+        
+        # 加载SoVITS模型
+        sovits_dirs = ["SoVITS_weights_v2", "SoVITS_weights_v3"]
+        sovits_models = []
+        
+        # 查找项目根目录中的SoVITS模型文件
+        for sovits_dir in sovits_dirs:
+            if os.path.exists(sovits_dir):
+                for file in os.listdir(sovits_dir):
+                    if file.endswith(".pth"):
+                        sovits_models.append(os.path.join(sovits_dir, file))
+        
+        # 添加到SoVITS模型下拉框
+        self.sovits_path.clear()
+        self.sovits_path.addItems(sovits_models) 
