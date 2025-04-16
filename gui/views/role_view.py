@@ -302,7 +302,14 @@ class RoleConfigView(QWidget):
     
     def show_message(self, title, message, icon=QMessageBox.Information):
         """显示消息对话框"""
-        QMessageBox.information(self, title, message, icon)
+        if icon == QMessageBox.Information:
+            QMessageBox.information(self, title, message)
+        elif icon == QMessageBox.Warning:
+            QMessageBox.warning(self, title, message)
+        elif icon == QMessageBox.Critical:
+            QMessageBox.critical(self, title, message)
+        else:
+            QMessageBox.information(self, title, message)
     
     def load_config_to_ui(self, config):
         """加载配置到UI控件"""
@@ -450,9 +457,67 @@ class RoleConfigView(QWidget):
     
     def on_add_emotion_clicked(self):
         """添加音色按钮点击事件"""
-        emotion_name, ok = QInputDialog.getText(self, "添加音色", "请输入音色名称:")
-        if ok and emotion_name:
-            self.emotion_add.emit(emotion_name)
+        # 获取当前音色名称
+        emotion_name = self.emotion_name.text().strip()
+        if not emotion_name:
+            self.show_message("错误", "请输入音色名称", QMessageBox.Warning)
+            return
+        
+        # 检查GPT和SoVITS模型是否设置
+        gpt_path = self.gpt_path.currentText().strip()
+        sovits_path = self.sovits_path.currentText().strip()
+        if not gpt_path:
+            self.show_message("错误", "请选择GPT模型", QMessageBox.Warning)
+            return
+        if not sovits_path:
+            self.show_message("错误", "请选择SoVITS模型", QMessageBox.Warning)
+            return
+        
+        # 检查参考音频是否设置
+        ref_audio = self.ref_audio.currentText().strip()
+        if not ref_audio:
+            reply = QMessageBox.question(
+                self,
+                "缺少参考音频",
+                "未设置参考音频，是否先选择参考音频?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.on_browse_ref_audio()
+                if not self.ref_audio.currentText().strip():
+                    return
+            elif not self.ref_free.isChecked():  # 非无参考模式需要参考音频
+                self.show_message("错误", "未启用无参考模式，必须设置参考音频", QMessageBox.Warning)
+                return
+        
+        # 检查参考文本是否设置
+        prompt_text = self.prompt_text.toPlainText().strip()
+        if not prompt_text and not self.ref_free.isChecked():
+            reply = QMessageBox.question(
+                self,
+                "缺少参考文本",
+                "未设置参考文本，是否继续?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+        
+        # 检查该音色是否已存在
+        for i in range(self.emotion_list.count()):
+            if self.emotion_list.item(i).text() == emotion_name:
+                # 如果已存在，询问是否覆盖
+                reply = QMessageBox.question(
+                    self, 
+                    "音色已存在", 
+                    f"音色'{emotion_name}'已存在，是否覆盖?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply != QMessageBox.Yes:
+                    return
+                break
+        
+        # 发送添加音色信号
+        self.emotion_add.emit(emotion_name)
     
     def on_del_emotion_clicked(self):
         """删除音色按钮点击事件"""
@@ -471,10 +536,18 @@ class RoleConfigView(QWidget):
     
     def on_add_aux_ref_clicked(self):
         """添加辅助参考音频按钮点击事件"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择辅助参考音频", "", "音频文件 (*.wav)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择辅助参考音频", "", "音频文件 (*.wav *.mp3)")
         if file_path:
-            self.aux_ref_list.addItem(file_path)
-            self.aux_ref_add.emit(file_path)
+            # 检查是否已添加
+            found = False
+            for i in range(self.aux_ref_list.count()):
+                if self.aux_ref_list.item(i).text() == file_path:
+                    found = True
+                    break
+                    
+            if not found:
+                self.aux_ref_list.addItem(file_path)
+                self.aux_ref_add.emit(file_path)
     
     def on_del_aux_ref_clicked(self):
         """删除辅助参考音频按钮点击事件"""
@@ -506,9 +579,16 @@ class RoleConfigView(QWidget):
     
     def on_browse_ref_audio(self):
         """浏览参考音频按钮点击事件"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择参考音频", "", "音频文件 (*.wav)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择参考音频", "", "音频文件 (*.wav *.mp3)")
         if file_path:
+            # 设置参考音频路径，但不复制文件（由控制器处理）
             self.ref_audio.setCurrentText(file_path)
+            
+            # 如果参考文本为空，尝试使用文件名作为参考文本
+            if not self.prompt_text.toPlainText().strip():
+                base_name = os.path.basename(file_path)
+                name_without_ext = os.path.splitext(base_name)[0]
+                self.prompt_text.setText(name_without_ext)
     
     def load_model_paths(self):
         """加载模型路径到下拉框"""

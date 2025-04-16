@@ -4,6 +4,7 @@
 """
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import Qt
+import os
 
 class RoleController:
     """角色配置控制器类"""
@@ -123,16 +124,74 @@ class RoleController:
             self.view.show_message("错误", "请先选择一个角色!", QMessageBox.Warning)
             return
         
-        if self.model.add_emotion(self.current_role, emotion_name):
+        # 获取当前音色配置
+        emotion_config = self.view.get_current_emotion_config()
+        
+        # 处理参考音频复制
+        ref_audio = emotion_config.get("ref_audio", "")
+        if ref_audio and os.path.isfile(ref_audio) and not ref_audio.startswith(str(self.model.role_dir)):
+            # 参考音频是外部文件路径，需要复制到角色目录
+            try:
+                role_path = self.model.get_role_path(self.current_role)
+                file_name = os.path.basename(ref_audio)
+                target_path = os.path.join(role_path, file_name)
+                
+                # 复制文件
+                import shutil
+                shutil.copy2(ref_audio, target_path)
+                
+                # 更新配置中的路径为相对路径
+                emotion_config["ref_audio"] = file_name
+            except Exception as e:
+                print(f"复制参考音频出错: {str(e)}")
+                self.view.show_message("错误", f"复制参考音频失败: {str(e)}", QMessageBox.Warning)
+                return
+        
+        # 处理辅助参考音频复制
+        new_aux_refs = []
+        for aux_ref in emotion_config.get("aux_refs", []):
+            if aux_ref and os.path.isfile(aux_ref) and not aux_ref.startswith(str(self.model.role_dir)):
+                # 辅助参考音频是外部文件路径，需要复制到角色目录
+                try:
+                    role_path = self.model.get_role_path(self.current_role)
+                    file_name = os.path.basename(aux_ref)
+                    target_path = os.path.join(role_path, file_name)
+                    
+                    # 复制文件
+                    import shutil
+                    shutil.copy2(aux_ref, target_path)
+                    
+                    # 更新为相对路径
+                    new_aux_refs.append(file_name)
+                except Exception as e:
+                    print(f"复制辅助参考音频出错: {str(e)}")
+                    continue
+            else:
+                new_aux_refs.append(aux_ref)
+        emotion_config["aux_refs"] = new_aux_refs
+        
+        # 同时更新基本参数
+        config = self.view.get_current_config()
+        for key in config:
+            if key != "emotions":  # 不更新音色列表
+                self.model.current_config[key] = config[key]
+        
+        # 使用模型添加/更新音色
+        if self.model.add_emotion(self.current_role, emotion_name, emotion_config):
+            # 保存配置到文件
+            self.model.save_role_config(self.current_role, self.model.current_config)
+            
             # 更新音色列表
             self.view.update_emotion_list(self.model.current_config.get("emotions", {}).keys())
             
             # 选中新音色
-            index = self.view.emotion_list.findItems(emotion_name, Qt.MatchExactly)
-            if index:
-                self.view.emotion_list.setCurrentItem(index[0])
+            items = self.view.emotion_list.findItems(emotion_name, Qt.MatchExactly)
+            if items:
+                self.view.emotion_list.setCurrentItem(items[0])
+            
+            self.view.show_message("成功", f"音色'{emotion_name}'保存成功!")
         else:
-            self.view.show_message("错误", f"音色'{emotion_name}'已存在!", QMessageBox.Warning)
+            self.view.show_message("错误", f"保存音色'{emotion_name}'失败!", QMessageBox.Warning)
     
     def on_emotion_delete(self, emotion_name):
         """删除音色事件处理"""

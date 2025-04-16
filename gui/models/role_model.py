@@ -94,8 +94,45 @@ class RoleModel:
         if role_path.exists():
             return False
         
+        # 创建角色目录
         role_path.mkdir(parents=True)
-        return True
+        
+        # 创建默认配置
+        default_config = {
+            "name": role_name,
+            "version": "v3",
+            "emotions": {},
+            "text_lang": "中文",
+            "prompt_lang": "中文",
+            "gpt_path": "",
+            "sovits_path": "",
+            "speed": 1.0,
+            "ref_free": False,
+            "if_sr": False,
+            "top_k": 15,
+            "top_p": 1.0,
+            "temperature": 1.0,
+            "sample_steps": 32,
+            "pause_second": 0.3,
+            "description": ""
+        }
+        
+        # 保存默认配置
+        config_path = role_path / "config.json"
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(default_config, f, ensure_ascii=False, indent=4)
+            
+            # 设置为当前角色和配置
+            self.current_role = role_name
+            self.current_config = default_config
+            return True
+        except Exception as e:
+            print(f"创建角色配置出错: {str(e)}")
+            # 如果保存配置失败，删除已创建的目录
+            if role_path.exists():
+                shutil.rmtree(role_path)
+            return False
     
     def delete_role(self, role_name):
         """删除角色（移动到回收站）"""
@@ -178,7 +215,7 @@ class RoleModel:
             print(f"导出角色出错: {str(e)}")
             return False
     
-    def add_emotion(self, role_name, emotion_name):
+    def add_emotion(self, role_name, emotion_name, emotion_config=None):
         """添加音色"""
         if not self.current_config:
             self.get_role_config(role_name)
@@ -187,14 +224,17 @@ class RoleModel:
             return False
         
         emotions = self.current_config.get("emotions", {})
-        if emotion_name in emotions:
-            return False
         
-        emotions[emotion_name] = {
-            "ref_audio": "",
-            "prompt_text": "",
-            "aux_refs": []
-        }
+        # 如果未提供配置，创建默认配置
+        if emotion_config is None:
+            emotion_config = {
+                "ref_audio": "",
+                "prompt_text": "",
+                "aux_refs": []
+            }
+        
+        # 添加或更新音色
+        emotions[emotion_name] = emotion_config
         self.current_config["emotions"] = emotions
         return True
     
