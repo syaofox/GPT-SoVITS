@@ -489,7 +489,7 @@ audio_data = tts.tts(
     sample_steps=32,       # 采样步数
     if_sr=False,           # 是否启用超分辨率
     pause_second=0.3,      # 停顿时长
-    cut_punc=",.，。",      # 文本分割标点
+    cut_punc="。！？.!?",      # 文本分割标点
     audio_format="wav",    # 输出音频格式
     bit_depth="int16",     # 音频位深度
 )

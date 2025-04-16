@@ -435,7 +435,7 @@ class GPTSoVITS:
         if_sr=False,
         spk="default",
         pause_second=0.3,
-        cut_punc=",.，。",
+        cut_punc=",.。！？.!?",
         audio_format="wav",
         bit_depth="int16",
     ):

@@ -204,7 +204,7 @@ class InferenceView(QWidget):
         self.disable_wheel_event(self.pause_second)
         
         # 切分标点
-        self.cut_punc = QLineEdit(",.，。")
+        self.cut_punc = QLineEdit("。！？.!?")
         
         # 选项
         options_layout = QVBoxLayout()

@@ -80,7 +80,7 @@ class InferenceModel:
             "if_sr": config.get("if_sr", False),
             "pause_second": config.get("pause_second", 0.3),
             "ref_free": config.get("ref_free", False),
-            "cut_punc": ",.，。",
+            "cut_punc": "。！？.!?",
             "audio_format": "wav",
             "bit_depth": "int16",
         }
@@ -183,7 +183,7 @@ class InferenceThread(QThread):
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            text_prefix = self.params["text"][:10].replace(' ', '_')
+            text_prefix = self.params["text"][:10].replace(' ', '_').replace('\n', '')
             output_path = Path("output") / f"{text_prefix}_{timestamp}.wav"
             
             self.progress_update.emit(40)
