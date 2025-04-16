@@ -23,7 +23,7 @@ class WaveformCanvas(FigureCanvas):
     # 添加自定义信号用于点击跳转
     playback_position_changed = Signal(float)
     
-    def __init__(self, parent=None, width=5, height=2, dpi=100, max_points=10000):
+    def __init__(self, parent=None, width=5, height=2, dpi=100, max_points=20000):
         try:
             self.fig = plt.Figure(figsize=(width, height), dpi=dpi)
             self.axes = self.fig.add_subplot(111)
@@ -33,7 +33,7 @@ class WaveformCanvas(FigureCanvas):
             self.axes.set_yticks([])
             self.axes.set_xticks([])
             
-            # 最大显示点数，用于长音频降采样
+            # 最大显示点数，用于长音频降采样 - 增加到20000以支持更长的音频
             self.max_points = max_points
             
             FigureCanvas.__init__(self, self.fig)
@@ -127,25 +127,19 @@ class WaveformCanvas(FigureCanvas):
         
         return result
     
-    def load_audio_efficient(self, audio_path, max_duration=None):
-        """高效加载音频文件，支持限制加载时长"""
+    def load_audio_efficient(self, audio_path):
+        """高效加载音频文件，始终加载完整音频"""
         try:
-            # 对于非常长的音频，可以选择只加载前几分钟
-            if max_duration is not None:
-                # 使用duration参数只加载指定长度的音频
-                audio_data, sr = librosa.load(audio_path, sr=None, duration=max_duration)
-                actual_duration = max_duration
-            else:
-                # 正常加载整个音频
-                audio_data, sr = librosa.load(audio_path, sr=None)
-                actual_duration = len(audio_data) / sr
+            # 始终加载完整音频文件
+            audio_data, sr = librosa.load(audio_path, sr=None)
+            actual_duration = len(audio_data) / sr
             
             return audio_data, sr, actual_duration
         except Exception as e:
             print(f"加载音频失败: {str(e)}")
             return np.array([]), 44100, 0
     
-    def plot_waveform(self, audio_path, max_duration=None):
+    def plot_waveform(self, audio_path):
         """绘制波形图，支持长音频优化"""
         try:
             if not os.path.exists(audio_path):
@@ -166,10 +160,8 @@ class WaveformCanvas(FigureCanvas):
             self.axes.set_yticks([])
             self.axes.set_xticks([])
             
-            # 高效加载音频
-            self.audio_data, self.audio_sr, self.audio_duration = self.load_audio_efficient(
-                audio_path, max_duration
-            )
+            # 高效加载完整音频
+            self.audio_data, self.audio_sr, self.audio_duration = self.load_audio_efficient(audio_path)
             
             if len(self.audio_data) == 0:
                 return
@@ -190,9 +182,16 @@ class WaveformCanvas(FigureCanvas):
             # 绘制波形
             self.axes.plot(time, display_data, color='#00BFFF', linewidth=0.5)
             
-            # 添加时间轴标签（每隔几秒一个）
+            # 添加时间轴标签（基于实际音频长度动态调整）
             if self.audio_duration > 0:
-                num_ticks = min(5, int(self.audio_duration) + 1)
+                # 动态计算时间轴刻度数量，确保显示合理的时间间隔
+                if self.audio_duration <= 60:  # 1分钟以内
+                    num_ticks = min(5, int(self.audio_duration) + 1)
+                elif self.audio_duration <= 300:  # 5分钟以内
+                    num_ticks = min(6, int(self.audio_duration // 30) + 1)
+                else:  # 5分钟以上
+                    num_ticks = min(10, int(self.audio_duration // 60) + 1)
+                
                 tick_positions = np.linspace(0, self.audio_duration, num_ticks)
                 tick_labels = [f"{int(t//60):02d}:{int(t%60):02d}" for t in tick_positions]
                 self.axes.set_xticks(tick_positions)
