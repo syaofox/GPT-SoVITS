@@ -30,6 +30,10 @@ class RoleConfigView(QWidget):
         super().__init__(parent)
         self.init_ui()
     
+    def disable_wheel_event(self, widget):
+        """禁用控件的滚轮事件"""
+        widget.wheelEvent = lambda event: event.ignore()
+    
     def init_ui(self):
         """初始化用户界面"""
         # 主布局
@@ -245,6 +249,21 @@ class RoleConfigView(QWidget):
         
         # 禁用右侧控件，直到选择角色
         self.set_config_widgets_enabled(False)
+        
+        # 禁用所有数值输入控件的滚轮事件
+        self.disable_wheel_event(self.speed)
+        self.disable_wheel_event(self.top_k)
+        self.disable_wheel_event(self.top_p)
+        self.disable_wheel_event(self.temperature)
+        self.disable_wheel_event(self.sample_steps)
+        self.disable_wheel_event(self.pause_second)
+        
+        # 禁用所有下拉框控件的滚轮事件
+        self.disable_wheel_event(self.gpt_path)
+        self.disable_wheel_event(self.sovits_path)
+        self.disable_wheel_event(self.text_lang)
+        self.disable_wheel_event(self.prompt_lang)
+        self.disable_wheel_event(self.ref_audio)
     
     def set_config_widgets_enabled(self, enabled):
         """启用或禁用配置控件"""
