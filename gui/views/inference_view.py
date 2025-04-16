@@ -456,7 +456,12 @@ class InferenceView(QWidget):
         """历史项目双击事件"""
         file_path = item.data(Qt.UserRole)
         if file_path:
+            # 向控制器发送信号
             self.history_selected.emit(file_path)
+            
+            # 立即设置并播放音频
+            self.set_result_audio(file_path)
+            self.result_player.play()
     
     def on_refresh_history_clicked(self):
         """刷新历史按钮点击事件"""
