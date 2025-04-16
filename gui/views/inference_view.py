@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QListWidget, 
     QTextEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QProgressBar,
-    QMessageBox, QListWidgetItem, QFileDialog, QSplitter
+    QMessageBox, QListWidgetItem, QFileDialog, QSplitter, QSizePolicy
 )
 from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
 from PySide6.QtGui import QFont, QTextOption
@@ -69,24 +69,45 @@ class InferenceView(QWidget):
         panel1 = QVBoxLayout()
         panel1_widget = QWidget()
         panel1_widget.setLayout(panel1)
-        panel1_widget.setFixedWidth(200)  # 恢复原始宽度
+        panel1_widget.setFixedWidth(200)  # 固定宽度
+        
+        # 设置第1块在垂直方向上的大小策略为自适应
+        size_policy = panel1_widget.sizePolicy()
+        size_policy.setVerticalPolicy(QSizePolicy.Expanding)
+        panel1_widget.setSizePolicy(size_policy)
         
         # 第2块 - 参考音频、辅助参考音频、合成参数 (固定宽度)
         panel2 = QVBoxLayout()
         panel2_widget = QWidget()
         panel2_widget.setLayout(panel2)
-        panel2_widget.setFixedWidth(250)  # 恢复原始宽度
+        panel2_widget.setFixedWidth(250)  # 固定宽度
+        
+        # 设置第2块在垂直方向上的大小策略为自适应
+        size_policy = panel2_widget.sizePolicy()
+        size_policy.setVerticalPolicy(QSizePolicy.Expanding)
+        panel2_widget.setSizePolicy(size_policy)
         
         # 第3块 - 待推理文本、开始推理-进度 (自适应宽度)
         panel3 = QVBoxLayout()
         panel3_widget = QWidget()
         panel3_widget.setLayout(panel3)
         
+        # 设置第3块在垂直方向上的大小策略为自适应
+        size_policy = panel3_widget.sizePolicy()
+        size_policy.setVerticalPolicy(QSizePolicy.Expanding)
+        size_policy.setHorizontalPolicy(QSizePolicy.Expanding)  # 水平方向也设为自适应
+        panel3_widget.setSizePolicy(size_policy)
+        
         # 第4块 - 历史结果 (固定宽度)
         panel4 = QVBoxLayout()
         panel4_widget = QWidget()
         panel4_widget.setLayout(panel4)
         panel4_widget.setFixedWidth(200)  # 减小宽度，只包含历史列表
+        
+        # 设置第4块在垂直方向上的大小策略为自适应
+        size_policy = panel4_widget.sizePolicy()
+        size_policy.setVerticalPolicy(QSizePolicy.Expanding)
+        panel4_widget.setSizePolicy(size_policy)
         
         # === 第1块内容 - 角色选择列表 ===
         
@@ -136,7 +157,7 @@ class InferenceView(QWidget):
         ref_info_layout.addRow("参考文本:", self.prompt_text)
         
         # 波形图
-        self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=20000)
+        self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=2000)
         self.ref_waveform.setMinimumHeight(80)
         self.ref_waveform.setFixedHeight(80)  # 设置固定高度
         self.ref_waveform.playback_position_changed.connect(self.on_ref_waveform_clicked)
@@ -231,10 +252,9 @@ class InferenceView(QWidget):
         params_group.setLayout(params_layout)
         
         # 添加所有组件到第2块
-        panel2.addWidget(ref_group)
-        panel2.addWidget(aux_group)
-        panel2.addWidget(params_group)
-        panel2.addStretch(1)  # 保持第2块底部的弹性空间
+        panel2.addWidget(ref_group, 0)  # 参考音频区域固定高度
+        panel2.addWidget(aux_group, 1)  # 辅助参考音频区域自适应填充
+        panel2.addWidget(params_group, 0)  # 参数区域固定高度
         
         # === 第3块内容 - 待推理文本、开始推理-进度 ===
         
@@ -278,7 +298,7 @@ class InferenceView(QWidget):
         result_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 结果音频波形图
-        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=1000)
+        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=2000)
         self.result_waveform.setMinimumHeight(80)
         self.result_waveform.setFixedHeight(80)  # 设置与参考音频相同的固定高度
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
