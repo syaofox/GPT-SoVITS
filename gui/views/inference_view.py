@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QProgressBar,
     QMessageBox, QListWidgetItem, QFileDialog
 )
-from PySide6.QtCore import Qt, Signal, Slot, QUrl
+from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from gui.views.common.waveform_canvas import WaveformCanvas
@@ -33,11 +33,27 @@ class InferenceView(QWidget):
     
     def init_ui(self):
         """初始化用户界面"""
-        # 主布局
+        # 主布局 - 三栏水平布局
         main_layout = QHBoxLayout(self)
         
-        # 左侧面板
+        # 左侧面板 - 固定宽度
         left_panel = QVBoxLayout()
+        left_widget = QWidget()
+        left_widget.setLayout(left_panel)
+        left_widget.setFixedWidth(250)
+        
+        # 中间面板 - 自适应宽度
+        middle_panel = QVBoxLayout()
+        middle_widget = QWidget()
+        middle_widget.setLayout(middle_panel)
+        
+        # 右侧面板 - 固定宽度
+        right_panel = QVBoxLayout()
+        right_widget = QWidget()
+        right_widget.setLayout(right_panel)
+        right_widget.setFixedWidth(250)
+        
+        # === 左侧面板内容 ===
         
         # 角色选择区域
         role_group = QGroupBox("角色选择")
@@ -136,6 +152,14 @@ class InferenceView(QWidget):
         self.pause_second.setSingleStep(0.1)
         self.pause_second.setValue(0.3)
         
+        # 禁用所有数值输入控件的滚轮事件
+        self.disable_wheel_event(self.speed)
+        self.disable_wheel_event(self.top_k)
+        self.disable_wheel_event(self.top_p)
+        self.disable_wheel_event(self.temperature)
+        self.disable_wheel_event(self.sample_steps)
+        self.disable_wheel_event(self.pause_second)
+        
         # 切分标点
         self.cut_punc = QLineEdit(",.，。")
         
@@ -157,6 +181,14 @@ class InferenceView(QWidget):
         params_layout.addRow("选项:", options_layout)
         params_group.setLayout(params_layout)
         
+        # 添加所有组件到左侧面板
+        left_panel.addWidget(role_group)
+        left_panel.addWidget(ref_group)
+        left_panel.addWidget(aux_group)
+        left_panel.addWidget(params_group)
+        
+        # === 中间面板内容 ===
+        
         # 推理文本区域
         text_group = QGroupBox("待推理文本")
         text_layout = QVBoxLayout()
@@ -169,6 +201,7 @@ class InferenceView(QWidget):
         text_group.setLayout(text_layout)
         
         # 推理控制区域
+        ctrl_group = QGroupBox("推理控制")
         ctrl_layout = QHBoxLayout()
         
         self.infer_btn = QPushButton("开始推理")
@@ -180,17 +213,16 @@ class InferenceView(QWidget):
         
         ctrl_layout.addWidget(self.infer_btn)
         ctrl_layout.addWidget(self.progress_bar)
+        ctrl_group.setLayout(ctrl_layout)
         
-        # 添加所有组件到左侧面板
-        left_panel.addWidget(role_group)
-        left_panel.addWidget(ref_group)
-        left_panel.addWidget(aux_group)
-        left_panel.addWidget(params_group)
-        left_panel.addWidget(text_group)
-        left_panel.addLayout(ctrl_layout)
+        # 添加所有组件到中间面板
+        middle_panel.addWidget(text_group, 1)  # 文本区域占据更多空间
+        middle_panel.addWidget(ctrl_group, 0)  # 控制区域固定高度
         
-        # 右侧面板
-        right_panel = QVBoxLayout()
+        # === 右侧面板内容 ===
+        
+        # 获取参考音频区域的高度用于保持一致
+        ref_height = ref_group.sizeHint().height()
         
         # 结果音频区域
         result_group = QGroupBox("结果音频")
@@ -198,7 +230,7 @@ class InferenceView(QWidget):
         
         # 结果音频波形图
         self.result_waveform = WaveformCanvas(self, width=5, height=2, dpi=100)
-        self.result_waveform.setMinimumHeight(120)
+        self.result_waveform.setMinimumHeight(80)
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
         # 播放控制
@@ -239,14 +271,22 @@ class InferenceView(QWidget):
         
         # 添加所有组件到右侧面板
         right_panel.addWidget(result_group)
-        right_panel.addWidget(history_group)
+        right_panel.addWidget(history_group, 1)  # 历史区域可以占据剩余空间
         
-        # 添加左右面板到主布局
-        main_layout.addLayout(left_panel, 3)
-        main_layout.addLayout(right_panel, 2)
+        # 设置结果音频区域的最大高度，使其与参考音频区域高度一致
+        result_group.setMaximumHeight(ref_height)
+        
+        # 添加三个面板到主布局
+        main_layout.addWidget(left_widget)
+        main_layout.addWidget(middle_widget, 1)  # 中间部分自适应宽度
+        main_layout.addWidget(right_widget)
         
         # 禁用控件，直到选择角色
         self.set_inference_widgets_enabled(False)
+    
+    def disable_wheel_event(self, widget):
+        """禁用控件的滚轮事件"""
+        widget.wheelEvent = lambda event: event.ignore()
     
     def init_player(self):
         """初始化音频播放器"""
