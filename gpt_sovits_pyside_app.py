@@ -31,6 +31,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 class WaveformCanvas(FigureCanvas):
     """波形图画布类"""
     
+    # 添加自定义信号用于点击跳转
+    playback_position_changed = Signal(float)
+    
     def __init__(self, parent=None, width=5, height=2, dpi=100):
         try:
             self.fig = plt.Figure(figsize=(width, height), dpi=dpi)
@@ -48,12 +51,60 @@ class WaveformCanvas(FigureCanvas):
                                       QSplitter.Policy.Expanding,
                                       QSplitter.Policy.Expanding)
             FigureCanvas.updateGeometry(self)
+            
+            # 存储音频信息
+            self.audio_data = None
+            self.audio_sr = None
+            self.audio_duration = 0
+            
+            # 添加鼠标点击事件
+            self.mpl_connect('button_press_event', self.on_click)
+            
+            # 添加当前位置标记线
+            self.position_line = None
+            
         except Exception as e:
             print(f"初始化波形图失败: {str(e)}")
             # 创建一个替代的占位符
             self.setParent(parent)
             self.setMinimumHeight(80)
             self.setStyleSheet("background-color: #282828;")
+    
+    def on_click(self, event):
+        """鼠标点击事件处理"""
+        try:
+            if event.xdata is not None and self.audio_duration > 0:
+                # 计算点击位置对应的时间(秒)
+                pos_ratio = event.xdata / self.audio_duration
+                # 发出信号
+                self.playback_position_changed.emit(pos_ratio)
+                # 更新位置标记线
+                self.update_position_line(event.xdata)
+        except Exception as e:
+            print(f"处理波形图点击事件出错: {str(e)}")
+    
+    def update_position_line(self, position):
+        """更新位置标记线"""
+        try:
+            # 移除旧线
+            if self.position_line:
+                self.position_line.remove()
+            
+            # 添加新线
+            self.position_line = self.axes.axvline(x=position, color='red', linewidth=1)
+            self.draw()
+        except Exception as e:
+            print(f"更新位置标记线出错: {str(e)}")
+    
+    def set_playback_position(self, position_ms):
+        """更新播放位置标记线（由播放器进度更新触发）"""
+        try:
+            if self.audio_duration > 0:
+                position_sec = position_ms / 1000.0
+                if 0 <= position_sec <= self.audio_duration:
+                    self.update_position_line(position_sec)
+        except Exception as e:
+            print(f"设置播放位置出错: {str(e)}")
     
     def plot_waveform(self, audio_path):
         """绘制波形图"""
@@ -74,13 +125,25 @@ class WaveformCanvas(FigureCanvas):
             self.axes.set_xticks([])
             
             # 加载音频
-            y, sr = librosa.load(audio_path, sr=None)
+            self.audio_data, self.audio_sr = librosa.load(audio_path, sr=None)
             
-            # 计算时间轴
-            time = np.arange(0, len(y)) / sr
+            # 计算时间轴和音频时长
+            self.audio_duration = len(self.audio_data) / self.audio_sr
+            time = np.arange(0, len(self.audio_data)) / self.audio_sr
             
             # 绘制波形
-            self.axes.plot(time, y, color='#00BFFF', linewidth=0.5)
+            self.axes.plot(time, self.audio_data, color='#00BFFF', linewidth=0.5)
+            
+            # 添加时间轴标签（每隔几秒一个）
+            if self.audio_duration > 0:
+                num_ticks = min(5, int(self.audio_duration) + 1)
+                tick_positions = np.linspace(0, self.audio_duration, num_ticks)
+                tick_labels = [f"{int(t//60):02d}:{int(t%60):02d}" for t in tick_positions]
+                self.axes.set_xticks(tick_positions)
+                self.axes.set_xticklabels(tick_labels, fontsize=8, color='white')
+            
+            # 重置位置标记线
+            self.position_line = None
             
             # 刷新图形
             self.fig.tight_layout()
@@ -866,6 +929,7 @@ class InferenceTab(QWidget):
         # 波形图
         self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100)
         self.ref_waveform.setMinimumHeight(80)
+        self.ref_waveform.playback_position_changed.connect(self.on_ref_waveform_clicked)
         
         # 播放按钮
         self.ref_play_btn = QPushButton("播放")
@@ -987,6 +1051,7 @@ class InferenceTab(QWidget):
         # 结果音频波形图
         self.result_waveform = WaveformCanvas(self, width=5, height=2, dpi=100)
         self.result_waveform.setMinimumHeight(120)
+        self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
         # 播放控制
         result_ctrl_layout = QHBoxLayout()
@@ -1048,12 +1113,52 @@ class InferenceTab(QWidget):
         self.ref_audio_output = QAudioOutput()
         self.ref_player.setAudioOutput(self.ref_audio_output)
         self.ref_player.playbackStateChanged.connect(self.on_ref_playback_state_changed)
+        self.ref_player.positionChanged.connect(self.on_ref_position_changed)
+        self.ref_player.durationChanged.connect(self.on_ref_duration_changed)
         
         # 结果音频播放器
         self.result_player = QMediaPlayer()
         self.result_audio_output = QAudioOutput()
         self.result_player.setAudioOutput(self.result_audio_output)
         self.result_player.playbackStateChanged.connect(self.on_result_playback_state_changed)
+        self.result_player.positionChanged.connect(self.on_result_position_changed)
+        self.result_player.durationChanged.connect(self.on_result_duration_changed)
+    
+    def on_ref_position_changed(self, position):
+        """参考音频播放位置变化事件"""
+        self.ref_waveform.set_playback_position(position)
+    
+    def on_ref_duration_changed(self, duration):
+        """参考音频时长变化事件"""
+        # 只是为了记录持续时间，不需要额外处理
+        pass
+    
+    def on_result_position_changed(self, position):
+        """结果音频播放位置变化事件"""
+        self.result_waveform.set_playback_position(position)
+    
+    def on_result_duration_changed(self, duration):
+        """结果音频时长变化事件"""
+        # 只是为了记录持续时间，不需要额外处理
+        pass
+    
+    def on_ref_waveform_clicked(self, position_ratio):
+        """参考音频波形图点击事件"""
+        if self.ref_player.duration() > 0:
+            position = int(position_ratio * self.ref_player.duration())
+            self.ref_player.setPosition(position)
+            # 如果当前不在播放状态，点击后开始播放
+            if self.ref_player.playbackState() != QMediaPlayer.PlayingState:
+                self.ref_player.play()
+    
+    def on_result_waveform_clicked(self, position_ratio):
+        """结果音频波形图点击事件"""
+        if self.result_player.duration() > 0:
+            position = int(position_ratio * self.result_player.duration())
+            self.result_player.setPosition(position)
+            # 如果当前不在播放状态，点击后开始播放
+            if self.result_player.playbackState() != QMediaPlayer.PlayingState:
+                self.result_player.play()
     
     def set_inference_widgets_enabled(self, enabled):
         """启用或禁用推理控件"""
