@@ -27,6 +27,7 @@ from gpt_sovits_lib import GPTSoVITS, GPTSoVITSConfig
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from PySide6.QtWidgets import QSizePolicy
 
 class WaveformCanvas(FigureCanvas):
     """波形图画布类"""
@@ -48,8 +49,8 @@ class WaveformCanvas(FigureCanvas):
             self.setParent(parent)
             
             FigureCanvas.setSizePolicy(self,
-                                      QSplitter.Policy.Expanding,
-                                      QSplitter.Policy.Expanding)
+                                      QSizePolicy.Expanding,
+                                      QSizePolicy.Expanding)
             FigureCanvas.updateGeometry(self)
             
             # 存储音频信息
