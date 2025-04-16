@@ -508,7 +508,8 @@ class GPTSoVITS:
         text = convert_text(text)
         logger.info("文本预处理完成")
         text = cut_text(text, cut_punc)
-        logger.info(f"文本分段后共有 {len(text.split('\\n'))} 句")
+        cut_text_list = text.split('\n')
+        logger.info(f"文本分段后共有 {len(cut_text_list)} 句")
         
         infer_sovits = self.speakers[spk].sovits
         vq_model = infer_sovits.vq_model
