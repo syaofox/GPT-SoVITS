@@ -1,0 +1,219 @@
+"""
+推理控制器
+负责协调推理模型和视图
+"""
+from pathlib import Path
+from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import QUrl
+
+from gui.models.inference_model import InferenceThread
+
+class InferenceController:
+    """推理控制器类"""
+    
+    def __init__(self, role_model, inference_model, view):
+        """初始化控制器"""
+        self.role_model = role_model
+        self.inference_model = inference_model
+        self.view = view
+        self.current_role = None
+        self.current_emotion = None
+        self.current_config = {}
+        self.inference_thread = None
+        self.is_inferring = False
+        
+        # 连接视图的信号
+        self.connect_signals()
+        
+        # 加载角色列表
+        self.load_roles()
+        
+        # 加载历史记录
+        self.load_history()
+    
+    def connect_signals(self):
+        """连接视图的信号"""
+        # 角色选择信号
+        self.view.role_selected.connect(self.on_role_selected)
+        self.view.emotion_selected.connect(self.on_emotion_selected)
+        
+        # 推理控制信号
+        self.view.infer_start.connect(self.on_infer_start)
+        self.view.infer_stop.connect(self.on_infer_stop)
+        
+        # 历史记录信号
+        self.view.history_selected.connect(self.on_history_selected)
+        self.view.history_clear.connect(self.on_history_clear)
+        self.view.history_refresh.connect(self.load_history)
+        
+        # 辅助参考音频信号
+        self.view.aux_ref_play.connect(self.on_aux_ref_play)
+    
+    def load_roles(self):
+        """加载角色列表"""
+        roles = self.role_model.get_role_list()
+        self.view.update_role_list(roles)
+    
+    def load_history(self):
+        """加载历史记录"""
+        history_items = self.inference_model.get_history_list()
+        self.view.update_history_list(history_items)
+    
+    def on_role_selected(self, role_name):
+        """角色选择事件处理"""
+        self.current_role = role_name
+        self.current_config = self.role_model.get_role_config(role_name)
+        
+        if not self.current_config:
+            self.view.show_message("错误", f"加载角色'{role_name}'配置失败!", QMessageBox.Warning)
+            self.view.set_inference_widgets_enabled(False)
+            return
+        
+        # 更新音色列表
+        emotions = self.current_config.get("emotions", {})
+        self.view.update_emotion_list(emotions.keys())
+        
+        # 设置参数
+        self.view.load_parameters(self.current_config)
+        
+        # 启用控件
+        self.view.set_inference_widgets_enabled(True)
+    
+    def on_emotion_selected(self, emotion_name):
+        """音色选择事件处理"""
+        if not self.current_role or not self.current_config:
+            return
+        
+        self.current_emotion = emotion_name
+        
+        # 获取音色配置
+        emotions = self.current_config.get("emotions", {})
+        emotion_config = emotions.get(emotion_name, {})
+        
+        if not emotion_config:
+            return
+        
+        # 更新参考音频信息
+        ref_audio = emotion_config.get("ref_audio", "")
+        prompt_text = emotion_config.get("prompt_text", "")
+        self.view.load_reference_info(ref_audio, prompt_text)
+        
+        # 更新辅助参考音频列表
+        aux_refs = emotion_config.get("aux_refs", [])
+        self.view.update_aux_ref_list(aux_refs)
+        
+        # 加载参考音频
+        if ref_audio:
+            ref_path = self.role_model.get_ref_audio_path(self.current_role, ref_audio)
+            if ref_path.exists():
+                self.view.set_ref_audio(str(ref_path))
+    
+    def on_aux_ref_play(self, ref_path):
+        """播放辅助参考音频事件处理"""
+        if not self.current_role:
+            return
+        
+        # 构建全路径
+        path = self.role_model.get_role_path(self.current_role) / ref_path
+        if not path.exists() and Path(ref_path).exists():
+            path = Path(ref_path)
+            
+        if path.exists():
+            self.view.set_ref_audio(str(path))
+        else:
+            self.view.show_message("错误", f"音频文件 '{ref_path}' 不存在!", QMessageBox.Warning)
+    
+    def on_infer_start(self, params):
+        """开始推理事件处理"""
+        if self.is_inferring:
+            return
+        
+        if not self.current_role or not self.current_emotion:
+            self.view.show_message("错误", "请先选择角色和音色!", QMessageBox.Warning)
+            return
+        
+        # 准备推理参数
+        infer_params = self.inference_model.prepare_inference_params(
+            self.current_config,
+            self.current_emotion,
+            params["text"],
+            params
+        )
+        
+        if not infer_params:
+            self.view.show_message("错误", "准备推理参数失败!", QMessageBox.Warning)
+            return
+        
+        # 设置状态
+        self.is_inferring = True
+        self.view.set_inferring_state(True)
+        
+        # 创建并启动推理线程
+        self.inference_thread = InferenceThread(
+            self.current_config.get("gpt_path", ""),
+            self.current_config.get("sovits_path", ""),
+            infer_params
+        )
+        
+        # 连接信号
+        self.inference_thread.progress_update.connect(self.on_progress_update)
+        self.inference_thread.inference_complete.connect(self.on_inference_complete)
+        self.inference_thread.inference_error.connect(self.on_inference_error)
+        
+        # 启动线程
+        self.inference_thread.start()
+    
+    def on_infer_stop(self):
+        """停止推理事件处理"""
+        if not self.is_inferring or not self.inference_thread:
+            return
+        
+        # 终止线程
+        self.inference_thread.terminate()
+        self.inference_thread.wait()
+        
+        # 重置状态
+        self.is_inferring = False
+        self.view.set_inferring_state(False)
+        self.view.set_progress(0)
+    
+    def on_progress_update(self, value):
+        """推理进度更新事件处理"""
+        self.view.set_progress(value)
+    
+    def on_inference_complete(self, output_path):
+        """推理完成事件处理"""
+        # 重置状态
+        self.is_inferring = False
+        self.view.set_inferring_state(False)
+        
+        # 设置结果音频
+        self.view.set_result_audio(output_path)
+        
+        # 刷新历史记录
+        self.load_history()
+        
+        # 显示成功消息
+        self.view.show_message("推理完成", f"音频已生成: {output_path}")
+    
+    def on_inference_error(self, error_msg):
+        """推理错误事件处理"""
+        # 重置状态
+        self.is_inferring = False
+        self.view.set_inferring_state(False)
+        self.view.set_progress(0)
+        
+        # 显示错误消息
+        self.view.show_message("推理失败", error_msg, QMessageBox.Critical)
+    
+    def on_history_selected(self, file_path):
+        """历史记录选择事件处理"""
+        self.view.set_result_audio(file_path)
+    
+    def on_history_clear(self):
+        """清空历史记录事件处理"""
+        if self.inference_model.clear_history():
+            self.load_history()
+            self.view.show_message("成功", "历史记录已清空!")
+        else:
+            self.view.show_message("错误", "清空历史记录失败!", QMessageBox.Warning) 
