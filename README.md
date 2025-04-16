@@ -393,3 +393,130 @@ Thankful to @Naozumi520 for providing the Cantonese training set and for the gui
 <a href="https://github.com/RVC-Boss/GPT-SoVITS/graphs/contributors" target="_blank">
   <img src="https://contrib.rocks/image?repo=RVC-Boss/GPT-SoVITS" />
 </a>
+
+# GPT-SoVITS 本地库
+
+这个项目提供了一个本地库，使你能够在自己的Python项目中直接调用GPT-SoVITS进行文本到语音的转换，而不需要通过HTTP API。
+
+## 特性
+
+- 基于GPT-SoVITS的高质量语音合成
+- 支持多种语言（中文、英文、日文、韩文、粤语等）
+- 支持多音字处理（使用`<tone>`标签）
+- 提供简单易用的Python API
+- 支持不同音频格式（WAV、OGG、AAC）
+- 兼容原始项目的所有功能
+
+## 安装
+
+1. 确保你已经安装了[GPT-SoVITS](https://github.com/RVC-Boss/GPT-SoVITS)，并按照官方指南配置好环境
+
+2. 将本项目文件夹`gpt_sovits_lib`复制到你的项目中，或者安装为本地包：
+
+```bash
+pip install -e .
+```
+
+## 基本用法
+
+### 使用库API
+
+```python
+from gpt_sovits_lib import GPTSoVITS, GPTSoVITSConfig
+
+# 创建配置
+config = GPTSoVITSConfig()
+config.sovits_path = "path/to/sovits/model.pth"
+config.gpt_path = "path/to/gpt/model.ckpt"
+
+# 初始化TTS引擎
+tts = GPTSoVITS(config)
+tts.load_models()
+
+# 生成语音
+audio_data = tts.tts(
+    ref_wav_path="path/to/reference.wav",  # 参考音频文件
+    prompt_text="参考音频的文本",           # 参考音频对应的文本
+    prompt_language="zh",                 # 参考音频的语言
+    text="要合成的文本内容",               # 要转换为语音的文本
+    text_language="zh",                   # 文本的语言
+    audio_format="wav"                    # 输出音频格式
+)
+
+# 保存音频
+with open("output.wav", "wb") as f:
+    f.write(audio_data)
+```
+
+### 使用命令行工具
+
+```bash
+python gpt_sovits_example.py --sovits path/to/sovits_model.pth --gpt path/to/gpt_model.ckpt --ref path/to/reference.wav --ref_text "参考音频文本" --ref_lang zh --text "要合成的文本" --text_lang zh --output output.wav
+```
+
+### 启动简化版API服务
+
+```bash
+python gpt_sovits_api_simple.py -s path/to/sovits_model.pth -g path/to/gpt_model.ckpt -dr path/to/reference.wav -dt "参考音频文本" -dl zh
+```
+
+## 高级用法
+
+### 多音字处理
+
+你可以使用`<tone>`标签来指定多音字的读音：
+
+```python
+text = "这是一个<tone as=\"shu4\">数</tone>字。"
+```
+
+### 调整生成参数
+
+```python
+audio_data = tts.tts(
+    # 基本参数
+    ref_wav_path="path/to/reference.wav",
+    prompt_text="参考音频的文本",
+    prompt_language="zh",
+    text="要合成的文本内容",
+    text_language="zh",
+    
+    # 生成参数
+    top_k=15,              # top-k 采样
+    top_p=0.6,             # top-p 采样
+    temperature=0.6,       # 温度控制随机性
+    speed=1.0,             # 语速
+    sample_steps=32,       # 采样步数
+    if_sr=False,           # 是否启用超分辨率
+    pause_second=0.3,      # 停顿时长
+    cut_punc=",.，。",      # 文本分割标点
+    audio_format="wav",    # 输出音频格式
+    bit_depth="int16",     # 音频位深度
+)
+```
+
+## 支持的语言
+
+- `zh` / `中文` - 中文
+- `en` / `英文` - 英文
+- `ja` / `日文` - 日文
+- `ko` / `韩文` - 韩文
+- `yue` / `粤语` - 粤语
+- `all_zh` - 纯中文
+- `all_en` - 纯英文
+- `all_ja` - 纯日文
+- `all_ko` - 纯韩文
+- `all_yue` - 纯粤语
+- `auto` - 自动检测语言
+- `auto_yue` - 自动检测语言(粤语版)
+
+## 注意事项
+
+- 确保模型路径正确，且模型格式兼容
+- 使用GPU可以大幅提高推理速度
+- 参考音频质量对合成结果有显著影响
+- 首次加载模型可能需要较长时间
+
+## 许可证
+
+与原项目保持一致的许可证
