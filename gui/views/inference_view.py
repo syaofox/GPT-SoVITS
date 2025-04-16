@@ -30,6 +30,8 @@ class InferenceView(QWidget):
         super().__init__(parent)
         self.init_ui()
         self.init_player()
+        # 设置最小宽度，使整体界面宽度增加30%
+        self.setMinimumWidth(1200)  # 设置一个合理的宽度值，确保推理文本区域有足够空间
     
     def init_ui(self):
         """初始化用户界面"""
@@ -40,13 +42,13 @@ class InferenceView(QWidget):
         panel1 = QVBoxLayout()
         panel1_widget = QWidget()
         panel1_widget.setLayout(panel1)
-        panel1_widget.setFixedWidth(200)
+        panel1_widget.setFixedWidth(200)  # 恢复原始宽度
         
         # 第2块 - 参考音频、辅助参考音频、合成参数 (固定宽度)
         panel2 = QVBoxLayout()
         panel2_widget = QWidget()
         panel2_widget.setLayout(panel2)
-        panel2_widget.setFixedWidth(250)
+        panel2_widget.setFixedWidth(250)  # 恢复原始宽度
         
         # 第3块 - 待推理文本、开始推理-进度 (自适应宽度)
         panel3 = QVBoxLayout()
@@ -57,7 +59,7 @@ class InferenceView(QWidget):
         panel4 = QVBoxLayout()
         panel4_widget = QWidget()
         panel4_widget.setLayout(panel4)
-        panel4_widget.setFixedWidth(250)
+        panel4_widget.setFixedWidth(250)  # 恢复原始宽度
         
         # === 第1块内容 - 角色选择列表 ===
         
@@ -81,9 +83,8 @@ class InferenceView(QWidget):
         role_layout.addWidget(self.emotion_combo)
         role_group.setLayout(role_layout)
         
-        # 添加所有组件到第1块
-        panel1.addWidget(role_group)
-        panel1.addStretch(1)
+        # 添加所有组件到第1块 - 角色选择列表占满高度
+        panel1.addWidget(role_group, 1)  # 使用权重1让角色选择列表占满高度
         
         # === 第2块内容 - 参考音频、辅助参考音频、合成参数 ===
         
@@ -200,7 +201,7 @@ class InferenceView(QWidget):
         panel2.addWidget(ref_group)
         panel2.addWidget(aux_group)
         panel2.addWidget(params_group)
-        panel2.addStretch(1)
+        panel2.addStretch(1)  # 保持第2块底部的弹性空间
         
         # === 第3块内容 - 待推理文本、开始推理-进度 ===
         
