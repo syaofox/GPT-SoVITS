@@ -225,30 +225,98 @@ class RoleController:
             self.view.show_message("错误", "请先选择一个角色!", QMessageBox.Warning)
             return
         
-        # 获取当前音色配置
-        if self.current_emotion:
-            old_emotions = self.model.current_config.get("emotions", {})
-            config["emotions"] = old_emotions
-            
-            # 更新当前音色配置
-            emotion_config = self.view.get_current_emotion_config()
-            emotion_name = self.view.emotion_name.text()
-            
-            if self.current_emotion != emotion_name:
-                # 音色名改变
-                if self.model.update_emotion(self.current_emotion, emotion_name, emotion_config):
-                    self.current_emotion = emotion_name  # 更新当前音色名
-                    # 更新音色列表
-                    self.view.update_emotion_list(self.model.current_config.get("emotions", {}).keys())
-                else:
-                    # 重置音色名
-                    self.view.emotion_name.setText(self.current_emotion)
-            else:
-                # 更新音色配置
-                self.model.update_emotion(self.current_emotion, emotion_name, emotion_config)
+        # 保留原来的音色配置
+        emotions = self.model.current_config.get("emotions", {})
         
-        # 保存配置
+        # 更新基本参数（从UI表单获取所有设置）
+        for key, value in config.items():
+            if key != "emotions":  # 不覆盖音色列表
+                self.model.current_config[key] = value
+        
+        # 如果当前有选中音色，更新该音色的配置
+        if self.current_emotion:
+            # 获取当前音色的编辑内容
+            emotion_config = self.view.get_current_emotion_config()
+            emotion_name = self.view.emotion_name.text().strip()
+            
+            # 处理参考音频复制
+            ref_audio = emotion_config.get("ref_audio", "")
+            if ref_audio and os.path.isfile(ref_audio) and not ref_audio.startswith(str(self.model.role_dir)):
+                try:
+                    role_path = self.model.get_role_path(self.current_role)
+                    file_name = os.path.basename(ref_audio)
+                    target_path = os.path.join(role_path, file_name)
+                    
+                    # 复制文件
+                    import shutil
+                    shutil.copy2(ref_audio, target_path)
+                    
+                    # 更新配置中的路径为相对路径
+                    emotion_config["ref_audio"] = file_name
+                except Exception as e:
+                    print(f"复制参考音频出错: {str(e)}")
+                    self.view.show_message("错误", f"复制参考音频失败: {str(e)}", QMessageBox.Warning)
+                    return
+            
+            # 处理辅助参考音频复制
+            new_aux_refs = []
+            for aux_ref in emotion_config.get("aux_refs", []):
+                if aux_ref and os.path.isfile(aux_ref) and not aux_ref.startswith(str(self.model.role_dir)):
+                    try:
+                        role_path = self.model.get_role_path(self.current_role)
+                        file_name = os.path.basename(aux_ref)
+                        target_path = os.path.join(role_path, file_name)
+                        
+                        # 复制文件
+                        import shutil
+                        shutil.copy2(aux_ref, target_path)
+                        
+                        # 更新为相对路径
+                        new_aux_refs.append(file_name)
+                    except Exception as e:
+                        print(f"复制辅助参考音频出错: {str(e)}")
+                        continue
+                else:
+                    new_aux_refs.append(aux_ref)
+            emotion_config["aux_refs"] = new_aux_refs
+            
+            # 如果音色名称已改变
+            if self.current_emotion != emotion_name and emotion_name:
+                # 检查新名称是否与其他音色冲突
+                if emotion_name in emotions and emotion_name != self.current_emotion:
+                    reply = QMessageBox.question(
+                        self.view, 
+                        "音色名称冲突", 
+                        f"音色'{emotion_name}'已存在，是否覆盖?",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+                    if reply != QMessageBox.Yes:
+                        # 恢复原名称
+                        self.view.emotion_name.setText(self.current_emotion)
+                        return
+                
+                # 删除旧音色，添加新音色
+                if self.current_emotion in emotions:
+                    del emotions[self.current_emotion]
+                emotions[emotion_name] = emotion_config
+                self.current_emotion = emotion_name  # 更新当前音色名
+            else:
+                # 更新当前音色配置
+                emotions[self.current_emotion] = emotion_config
+        
+        # 更新音色列表
+        self.model.current_config["emotions"] = emotions
+        
+        # 保存配置到文件
         if self.model.save_role_config(self.current_role, self.model.current_config):
+            # 更新音色列表（以防音色名称变更）
+            self.view.update_emotion_list(emotions.keys())
+            # 如果有选中的音色，确保它在列表中被选中
+            if self.current_emotion:
+                items = self.view.emotion_list.findItems(self.current_emotion, Qt.MatchExactly)
+                if items:
+                    self.view.emotion_list.setCurrentItem(items[0])
+                    
             self.view.show_message("成功", "配置保存成功!")
         else:
             self.view.show_message("错误", "配置保存失败!", QMessageBox.Warning) 
