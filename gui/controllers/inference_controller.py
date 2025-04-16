@@ -107,6 +107,8 @@ class InferenceController:
             ref_path = self.role_model.get_ref_audio_path(self.current_role, ref_audio)
             if ref_path.exists():
                 self.view.set_ref_audio(str(ref_path))
+            else:
+                print(f"参考音频文件不存在: {ref_path}")
     
     def on_aux_ref_play(self, ref_path):
         """播放辅助参考音频事件处理"""
@@ -133,15 +135,23 @@ class InferenceController:
             return
         
         # 准备推理参数
-        infer_params = self.inference_model.prepare_inference_params(
-            self.current_config,
-            self.current_emotion,
-            params["text"],
-            params
-        )
-        
-        if not infer_params:
-            self.view.show_message("错误", "准备推理参数失败!", QMessageBox.Warning)
+        try:
+            infer_params, error_msg = self.inference_model.prepare_inference_params(
+                self.current_config,
+                self.current_emotion,
+                params["text"],
+                params
+            )
+            
+            if error_msg:
+                self.view.show_message("参数错误", error_msg, QMessageBox.Warning)
+                return
+                
+            if not infer_params:
+                self.view.show_message("错误", "准备推理参数失败!", QMessageBox.Warning)
+                return
+        except Exception as e:
+            self.view.show_message("错误", f"准备推理参数时发生异常: {str(e)}", QMessageBox.Warning)
             return
         
         # 设置状态
@@ -149,19 +159,24 @@ class InferenceController:
         self.view.set_inferring_state(True)
         
         # 创建并启动推理线程
-        self.inference_thread = InferenceThread(
-            self.current_config.get("gpt_path", ""),
-            self.current_config.get("sovits_path", ""),
-            infer_params
-        )
-        
-        # 连接信号
-        self.inference_thread.progress_update.connect(self.on_progress_update)
-        self.inference_thread.inference_complete.connect(self.on_inference_complete)
-        self.inference_thread.inference_error.connect(self.on_inference_error)
-        
-        # 启动线程
-        self.inference_thread.start()
+        try:
+            self.inference_thread = InferenceThread(
+                self.current_config.get("gpt_path", ""),
+                self.current_config.get("sovits_path", ""),
+                infer_params
+            )
+            
+            # 连接信号
+            self.inference_thread.progress_update.connect(self.on_progress_update)
+            self.inference_thread.inference_complete.connect(self.on_inference_complete)
+            self.inference_thread.inference_error.connect(self.on_inference_error)
+            
+            # 启动线程
+            self.inference_thread.start()
+        except Exception as e:
+            self.is_inferring = False
+            self.view.set_inferring_state(False)
+            self.view.show_message("错误", f"启动推理线程时发生异常: {str(e)}", QMessageBox.Warning)
     
     def on_infer_stop(self):
         """停止推理事件处理"""

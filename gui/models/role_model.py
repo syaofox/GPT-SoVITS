@@ -41,6 +41,8 @@ class RoleModel:
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
+                # 确保config中包含角色名称
+                config["name"] = role_name
                 self.current_role = role_name
                 self.current_config = config
                 return config
@@ -50,6 +52,7 @@ class RoleModel:
         else:
             # 创建新的配置
             config = {
+                "name": role_name,  # 添加角色名称
                 "version": "v3",
                 "emotions": {},
                 "text_lang": "中文",

@@ -303,7 +303,11 @@ class InferenceView(QWidget):
     
     def show_message(self, title, message, icon=QMessageBox.Information):
         """显示消息对话框"""
-        QMessageBox.information(self, title, message, icon)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(icon)
+        msg_box.exec()
     
     def load_reference_info(self, ref_audio, prompt_text):
         """加载参考音频信息"""

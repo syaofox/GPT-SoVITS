@@ -59,13 +59,13 @@ class InferenceModel:
     def prepare_inference_params(self, config, emotion_name, text, user_params=None):
         """准备推理参数"""
         if not config:
-            return None
+            return None, "配置信息为空"
         
         emotions = config.get("emotions", {})
         emotion_config = emotions.get(emotion_name, {})
         
         if not emotion_config:
-            return None
+            return None, "未找到音色配置"
         
         # 基本参数
         params = {
@@ -96,10 +96,36 @@ class InferenceModel:
         
         if ref_audio:
             role_dir = Path("configs/roles")
-            ref_path = role_dir / config.get("name", "") / ref_audio
-            params["ref_wav_path"] = str(ref_path) if ref_path.exists() else None
+            role_name = config.get("name", "")
+            
+            # 确保使用完整的角色名称
+            if not role_name:
+                # 如果name字段为空，尝试从config中获取name
+                for key, value in config.items():
+                    if key not in ["emotions", "version", "text_lang", "prompt_lang", 
+                                  "gpt_path", "sovits_path", "speed", "ref_free", 
+                                  "if_sr", "top_k", "top_p", "temperature", 
+                                  "sample_steps", "pause_second", "description"]:
+                        role_name = key
+                        break
+            
+            ref_path = role_dir / role_name / ref_audio
+            if not ref_path.exists():
+                # 尝试在configs/roles目录下查找正确的角色目录
+                for role_dir_item in role_dir.iterdir():
+                    if role_dir_item.is_dir():
+                        potential_path = role_dir_item / ref_audio
+                        if potential_path.exists():
+                            ref_path = potential_path
+                            break
+                
+                if not ref_path.exists():
+                    return None, f"参考音频文件不存在: {ref_path}"
+            
+            params["ref_wav_path"] = str(ref_path)
         else:
-            params["ref_wav_path"] = None
+            # 必须有参考音频才能推理
+            return None, "未指定参考音频文件"
         
         params["prompt_text"] = prompt_text
         
@@ -118,7 +144,7 @@ class InferenceModel:
         else:
             params["inp_refs"] = None
         
-        return params
+        return params, None
 
 
 class InferenceThread(QThread):
