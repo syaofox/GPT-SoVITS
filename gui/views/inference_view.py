@@ -82,11 +82,11 @@ class InferenceView(QWidget):
         panel3_widget = QWidget()
         panel3_widget.setLayout(panel3)
         
-        # 第4块 - 结果音频、历史结果 (固定宽度)
+        # 第4块 - 历史结果 (固定宽度)
         panel4 = QVBoxLayout()
         panel4_widget = QWidget()
         panel4_widget.setLayout(panel4)
-        panel4_widget.setFixedWidth(250)  # 固定宽度
+        panel4_widget.setFixedWidth(200)  # 减小宽度，只包含历史列表
         
         # === 第1块内容 - 角色选择列表 ===
         
@@ -272,15 +272,13 @@ class InferenceView(QWidget):
         panel3.addWidget(text_group, 1)  # 文本区域占据更多空间
         panel3.addWidget(ctrl_group, 0)  # 控制区域固定高度
         
-        # === 第4块内容 - 结果音频、历史结果 ===
-        
         # 结果音频区域
         result_group = QGroupBox("结果音频")
         result_layout = QVBoxLayout()
         result_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 结果音频波形图
-        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=5000)
+        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=1000)
         self.result_waveform.setMinimumHeight(80)
         self.result_waveform.setFixedHeight(80)  # 设置与参考音频相同的固定高度
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
@@ -302,6 +300,11 @@ class InferenceView(QWidget):
         result_layout.addWidget(self.result_waveform)
         result_layout.addLayout(result_ctrl_layout)
         result_group.setLayout(result_layout)
+        
+        # 将结果音频区域添加到第3块
+        panel3.addWidget(result_group, 0)  # 结果音频区域固定高度
+        
+        # === 第4块内容 - 历史结果 ===
         
         # 历史结果区域
         history_group = QGroupBox("历史结果")
@@ -326,16 +329,8 @@ class InferenceView(QWidget):
         history_layout.addLayout(history_btn_layout)
         history_group.setLayout(history_layout)
         
-        # 创建一个分割器，使历史区域和结果区域可以动态调整比例
-        panel4_splitter = QSplitter(Qt.Vertical)
-        panel4_splitter.addWidget(result_group)
-        panel4_splitter.addWidget(history_group)
-        
-        # 设置初始分割比例
-        panel4_splitter.setSizes([150, 450])  # 结果音频区域较小，历史区域较大
-        
-        # 将分割器添加到第4块
-        panel4.addWidget(panel4_splitter)
+        # 将历史结果添加到第4块
+        panel4.addWidget(history_group, 1)  # 历史结果区域占满高度
         
         # 添加四个面板到主布局
         main_layout.addWidget(panel1_widget)
