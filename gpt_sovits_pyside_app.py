@@ -886,11 +886,14 @@ class InferenceTab(QWidget):
     
     def init_ui(self):
         """初始化用户界面"""
-        # 主布局
+        # 主布局 - 水平三列布局
         main_layout = QHBoxLayout(self)
         
-        # 左侧面板
+        # ===== 左侧面板（固定宽度）=====
         left_panel = QVBoxLayout()
+        left_widget = QWidget()
+        left_widget.setLayout(left_panel)
+        left_widget.setFixedWidth(300)  # 设置固定宽度
         
         # 角色选择区域
         role_group = QGroupBox("角色选择")
@@ -1010,6 +1013,17 @@ class InferenceTab(QWidget):
         params_layout.addRow("选项:", options_layout)
         params_group.setLayout(params_layout)
         
+        # 添加所有组件到左侧面板
+        left_panel.addWidget(role_group)
+        left_panel.addWidget(ref_group)
+        left_panel.addWidget(aux_group)
+        left_panel.addWidget(params_group)
+        
+        # ===== 中间面板（自适应宽度）=====
+        middle_panel = QVBoxLayout()
+        middle_widget = QWidget()
+        middle_widget.setLayout(middle_panel)
+        
         # 推理文本区域
         text_group = QGroupBox("待推理文本")
         text_layout = QVBoxLayout()
@@ -1034,24 +1048,27 @@ class InferenceTab(QWidget):
         ctrl_layout.addWidget(self.infer_btn)
         ctrl_layout.addWidget(self.progress_bar)
         
-        # 添加所有组件到左侧面板
-        left_panel.addWidget(role_group)
-        left_panel.addWidget(ref_group)
-        left_panel.addWidget(aux_group)
-        left_panel.addWidget(params_group)
-        left_panel.addWidget(text_group)
-        left_panel.addLayout(ctrl_layout)
+        # 添加到中间面板
+        middle_panel.addWidget(text_group)
+        middle_panel.addLayout(ctrl_layout)
         
-        # 右侧面板
+        # ===== 右侧面板（固定宽度）=====
         right_panel = QVBoxLayout()
+        right_panel.setSpacing(10)  # 减少组件间距
+        right_widget = QWidget()
+        right_widget.setLayout(right_panel)
+        right_widget.setFixedWidth(300)  # 设置固定宽度
         
         # 结果音频区域
         result_group = QGroupBox("结果音频")
         result_layout = QVBoxLayout()
+        result_layout.setContentsMargins(5, 5, 5, 5)  # 减少内边距
+        result_layout.setSpacing(5)  # 减少内部组件间距
         
         # 结果音频波形图
-        self.result_waveform = WaveformCanvas(self, width=5, height=2, dpi=100)
-        self.result_waveform.setMinimumHeight(120)
+        self.result_waveform = WaveformCanvas(self, width=5, height=1.2, dpi=100)
+        self.result_waveform.setMinimumHeight(80)  # 设置固定高度与参考音频一致
+        self.result_waveform.setMaximumHeight(120)  # 设置最大高度限制
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
         # 播放控制
@@ -1069,10 +1086,12 @@ class InferenceTab(QWidget):
         result_layout.addWidget(self.result_waveform)
         result_layout.addLayout(result_ctrl_layout)
         result_group.setLayout(result_layout)
+        result_group.setMaximumHeight(180)  # 限制结果音频区域的最大高度
         
         # 历史结果区域
         history_group = QGroupBox("历史结果")
         history_layout = QVBoxLayout()
+        history_layout.setContentsMargins(5, 5, 5, 5)  # 减少内边距
         
         self.history_list = QListWidget()
         self.history_list.itemDoubleClicked.connect(self.on_history_item_clicked)
@@ -1090,13 +1109,14 @@ class InferenceTab(QWidget):
         history_layout.addLayout(history_btn_layout)
         history_group.setLayout(history_layout)
         
-        # 添加所有组件到右侧面板
-        right_panel.addWidget(result_group)
-        right_panel.addWidget(history_group)
+        # 添加所有组件到右侧面板，设置伸展因子，让历史结果区域占据更多空间
+        right_panel.addWidget(result_group, 1)  # 结果音频区域占比较小
+        right_panel.addWidget(history_group, 3)  # 历史结果区域占比较大
         
-        # 添加左右面板到主布局
-        main_layout.addLayout(left_panel, 3)
-        main_layout.addLayout(right_panel, 2)
+        # 添加三个面板到主布局
+        main_layout.addWidget(left_widget)
+        main_layout.addWidget(middle_widget, 1)  # 设置伸展因子为1，使中间面板自适应
+        main_layout.addWidget(right_widget)
         
         # 初始化播放器
         self.init_player()
