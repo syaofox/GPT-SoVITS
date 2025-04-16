@@ -131,7 +131,7 @@ class InferenceView(QWidget):
         ref_info_layout.addRow("参考文本:", self.prompt_text)
         
         # 波形图
-        self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100)
+        self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=5000)
         self.ref_waveform.setMinimumHeight(80)
         self.ref_waveform.playback_position_changed.connect(self.on_ref_waveform_clicked)
         
@@ -270,7 +270,7 @@ class InferenceView(QWidget):
         result_layout = QVBoxLayout()
         
         # 结果音频波形图
-        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100)
+        self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=5000)
         self.result_waveform.setMinimumHeight(80)
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
@@ -411,13 +411,17 @@ class InferenceView(QWidget):
         """设置参考音频"""
         if audio_path:
             self.ref_player.setSource(QUrl.fromLocalFile(audio_path))
+            # 对于参考音频，通常较短，可以全部加载
             self.ref_waveform.plot_waveform(audio_path)
     
     def set_result_audio(self, audio_path):
         """设置结果音频"""
         if audio_path:
             self.result_player.setSource(QUrl.fromLocalFile(audio_path))
-            self.result_waveform.plot_waveform(audio_path)
+            # 对于结果音频，可能较长，设置最大显示时长为3分钟
+            # 如果音频低于3分钟则显示全部，超过则只显示前3分钟的波形
+            max_duration = 180  # 3分钟 = 180秒
+            self.result_waveform.plot_waveform(audio_path, max_duration)
             self.last_result_path = audio_path
     
     def get_inference_params(self):

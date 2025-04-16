@@ -1,6 +1,6 @@
 """
 波形图画布组件
-用于显示音频波形
+用于显示音频波形，针对长音频文件进行了性能优化
 """
 import os
 import sys
@@ -23,7 +23,7 @@ class WaveformCanvas(FigureCanvas):
     # 添加自定义信号用于点击跳转
     playback_position_changed = Signal(float)
     
-    def __init__(self, parent=None, width=5, height=2, dpi=100):
+    def __init__(self, parent=None, width=5, height=2, dpi=100, max_points=10000):
         try:
             self.fig = plt.Figure(figsize=(width, height), dpi=dpi)
             self.axes = self.fig.add_subplot(111)
@@ -32,6 +32,9 @@ class WaveformCanvas(FigureCanvas):
             self.axes.set_ylim([-1.1, 1.1])
             self.axes.set_yticks([])
             self.axes.set_xticks([])
+            
+            # 最大显示点数，用于长音频降采样
+            self.max_points = max_points
             
             FigureCanvas.__init__(self, self.fig)
             self.setParent(parent)
@@ -45,6 +48,7 @@ class WaveformCanvas(FigureCanvas):
             self.audio_data = None
             self.audio_sr = None
             self.audio_duration = 0
+            self.audio_path = None
             
             # 添加鼠标点击事件
             self.mpl_connect('button_press_event', self.on_click)
@@ -95,8 +99,53 @@ class WaveformCanvas(FigureCanvas):
         except Exception as e:
             print(f"设置播放位置出错: {str(e)}")
     
-    def plot_waveform(self, audio_path):
-        """绘制波形图"""
+    def downsample_audio(self, audio_data, target_length):
+        """对音频数据进行降采样，减少绘图点数"""
+        if len(audio_data) <= target_length:
+            return audio_data
+        
+        # 计算降采样倍率
+        step = len(audio_data) // target_length
+        
+        # 方法1: 简单抽样（更快但可能丢失峰值）
+        # return audio_data[::step]
+        
+        # 方法2: 使用峰值折叠（保留音频特征，显示包络线）
+        # 将数据分成多个块，每个块取最大值和最小值
+        result = np.zeros(target_length * 2)
+        for i in range(target_length):
+            start = i * step
+            end = min(start + step, len(audio_data))
+            if start < end:
+                block = audio_data[start:end]
+                result[i*2] = np.max(block)
+                result[i*2+1] = np.min(block)
+            else:
+                result[i*2] = 0
+                result[i*2+1] = 0
+        
+        return result
+    
+    def load_audio_efficient(self, audio_path, max_duration=None):
+        """高效加载音频文件，支持限制加载时长"""
+        try:
+            # 对于非常长的音频，可以选择只加载前几分钟
+            if max_duration is not None:
+                # 使用duration参数只加载指定长度的音频
+                audio_data, sr = librosa.load(audio_path, sr=None, duration=max_duration)
+                actual_duration = max_duration
+            else:
+                # 正常加载整个音频
+                audio_data, sr = librosa.load(audio_path, sr=None)
+                actual_duration = len(audio_data) / sr
+            
+            return audio_data, sr, actual_duration
+        except Exception as e:
+            print(f"加载音频失败: {str(e)}")
+            return np.array([]), 44100, 0
+    
+    def plot_waveform(self, audio_path, max_duration=None):
+        """绘制波形图，支持长音频优化"""
         try:
             if not os.path.exists(audio_path):
                 return
@@ -105,6 +154,9 @@ class WaveformCanvas(FigureCanvas):
             if not HAS_LIBROSA:
                 print("缺少librosa库，无法绘制波形图")
                 return
+            
+            # 保存音频路径
+            self.audio_path = audio_path
                 
             # 清除当前图形
             self.axes.clear()
@@ -113,15 +165,29 @@ class WaveformCanvas(FigureCanvas):
             self.axes.set_yticks([])
             self.axes.set_xticks([])
             
-            # 加载音频
-            self.audio_data, self.audio_sr = librosa.load(audio_path, sr=None)
+            # 高效加载音频
+            self.audio_data, self.audio_sr, self.audio_duration = self.load_audio_efficient(
+                audio_path, max_duration
+            )
             
-            # 计算时间轴和音频时长
-            self.audio_duration = len(self.audio_data) / self.audio_sr
-            time = np.arange(0, len(self.audio_data)) / self.audio_sr
+            if len(self.audio_data) == 0:
+                return
+            
+            # 对长音频进行降采样
+            if len(self.audio_data) > self.max_points:
+                # 降采样后的数据
+                display_data = self.downsample_audio(self.audio_data, self.max_points // 2)
+                
+                # 创建对应的时间轴
+                # 由于使用的是峰值折叠方法，时间点数量是音频点的两倍
+                time = np.linspace(0, self.audio_duration, len(display_data))
+            else:
+                # 对于短音频，直接使用原始数据
+                display_data = self.audio_data
+                time = np.arange(0, len(display_data)) / self.audio_sr
             
             # 绘制波形
-            self.axes.plot(time, self.audio_data, color='#00BFFF', linewidth=0.5)
+            self.axes.plot(time, display_data, color='#00BFFF', linewidth=0.5)
             
             # 添加时间轴标签（每隔几秒一个）
             if self.audio_duration > 0:
