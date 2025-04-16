@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QListWidget, 
     QTextEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QProgressBar,
-    QMessageBox, QListWidgetItem, QFileDialog
+    QMessageBox, QListWidgetItem, QFileDialog, QSplitter
 )
 from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
 from PySide6.QtGui import QFont, QTextOption
@@ -86,13 +86,15 @@ class InferenceView(QWidget):
         panel4 = QVBoxLayout()
         panel4_widget = QWidget()
         panel4_widget.setLayout(panel4)
-        panel4_widget.setFixedWidth(250)  # 恢复原始宽度
+        panel4_widget.setFixedWidth(250)  # 固定宽度
         
         # === 第1块内容 - 角色选择列表 ===
         
         # 角色选择区域
         role_group = QGroupBox("角色选择")
         role_layout = QVBoxLayout()
+        role_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
+        role_layout.setSpacing(5)  # 减小间距
         
         # 角色列表
         self.role_list = QListWidget()
@@ -118,9 +120,12 @@ class InferenceView(QWidget):
         # 参考音频区域
         ref_group = QGroupBox("参考音频")
         ref_layout = QVBoxLayout()
+        ref_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 参考音频信息
         ref_info_layout = QFormLayout()
+        ref_info_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
+        ref_info_layout.setSpacing(5)  # 减小间距
         self.ref_audio_label = QLabel("")
         ref_info_layout.addRow("音频:", self.ref_audio_label)
         
@@ -133,6 +138,7 @@ class InferenceView(QWidget):
         # 波形图
         self.ref_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=5000)
         self.ref_waveform.setMinimumHeight(80)
+        self.ref_waveform.setFixedHeight(80)  # 设置固定高度
         self.ref_waveform.playback_position_changed.connect(self.on_ref_waveform_clicked)
         
         # 播放按钮
@@ -145,12 +151,10 @@ class InferenceView(QWidget):
         ref_layout.addWidget(self.ref_play_btn)
         ref_group.setLayout(ref_layout)
         
-        # 保存参考音频区域的高度用于设置结果区域
-        self.ref_height = ref_group.sizeHint().height()
-        
         # 辅助参考音频区域
         aux_group = QGroupBox("辅助参考音频")
         aux_layout = QVBoxLayout()
+        aux_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 辅助参考音频列表
         self.aux_ref_list = QListWidget()
@@ -163,6 +167,8 @@ class InferenceView(QWidget):
         # 参数区域
         params_group = QGroupBox("合成参数")
         params_layout = QFormLayout()
+        params_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
+        params_layout.setSpacing(5)  # 减小间距
         
         # 语速
         self.speed = QDoubleSpinBox()
@@ -235,6 +241,7 @@ class InferenceView(QWidget):
         # 推理文本区域
         text_group = QGroupBox("待推理文本")
         text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 使用自定义的纯文本编辑框替代QTextEdit
         self.input_text = PlainTextEdit()
@@ -247,6 +254,8 @@ class InferenceView(QWidget):
         # 推理控制区域
         ctrl_group = QGroupBox("推理控制")
         ctrl_layout = QHBoxLayout()
+        ctrl_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
+        ctrl_layout.setSpacing(5)  # 减小间距
         
         self.infer_btn = QPushButton("开始推理")
         self.infer_btn.clicked.connect(self.on_infer_clicked)
@@ -268,14 +277,18 @@ class InferenceView(QWidget):
         # 结果音频区域
         result_group = QGroupBox("结果音频")
         result_layout = QVBoxLayout()
+        result_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         # 结果音频波形图
         self.result_waveform = WaveformCanvas(self, width=5, height=1.5, dpi=100, max_points=5000)
         self.result_waveform.setMinimumHeight(80)
+        self.result_waveform.setFixedHeight(80)  # 设置与参考音频相同的固定高度
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
         # 播放控制
         result_ctrl_layout = QHBoxLayout()
+        result_ctrl_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
+        result_ctrl_layout.setSpacing(5)  # 减小间距
         self.result_play_btn = QPushButton("播放")
         self.result_play_btn.clicked.connect(self.on_result_play_clicked)
         
@@ -290,17 +303,17 @@ class InferenceView(QWidget):
         result_layout.addLayout(result_ctrl_layout)
         result_group.setLayout(result_layout)
         
-        # 设置结果音频区域的固定高度，与参考音频区域高度一致
-        result_group.setFixedHeight(self.ref_height)
-        
         # 历史结果区域
         history_group = QGroupBox("历史结果")
         history_layout = QVBoxLayout()
+        history_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
         
         self.history_list = QListWidget()
         self.history_list.itemDoubleClicked.connect(self.on_history_item_double_clicked)
         
         history_btn_layout = QHBoxLayout()
+        history_btn_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
+        history_btn_layout.setSpacing(5)  # 减小间距
         self.refresh_history_btn = QPushButton("刷新")
         self.refresh_history_btn.clicked.connect(self.on_refresh_history_clicked)
         self.clear_history_btn = QPushButton("清空")
@@ -313,9 +326,16 @@ class InferenceView(QWidget):
         history_layout.addLayout(history_btn_layout)
         history_group.setLayout(history_layout)
         
-        # 添加所有组件到第4块
-        panel4.addWidget(result_group)
-        panel4.addWidget(history_group, 1)  # 历史区域可以占据剩余空间
+        # 创建一个分割器，使历史区域和结果区域可以动态调整比例
+        panel4_splitter = QSplitter(Qt.Vertical)
+        panel4_splitter.addWidget(result_group)
+        panel4_splitter.addWidget(history_group)
+        
+        # 设置初始分割比例
+        panel4_splitter.setSizes([150, 450])  # 结果音频区域较小，历史区域较大
+        
+        # 将分割器添加到第4块
+        panel4.addWidget(panel4_splitter)
         
         # 添加四个面板到主布局
         main_layout.addWidget(panel1_widget)

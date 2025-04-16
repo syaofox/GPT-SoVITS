@@ -39,9 +39,10 @@ class WaveformCanvas(FigureCanvas):
             FigureCanvas.__init__(self, self.fig)
             self.setParent(parent)
             
+            # 设置尺寸策略为可扩展，但优先遵循固定高度
             FigureCanvas.setSizePolicy(self,
                                       QSizePolicy.Expanding,
-                                      QSizePolicy.Expanding)
+                                      QSizePolicy.Fixed)
             FigureCanvas.updateGeometry(self)
             
             # 存储音频信息
