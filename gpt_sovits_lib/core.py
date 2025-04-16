@@ -8,6 +8,7 @@ import torch
 import torchaudio
 import numpy as np
 import logging
+import re  # 添加正则表达式模块
 from io import BytesIO
 from time import time as ttime
 
@@ -497,7 +498,7 @@ class GPTSoVITS:
                 if inp_refs:
                     for path in inp_refs:
                         try:
-                            refer = self.get_spepc(hps, path).to(dtype).to(self.device)
+                            refer = self.get_spepc(path).to(dtype).to(self.device)
                             refers.append(refer)
                         except Exception as e:
                             logger.error(e)
