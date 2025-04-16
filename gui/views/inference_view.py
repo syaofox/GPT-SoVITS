@@ -9,9 +9,36 @@ from PySide6.QtWidgets import (
     QMessageBox, QListWidgetItem, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
+from PySide6.QtGui import QFont, QTextOption
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from gui.views.common.waveform_canvas import WaveformCanvas
+
+# 添加自定义的纯文本编辑框类
+class PlainTextEdit(QTextEdit):
+    """纯文本编辑框，禁用富文本功能并自动换行"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 设置为纯文本模式
+        self.setAcceptRichText(False)
+        # 设置自动换行模式
+        self.setLineWrapMode(QTextEdit.WidgetWidth)
+        # 设置字体
+        self.setFont(QFont("SimSun", 10))
+        # 设置样式，禁用横向滚动条
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # 设置文档默认格式，启用自动换行
+        text_option = QTextOption()
+        text_option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        self.document().setDefaultTextOption(text_option)
+    
+    def insertFromMimeData(self, source):
+        """重写此方法以确保粘贴的是纯文本"""
+        if source.hasText():
+            # 只插入纯文本内容
+            self.insertPlainText(source.text())
+        # 不调用父类方法，避免富文本格式插入
 
 class InferenceView(QWidget):
     """推理视图类"""
@@ -209,7 +236,8 @@ class InferenceView(QWidget):
         text_group = QGroupBox("待推理文本")
         text_layout = QVBoxLayout()
         
-        self.input_text = QTextEdit()
+        # 使用自定义的纯文本编辑框替代QTextEdit
+        self.input_text = PlainTextEdit()
         self.input_text.setPlaceholderText("请在此输入需要转换为语音的文本...")
         
         # 添加到布局
