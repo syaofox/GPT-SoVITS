@@ -32,9 +32,11 @@ class MainWindow(QMainWindow):
         self.init_components()
         
         # 添加标签页
-        self.tabs.addTab(self.role_view, "角色配置")
         self.tabs.addTab(self.inference_view, "音频推理")
         self.tabs.addTab(self.word_replace_view, "词语替换")
+        self.tabs.addTab(self.role_view, "角色配置")
+        
+        
         
         self.setCentralWidget(self.tabs)
     
