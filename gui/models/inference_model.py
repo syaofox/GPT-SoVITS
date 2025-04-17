@@ -150,7 +150,7 @@ class InferenceModel:
 class InferenceThread(QThread):
     """推理线程类"""
     
-    progress_update = Signal(int)
+    progress_update = Signal(tuple)
     inference_complete = Signal(str)
     inference_error = Signal(str)
     
@@ -160,11 +160,33 @@ class InferenceThread(QThread):
         self.sovits_path = sovits_path
         self.params = params
     
+    def hook_progress(self, current_index, total_segments):
+        """处理段落进度回调
+        
+        Args:
+            current_index: 当前处理的段落索引 (从0开始)
+            total_segments: 总段落数
+        """
+        if total_segments <= 0:
+            return
+        
+        # 计算进度百分比 (40%~80%的范围，因为前40%用于加载模型，最后20%用于保存音频)
+        progress_percent = 40 + int((current_index / total_segments) * 40)
+        
+        # 构建段落信息字典
+        segment_info = {
+            'current_segment': current_index,
+            'total_segments': total_segments
+        }
+        
+        # 发出带有段落信息的进度更新信号
+        self.progress_update.emit((progress_percent, segment_info))
+    
     def run(self):
         """运行推理"""
         try:
             # 模拟进度更新
-            self.progress_update.emit(10)
+            self.progress_update.emit((10, {}))
             
             # 导入GPTSoVITS
             from gpt_sovits_lib import GPTSoVITS, GPTSoVITSConfig
@@ -174,19 +196,19 @@ class InferenceThread(QThread):
             config.gpt_path = self.gpt_path
             config.sovits_path = self.sovits_path
             
-            self.progress_update.emit(20)
+            self.progress_update.emit((20, {}))
             
             gpt_sovits = GPTSoVITS(config)
             gpt_sovits.load_models()
             
-            self.progress_update.emit(30)
+            self.progress_update.emit((30, {}))
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             text_prefix = self.params["text"][:10].replace(' ', '_').replace('\n', '')
             output_path = Path("output") / f"{text_prefix}_{timestamp}.wav"
             
-            self.progress_update.emit(40)
+            self.progress_update.emit((40, {}))
             
             # 执行推理
             tts_params = self.params.copy()
@@ -211,15 +233,16 @@ class InferenceThread(QThread):
                 cut_punc=tts_params.get("cut_punc"),
                 audio_format=tts_params.get("audio_format"),
                 bit_depth=tts_params.get("bit_depth"),
+                progress_callback=self.hook_progress  # 添加进度回调
             )
             
-            self.progress_update.emit(80)
+            self.progress_update.emit((80, {}))
             
             # 保存音频字节流到WAV文件
             with open(str(output_path), 'wb') as f:
                 f.write(result_audio_bytes)
             
-            self.progress_update.emit(100)
+            self.progress_update.emit((100, {}))
             
             # 发送完成信号
             self.inference_complete.emit(str(output_path))

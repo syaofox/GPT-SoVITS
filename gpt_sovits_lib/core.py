@@ -489,6 +489,7 @@ class GPTSoVITS:
         cut_punc=",.。！？.!?",
         audio_format="wav",
         bit_depth="int16",
+        progress_callback=None,
     ):
         """文本转语音"""
         logger.info("===== TTS 推理开始 =====")
@@ -605,6 +606,10 @@ class GPTSoVITS:
         for i, text in enumerate(texts):
             logger.info(f"处理第 {i+1}/{len(texts)} 段文本: '{text}'")
             seg_start_time = ttime()
+            
+            # 调用进度回调函数
+            if progress_callback:
+                progress_callback(i, len(texts))
             
             if text == "<br>" or text == "<bt>":
                 # 根据不同标记设置不同的停顿时长

@@ -195,6 +195,9 @@ class InferenceController:
         self.is_inferring = True
         self.view.set_inferring_state(True)
         
+        # 重置进度条
+        self.view.set_progress(0)
+        
         # 创建并启动推理线程
         try:
             self.inference_thread = InferenceThread(
@@ -229,15 +232,27 @@ class InferenceController:
         self.view.set_inferring_state(False)
         self.view.set_progress(0)
     
-    def on_progress_update(self, value):
-        """推理进度更新事件处理"""
-        self.view.set_progress(value)
+    def on_progress_update(self, progress_data):
+        """推理进度更新事件处理
+        
+        Args:
+            progress_data: 包含进度值和段落信息的元组(progress_value, segment_info)
+        """
+        if isinstance(progress_data, tuple) and len(progress_data) == 2:
+            progress_value, segment_info = progress_data
+            self.view.set_progress(progress_value, segment_info)
+        else:
+            # 兼容处理旧版本的进度更新信号
+            self.view.set_progress(progress_data)
     
     def on_inference_complete(self, output_path):
         """推理完成事件处理"""
         # 重置状态
         self.is_inferring = False
         self.view.set_inferring_state(False)
+        
+        # 重置进度条并显示100%
+        self.view.set_progress(100)
         
         # 设置结果音频
         self.view.set_result_audio(output_path)

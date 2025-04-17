@@ -482,9 +482,24 @@ class InferenceView(QWidget):
         }
         return params
     
-    def set_progress(self, value):
-        """设置进度条值"""
+    def set_progress(self, value, segment_info=None):
+        """设置进度条值
+        
+        Args:
+            value: 进度值（0-100）
+            segment_info: 段落信息字典，包含 current_segment 和 total_segments
+        """
         self.progress_bar.setValue(value)
+        
+        # 如果提供了段落信息，更新进度条格式
+        if segment_info and 'current_segment' in segment_info and 'total_segments' in segment_info:
+            current = segment_info['current_segment'] + 1  # 转为从1开始计数
+            total = segment_info['total_segments']
+            # 设置进度条格式文本
+            self.progress_bar.setFormat(f"{value}% (第{current}/{total}段)")
+        else:
+            # 恢复默认格式
+            self.progress_bar.setFormat("%p%")
     
     def set_inferring_state(self, is_inferring):
         """设置推理状态"""
