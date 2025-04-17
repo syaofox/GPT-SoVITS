@@ -6,10 +6,13 @@ from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from gui.models.role_model import RoleModel
 from gui.models.inference_model import InferenceModel
+from gui.models.word_replace_model import WordReplaceModel
 from gui.views.role_view import RoleConfigView
 from gui.views.inference_view import InferenceView
+from gui.views.word_replace_view import WordReplaceView
 from gui.controllers.role_controller import RoleController
 from gui.controllers.inference_controller import InferenceController
+from gui.controllers.word_replace_controller import WordReplaceController
 
 class MainWindow(QMainWindow):
     """主窗口类"""
@@ -31,6 +34,7 @@ class MainWindow(QMainWindow):
         # 添加标签页
         self.tabs.addTab(self.role_view, "角色配置")
         self.tabs.addTab(self.inference_view, "音频推理")
+        self.tabs.addTab(self.word_replace_view, "词语替换")
         
         self.setCentralWidget(self.tabs)
     
@@ -39,10 +43,12 @@ class MainWindow(QMainWindow):
         # 创建模型
         self.role_model = RoleModel()
         self.inference_model = InferenceModel()
+        self.word_replace_model = WordReplaceModel()
         
         # 创建视图
         self.role_view = RoleConfigView()
         self.inference_view = InferenceView()
+        self.word_replace_view = WordReplaceView()
         
         # 创建控制器
         self.role_controller = RoleController(self.role_model, self.role_view)
@@ -50,4 +56,8 @@ class MainWindow(QMainWindow):
             self.role_model, 
             self.inference_model, 
             self.inference_view
+        )
+        self.word_replace_controller = WordReplaceController(
+            self.word_replace_model,
+            self.word_replace_view
         ) 
