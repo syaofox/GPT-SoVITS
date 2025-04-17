@@ -56,7 +56,8 @@ class MainWindow(QMainWindow):
         self.role_controller = RoleController(self.role_model, self.role_view)
         self.inference_controller = InferenceController(
             self.role_model, 
-            self.inference_model, 
+            self.inference_model,
+            self.word_replace_model,
             self.inference_view
         )
         self.word_replace_controller = WordReplaceController(

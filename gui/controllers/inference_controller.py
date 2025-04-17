@@ -2,25 +2,42 @@
 推理控制器
 负责协调推理模型和视图
 """
+import os
+import logging
 from pathlib import Path
+from datetime import datetime
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtCore import QUrl
 
 from gui.models.inference_model import InferenceThread
 
+# 配置logger
+logger = logging.getLogger("word_replace")
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('[%(asctime)s] %(message)s')
+
+# 添加控制台处理器
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
 class InferenceController:
     """推理控制器类"""
     
-    def __init__(self, role_model, inference_model, view):
+    def __init__(self, role_model, inference_model, word_replace_model, view):
         """初始化控制器"""
         self.role_model = role_model
         self.inference_model = inference_model
+        self.word_replace_model = word_replace_model  # 添加词语替换模型
         self.view = view
         self.current_role = None
         self.current_emotion = None
         self.current_config = {}
         self.inference_thread = None
         self.is_inferring = False
+        
+        # 创建日志目录
+        os.makedirs("logs", exist_ok=True)
         
         # 连接视图的信号
         self.connect_signals()
@@ -171,6 +188,17 @@ class InferenceController:
             self.view.show_message("错误", "请先选择角色和音色!", QMessageBox.Warning)
             return
         
+        # 应用词语替换
+        original_text = params["text"]
+        replaced_text = self.word_replace_model.clean_text(original_text)
+        
+        # 记录替换日志
+        has_change = original_text != replaced_text
+        self._log_word_replace(original_text, replaced_text, has_change)
+        
+        # 使用替换后的文本
+        params["text"] = replaced_text
+        
         # 准备推理参数
         try:
             infer_params, error_msg = self.inference_model.prepare_inference_params(
@@ -283,4 +311,33 @@ class InferenceController:
             self.load_history()
             self.view.show_message("成功", "历史记录已清空!")
         else:
-            self.view.show_message("错误", "清空历史记录失败!", QMessageBox.Warning) 
+            self.view.show_message("错误", "清空历史记录失败!", QMessageBox.Warning)
+    
+    def _log_word_replace(self, original_text, replaced_text, has_change):
+        """记录词语替换日志"""
+        status = "有替换" if has_change else "无替换"
+        
+        # 记录基本信息
+        logger.info(f"词语替换 - {status}")
+        logger.info(f"原文本: {original_text}")
+        
+        if has_change:
+            logger.info(f"替换后: {replaced_text}")
+            
+            # 查找并记录哪些词被替换了
+            replace_dict = self.word_replace_model.get_replace_dict()
+            found_replacements = []
+            
+            for src, dst in replace_dict.items():
+                import re
+                # 创建不区分大小写的模式
+                pattern = ''.join(['[' + c.upper() + c.lower() + ']' if c.isascii() and c.isalpha() else re.escape(c) for c in src])
+                if re.search(pattern, original_text):
+                    found_replacements.append(f"{src} → {dst}")
+            
+            if found_replacements:
+                logger.info("替换详情:")
+                for repl in found_replacements:
+                    logger.info(f"- {repl}")
+                    
+        logger.info("-" * 50) 
