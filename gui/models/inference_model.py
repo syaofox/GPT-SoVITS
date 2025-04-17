@@ -170,8 +170,8 @@ class InferenceThread(QThread):
         if total_segments <= 0:
             return
         
-        # 计算进度百分比 (40%~80%的范围，因为前40%用于加载模型，最后20%用于保存音频)
-        progress_percent = 40 + int((current_index / total_segments) * 40)
+        # 计算进度百分比 (5%~95%的范围，因为前5%用于加载模型，最后5%用于保存音频)
+        progress_percent = 5 + int((current_index / total_segments) * 90)
         
         # 构建段落信息字典
         segment_info = {
@@ -185,8 +185,8 @@ class InferenceThread(QThread):
     def run(self):
         """运行推理"""
         try:
-            # 模拟进度更新
-            self.progress_update.emit((10, {}))
+            # 模拟进度更新 - 加载模型阶段
+            self.progress_update.emit((1, {}))
             
             # 导入GPTSoVITS
             from gpt_sovits_lib import GPTSoVITS, GPTSoVITSConfig
@@ -196,19 +196,19 @@ class InferenceThread(QThread):
             config.gpt_path = self.gpt_path
             config.sovits_path = self.sovits_path
             
-            self.progress_update.emit((20, {}))
+            self.progress_update.emit((2, {}))
             
             gpt_sovits = GPTSoVITS(config)
             gpt_sovits.load_models()
             
-            self.progress_update.emit((30, {}))
+            self.progress_update.emit((4, {}))
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             text_prefix = self.params["text"][:10].replace(' ', '_').replace('\n', '')
             output_path = Path("output") / f"{text_prefix}_{timestamp}.wav"
             
-            self.progress_update.emit((40, {}))
+            self.progress_update.emit((5, {}))
             
             # 执行推理
             tts_params = self.params.copy()
@@ -236,7 +236,7 @@ class InferenceThread(QThread):
                 progress_callback=self.hook_progress  # 添加进度回调
             )
             
-            self.progress_update.emit((80, {}))
+            self.progress_update.emit((95, {}))
             
             # 保存音频字节流到WAV文件
             with open(str(output_path), 'wb') as f:
