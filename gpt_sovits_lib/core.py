@@ -29,6 +29,7 @@ from .utils import (
     cut_text  # 添加这个函数
 )
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # 设置环境变量
 os.environ["no_proxy"] = "localhost, 127.0.0.1, ::1"  # 设置直连地址
