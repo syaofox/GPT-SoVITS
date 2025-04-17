@@ -273,30 +273,7 @@ class InferenceView(QWidget):
         self.input_text = PlainTextEdit()
         self.input_text.setPlaceholderText("请在此输入需要转换为语音的文本...")
         
-        # 添加到布局
-        text_layout.addWidget(self.input_text)
-        text_group.setLayout(text_layout)
         
-        # 推理控制区域
-        ctrl_group = QGroupBox("推理控制")
-        ctrl_layout = QHBoxLayout()
-        ctrl_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
-        ctrl_layout.setSpacing(5)  # 减小间距
-        
-        self.infer_btn = QPushButton("开始推理")
-        self.infer_btn.clicked.connect(self.on_infer_clicked)
-        
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-        
-        ctrl_layout.addWidget(self.infer_btn)
-        ctrl_layout.addWidget(self.progress_bar)
-        ctrl_group.setLayout(ctrl_layout)
-        
-        # 添加所有组件到第3块
-        panel3.addWidget(text_group, 1)  # 文本区域占据更多空间
-        panel3.addWidget(ctrl_group, 0)  # 控制区域固定高度
         
         # 结果音频区域
         result_group = QGroupBox("结果音频")
@@ -329,6 +306,32 @@ class InferenceView(QWidget):
         
         # 将结果音频区域添加到第3块
         panel3.addWidget(result_group, 0)  # 结果音频区域固定高度
+
+
+        # 添加到布局
+        text_layout.addWidget(self.input_text)
+        text_group.setLayout(text_layout)
+        
+        # 推理控制区域
+        ctrl_group = QGroupBox("推理控制")
+        ctrl_layout = QHBoxLayout()
+        ctrl_layout.setContentsMargins(5, 5, 5, 5)  # 减小内边距
+        ctrl_layout.setSpacing(5)  # 减小间距
+        
+        self.infer_btn = QPushButton("开始推理")
+        self.infer_btn.clicked.connect(self.on_infer_clicked)
+        
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        
+        ctrl_layout.addWidget(self.infer_btn)
+        ctrl_layout.addWidget(self.progress_bar)
+        ctrl_group.setLayout(ctrl_layout)
+        
+        # 添加所有组件到第3块
+        panel3.addWidget(text_group, 1)  # 文本区域占据更多空间
+        panel3.addWidget(ctrl_group, 0)  # 控制区域固定高度
         
         # === 第4块内容 - 历史结果 ===
         
