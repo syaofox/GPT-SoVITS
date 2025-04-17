@@ -109,6 +109,9 @@ class InferenceModel:
                         role_name = key
                         break
             
+            # 设置角色名称作为说话人参数
+            params["spk"] = role_name
+            
             ref_path = role_dir / role_name / ref_audio
             if not ref_path.exists():
                 # 尝试在configs/roles目录下查找正确的角色目录
@@ -198,8 +201,15 @@ class InferenceThread(QThread):
             
             self.progress_update.emit((2, {}))
             
+            # 执行推理
+            tts_params = self.params.copy()
+            if "spk" in tts_params:
+                if tts_params["spk"] is None:
+                    tts_params["spk"] = "default"
+            
+            # 创建GPTSoVITS实例并加载模型，传入说话人名称
             gpt_sovits = GPTSoVITS(config)
-            gpt_sovits.load_models()
+            gpt_sovits.load_models(speaker_name=tts_params.get("spk", "default"))
             
             self.progress_update.emit((4, {}))
             
@@ -211,11 +221,6 @@ class InferenceThread(QThread):
             self.progress_update.emit((5, {}))
             
             # 执行推理
-            tts_params = self.params.copy()
-            if "spk" in tts_params:
-                if tts_params["spk"] is None:
-                    tts_params["spk"] = "default"
-            
             result_audio_bytes = gpt_sovits.tts(
                 ref_wav_path=tts_params.get("ref_wav_path"),
                 prompt_text=tts_params.get("prompt_text"),
@@ -233,6 +238,7 @@ class InferenceThread(QThread):
                 cut_punc=tts_params.get("cut_punc"),
                 audio_format=tts_params.get("audio_format"),
                 bit_depth=tts_params.get("bit_depth"),
+                spk=tts_params.get("spk", "default"),
                 progress_callback=self.hook_progress  # 添加进度回调
             )
             
