@@ -1,1 +1,2 @@
+pysrt
 PySide6>=6.5.0
