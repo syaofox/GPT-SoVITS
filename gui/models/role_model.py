@@ -14,6 +14,7 @@ class RoleModel:
         """初始化角色模型"""
         self.role_dir = Path("configs/roles")
         self.del_role_dir = Path("configs/del_roles")
+        self.model_dir = Path("models/GPT_SoVITS/pretrained_models")  # 添加模型目录
         self.current_role = None
         self.current_config = {}
         
@@ -33,6 +34,45 @@ class RoleModel:
                 if role_path.is_dir():
                     role_list.append(role_path.name)
         return role_list
+    
+    def scan_model_dir(self):
+        """扫描模型目录获取所有可用角色"""
+        role_list = []
+        
+        # 确保模型目录存在
+        if not self.model_dir.exists() or not self.model_dir.is_dir():
+            return role_list
+            
+        # 获取所有子目录，每个子目录代表一个角色
+        for role_path in self.model_dir.iterdir():
+            if role_path.is_dir():
+                # 检查必要的模型文件是否存在
+                required_files = ["kmeans.bin", "model.ckpt"]
+                if all(os.path.exists(role_path / f) for f in required_files):
+                    role_list.append(role_path.name)
+        
+        return sorted(role_list)  # 返回按字母排序的角色列表
+    
+    def sync_roles_with_models(self):
+        """同步模型目录和角色配置目录"""
+        # 从模型目录获取角色列表
+        model_roles = self.scan_model_dir()
+        # 从配置目录获取角色列表
+        config_roles = self.get_role_list()
+        
+        # 创建不存在的角色配置
+        new_roles = []
+        for role in model_roles:
+            if role not in config_roles:
+                # 为此角色创建配置
+                if self.create_role(role):
+                    new_roles.append(role)
+        
+        # 返回所有角色和新创建的角色
+        return {
+            "all_roles": sorted(self.get_role_list()),
+            "new_roles": new_roles
+        }
     
     def get_role_config(self, role_name):
         """获取角色配置"""

@@ -52,6 +52,7 @@ class InferenceView(QWidget):
     history_clear = Signal()  # 清空历史信号
     history_refresh = Signal()  # 刷新历史信号
     aux_ref_play = Signal(str)  # 播放辅助参考音频信号
+    role_refresh = Signal()  # 刷新角色列表信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -122,6 +123,10 @@ class InferenceView(QWidget):
         self.role_list.setMinimumWidth(150)
         self.role_list.currentItemChanged.connect(self.on_role_selection_changed)
         
+        # 添加角色刷新按钮
+        self.refresh_role_btn = QPushButton("刷新角色")
+        self.refresh_role_btn.clicked.connect(self.on_refresh_role_clicked)
+        
         # 音色列表
         emotion_label = QLabel("音色选择:")
         self.emotion_combo = QComboBox()
@@ -129,6 +134,7 @@ class InferenceView(QWidget):
         
         # 添加到布局
         role_layout.addWidget(self.role_list)
+        role_layout.addWidget(self.refresh_role_btn)  # 添加刷新角色按钮
         role_layout.addWidget(emotion_label)
         role_layout.addWidget(self.emotion_combo)
         role_group.setLayout(role_layout)
@@ -610,4 +616,8 @@ class InferenceView(QWidget):
             
             # 获取参数
             params = self.get_inference_params()
-            self.infer_start.emit(params) 
+            self.infer_start.emit(params)
+    
+    def on_refresh_role_clicked(self):
+        """刷新角色按钮点击事件"""
+        self.role_refresh.emit() 

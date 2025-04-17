@@ -36,6 +36,7 @@ class InferenceController:
         # 角色选择信号
         self.view.role_selected.connect(self.on_role_selected)
         self.view.emotion_selected.connect(self.on_emotion_selected)
+        self.view.role_refresh.connect(self.refresh_roles)  # 连接角色刷新信号
         
         # 推理控制信号
         self.view.infer_start.connect(self.on_infer_start)
@@ -53,6 +54,42 @@ class InferenceController:
         """加载角色列表"""
         roles = self.role_model.get_role_list()
         self.view.update_role_list(roles)
+    
+    def refresh_roles(self):
+        """刷新角色列表，从模型目录扫描角色"""
+        # 显示加载状态
+        self.view.role_list.setEnabled(False)
+        self.view.refresh_role_btn.setEnabled(False)
+        self.view.refresh_role_btn.setText("刷新中...")
+        
+        try:
+            # 同步模型目录和角色配置
+            result = self.role_model.sync_roles_with_models()
+            
+            # 更新视图中的角色列表
+            self.view.update_role_list(result["all_roles"])
+            
+            # 如果存在新角色，显示提示信息
+            if result["new_roles"]:
+                new_roles_str = ", ".join(result["new_roles"])
+                self.view.show_message(
+                    "刷新成功", 
+                    f"角色列表已刷新，发现{len(result['new_roles'])}个新角色: {new_roles_str}"
+                )
+            else:
+                self.view.show_message("刷新成功", "角色列表已刷新，未发现新角色")
+                
+            # 如果当前没有选中角色且列表不为空，则选择第一个
+            if self.view.role_list.currentRow() < 0 and self.view.role_list.count() > 0:
+                self.view.role_list.setCurrentRow(0)
+        except Exception as e:
+            # 显示错误消息
+            self.view.show_message("刷新失败", f"角色列表刷新失败: {str(e)}", QMessageBox.Warning)
+        finally:
+            # 恢复按钮状态
+            self.view.role_list.setEnabled(True)
+            self.view.refresh_role_btn.setEnabled(True)
+            self.view.refresh_role_btn.setText("刷新角色")
     
     def load_history(self):
         """加载历史记录"""
