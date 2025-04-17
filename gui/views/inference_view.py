@@ -159,7 +159,7 @@ class InferenceView(QWidget):
         # 参考文本
         self.prompt_text = QTextEdit()
         self.prompt_text.setReadOnly(True)
-        self.prompt_text.setMaximumHeight(60)
+        self.prompt_text.setMaximumHeight(100)
         ref_info_layout.addRow("参考文本:", self.prompt_text)
         
         # 波形图
