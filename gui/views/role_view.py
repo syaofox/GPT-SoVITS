@@ -40,10 +40,16 @@ class RoleConfigView(QWidget):
         """初始化用户界面"""
         # 主布局
         main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(5)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
         # 左侧角色列表区域
         role_group = QGroupBox("角色列表")
+        # 设置GroupBox的样式，减小内边距
+        role_group.setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; }")
         role_layout = QVBoxLayout()
+        role_layout.setSpacing(5)
+        role_layout.setContentsMargins(5, 5, 5, 5)
         
         # 角色列表控件
         self.role_list = QListWidget()
@@ -73,33 +79,50 @@ class RoleConfigView(QWidget):
         
         # 右侧配置区域
         config_layout = QVBoxLayout()
+        # 设置右侧布局的间距更小，使界面更紧凑
+        config_layout.setSpacing(5)
+        config_layout.setContentsMargins(5, 5, 5, 5)
         
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout(scroll_widget)
+        # 减小滚动区域内布局的间距
+        scroll_layout.setSpacing(5)
+        scroll_layout.setContentsMargins(5, 5, 5, 5)
         
         # 基本配置
         basic_group = QGroupBox("基本配置")
+        # 设置GroupBox的样式，减小内边距
+        basic_group.setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; }")
         basic_form = QFormLayout()
+        # 减小表单布局的间距
+        basic_form.setSpacing(5)
+        basic_form.setContentsMargins(5, 5, 5, 5)
         
         # 模型选择
         self.gpt_path = QComboBox()
         self.gpt_path.setEditable(True)
+        # 使用更小的浏览按钮
         self.gpt_path_browse = QPushButton("浏览")
+        self.gpt_path_browse.setMaximumWidth(50)  # 设置最大宽度
         self.gpt_path_browse.clicked.connect(self.on_browse_gpt_model)
         gpt_layout = QHBoxLayout()
-        gpt_layout.addWidget(self.gpt_path)
-        gpt_layout.addWidget(self.gpt_path_browse)
+        gpt_layout.setSpacing(3)  # 减小水平布局间距
+        gpt_layout.addWidget(self.gpt_path, 4)  # 设置比例为4
+        gpt_layout.addWidget(self.gpt_path_browse, 1)  # 设置比例为1
         
         self.sovits_path = QComboBox()
         self.sovits_path.setEditable(True)
+        # 使用更小的浏览按钮
         self.sovits_path_browse = QPushButton("浏览")
+        self.sovits_path_browse.setMaximumWidth(50)  # 设置最大宽度
         self.sovits_path_browse.clicked.connect(self.on_browse_sovits_model)
         sovits_layout = QHBoxLayout()
-        sovits_layout.addWidget(self.sovits_path)
-        sovits_layout.addWidget(self.sovits_path_browse)
+        sovits_layout.setSpacing(3)  # 减小水平布局间距
+        sovits_layout.addWidget(self.sovits_path, 4)  # 设置比例为4
+        sovits_layout.addWidget(self.sovits_path_browse, 1)  # 设置比例为1
         
         # 语言选择
         self.text_lang = QComboBox()
@@ -117,73 +140,112 @@ class RoleConfigView(QWidget):
         
         # 参考音频配置
         ref_group = QGroupBox("参考音频配置")
+        # 设置GroupBox的样式，减小内边距
+        ref_group.setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; }")
         ref_layout = QVBoxLayout()
+        # 减小布局的间距
+        ref_layout.setSpacing(5)
+        ref_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 创建水平布局，左侧音色列表，右侧按钮
+        emotion_header = QHBoxLayout()
+        emotion_header.setSpacing(3)
         
         # 音色列表
         self.emotion_list = QListWidget()
+        self.emotion_list.setMaximumHeight(100)  # 限制高度
         self.emotion_list.currentItemChanged.connect(self.on_emotion_selection_changed)
         
-        # 音色操作按钮
-        emotion_btn_layout = QHBoxLayout()
+        # 音色操作按钮 - 垂直排列
+        emotion_btn_layout = QVBoxLayout()
+        emotion_btn_layout.setSpacing(3)
         self.add_emotion_btn = QPushButton("添加音色")
+        self.add_emotion_btn.setMaximumWidth(80)
         self.del_emotion_btn = QPushButton("删除音色")
+        self.del_emotion_btn.setMaximumWidth(80)
         self.add_emotion_btn.clicked.connect(self.on_add_emotion_clicked)
         self.del_emotion_btn.clicked.connect(self.on_del_emotion_clicked)
         
         emotion_btn_layout.addWidget(self.add_emotion_btn)
         emotion_btn_layout.addWidget(self.del_emotion_btn)
+        emotion_btn_layout.addStretch()
+        
+        emotion_header.addWidget(self.emotion_list, 3)
+        emotion_header.addLayout(emotion_btn_layout, 1)
+        
+        ref_layout.addLayout(emotion_header)
         
         # 音色编辑区
         emotion_edit_group = QGroupBox("音色编辑")
+        # 设置GroupBox的样式，减小内边距
+        emotion_edit_group.setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; }")
         emotion_edit_form = QFormLayout()
+        # 减小表单布局的间距
+        emotion_edit_form.setSpacing(5)
+        emotion_edit_form.setContentsMargins(5, 5, 5, 5)
         
         self.emotion_name = QLineEdit()
         
         self.ref_audio = QComboBox()
         self.ref_audio.setEditable(True)
+        # 使用更小的浏览按钮
         self.ref_audio_browse = QPushButton("浏览")
+        self.ref_audio_browse.setMaximumWidth(50)  # 设置最大宽度
         self.ref_audio_browse.clicked.connect(self.on_browse_ref_audio)
         ref_audio_layout = QHBoxLayout()
-        ref_audio_layout.addWidget(self.ref_audio)
-        ref_audio_layout.addWidget(self.ref_audio_browse)
+        ref_audio_layout.setSpacing(3)  # 减小水平布局间距
+        ref_audio_layout.addWidget(self.ref_audio, 4)  # 设置比例为4
+        ref_audio_layout.addWidget(self.ref_audio_browse, 1)  # 设置比例为1
         
         self.prompt_text = QTextEdit()
-        self.prompt_text.setMaximumHeight(80)
+        self.prompt_text.setMaximumHeight(60)
         
         emotion_edit_form.addRow("音色名称:", self.emotion_name)
         emotion_edit_form.addRow("参考音频:", ref_audio_layout)
         emotion_edit_form.addRow("参考文本:", self.prompt_text)
         emotion_edit_group.setLayout(emotion_edit_form)
         
-        # 辅助参考音频列表
-        aux_group = QGroupBox("辅助参考音频")
-        aux_layout = QVBoxLayout()
+        # 辅助参考音频列表 - 合并到水平布局中
+        aux_header = QHBoxLayout()
+        aux_header.setSpacing(3)
         
         self.aux_ref_list = QListWidget()
+        self.aux_ref_list.setMaximumHeight(80)  # 限制高度
         
-        aux_btn_layout = QHBoxLayout()
+        # 辅助音频按钮 - 垂直排列
+        aux_btn_layout = QVBoxLayout()
+        aux_btn_layout.setSpacing(3)
         self.add_aux_btn = QPushButton("添加")
+        self.add_aux_btn.setMaximumWidth(80)
         self.del_aux_btn = QPushButton("删除")
+        self.del_aux_btn.setMaximumWidth(80)
         self.add_aux_btn.clicked.connect(self.on_add_aux_ref_clicked)
         self.del_aux_btn.clicked.connect(self.on_del_aux_ref_clicked)
         
         aux_btn_layout.addWidget(self.add_aux_btn)
         aux_btn_layout.addWidget(self.del_aux_btn)
+        aux_btn_layout.addStretch()
         
-        aux_layout.addWidget(self.aux_ref_list)
-        aux_layout.addLayout(aux_btn_layout)
-        aux_group.setLayout(aux_layout)
+        aux_header.addWidget(self.aux_ref_list, 3)
+        aux_header.addLayout(aux_btn_layout, 1)
         
-        # 组合音色编辑区域
-        ref_layout.addWidget(self.emotion_list)
-        ref_layout.addLayout(emotion_btn_layout)
         ref_layout.addWidget(emotion_edit_group)
-        ref_layout.addWidget(aux_group)
+        ref_layout.addWidget(QLabel("辅助参考音频:"))
+        ref_layout.addLayout(aux_header)
         ref_group.setLayout(ref_layout)
         
         # 参数配置
         params_group = QGroupBox("参数配置")
+        # 设置GroupBox的样式，减小内边距
+        params_group.setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; }")
         params_form = QFormLayout()
+        # 减小参数配置表单的间距
+        params_form.setSpacing(5)
+        params_form.setContentsMargins(5, 5, 5, 5)
+        
+        # 将多个控件组合在同一行
+        speed_container = QHBoxLayout()
+        speed_container.setSpacing(3)
         
         self.speed = QDoubleSpinBox()
         self.speed.setRange(0.1, 5.0)
@@ -191,43 +253,90 @@ class RoleConfigView(QWidget):
         self.speed.setValue(1.0)
         
         self.ref_free = QCheckBox("无参考推理")
-        
         self.if_sr = QCheckBox("使用超分辨率")
+        
+        speed_container.addWidget(self.speed)
+        speed_container.addWidget(self.ref_free)
+        speed_container.addWidget(self.if_sr)
+        speed_container.addStretch()
+        
+        # 将采样参数组合在同一行
+        sampling_container = QHBoxLayout()
+        sampling_container.setSpacing(10)
+        
+        top_k_container = QHBoxLayout()
+        top_k_container.setSpacing(3)
+        top_k_container.addWidget(QLabel("Top K:"))
         
         self.top_k = QSpinBox()
         self.top_k.setRange(1, 100)
         self.top_k.setValue(15)
+        
+        top_k_container.addWidget(self.top_k)
+        
+        top_p_container = QHBoxLayout()
+        top_p_container.setSpacing(3)
+        top_p_container.addWidget(QLabel("Top P:"))
         
         self.top_p = QDoubleSpinBox()
         self.top_p.setRange(0.1, 1.0)
         self.top_p.setSingleStep(0.05)
         self.top_p.setValue(1.0)
         
+        top_p_container.addWidget(self.top_p)
+        
+        temp_container = QHBoxLayout()
+        temp_container.setSpacing(3)
+        temp_container.addWidget(QLabel("Temperature:"))
+        
         self.temperature = QDoubleSpinBox()
         self.temperature.setRange(0.1, 1.0)
         self.temperature.setSingleStep(0.05)
         self.temperature.setValue(1.0)
         
+        temp_container.addWidget(self.temperature)
+        
+        sampling_container.addLayout(top_k_container)
+        sampling_container.addLayout(top_p_container)
+        sampling_container.addLayout(temp_container)
+        sampling_container.addStretch()
+        
+        # 将步数和停顿组合在同一行
+        steps_container = QHBoxLayout()
+        steps_container.setSpacing(10)
+        
+        sample_steps_container = QHBoxLayout()
+        sample_steps_container.setSpacing(3)
+        sample_steps_container.addWidget(QLabel("采样步数:"))
+        
         self.sample_steps = QSpinBox()
         self.sample_steps.setRange(1, 100)
         self.sample_steps.setValue(32)
+        
+        sample_steps_container.addWidget(self.sample_steps)
+        
+        pause_container = QHBoxLayout()
+        pause_container.setSpacing(3)
+        pause_container.addWidget(QLabel("停顿时长:"))
         
         self.pause_second = QDoubleSpinBox()
         self.pause_second.setRange(0.1, 2.0)
         self.pause_second.setSingleStep(0.1)
         self.pause_second.setValue(0.3)
         
-        self.description = QTextEdit()
-        self.description.setMaximumHeight(80)
+        pause_container.addWidget(self.pause_second)
         
-        params_form.addRow("语速:", self.speed)
-        params_form.addRow("", self.ref_free)
-        params_form.addRow("", self.if_sr)
-        params_form.addRow("Top K:", self.top_k)
-        params_form.addRow("Top P:", self.top_p)
-        params_form.addRow("Temperature:", self.temperature)
-        params_form.addRow("采样步数:", self.sample_steps)
-        params_form.addRow("停顿时长:", self.pause_second)
+        steps_container.addLayout(sample_steps_container)
+        steps_container.addLayout(pause_container)
+        steps_container.addStretch()
+        
+        self.description = QTextEdit()
+        self.description.setMaximumHeight(60)
+        
+        # 添加到表单布局
+        params_form.addRow("语速:", speed_container)
+        params_form.addRow("采样参数:", sampling_container)
+        params_form.addRow("步数设置:", steps_container)
         params_form.addRow("角色描述:", self.description)
         params_group.setLayout(params_form)
         
@@ -235,7 +344,6 @@ class RoleConfigView(QWidget):
         self.save_btn = QPushButton("保存配置")
         self.save_btn.clicked.connect(self.on_save_config_clicked)
         
-        # 添加所有组件到滚动区域
         scroll_layout.addWidget(basic_group)
         scroll_layout.addWidget(ref_group)
         scroll_layout.addWidget(params_group)
@@ -266,6 +374,11 @@ class RoleConfigView(QWidget):
         self.disable_wheel_event(self.text_lang)
         self.disable_wheel_event(self.prompt_lang)
         self.disable_wheel_event(self.ref_audio)
+        
+        # 减小列表控件的行高
+        self.role_list.setStyleSheet("QListWidget::item { height: 18px; }")
+        self.emotion_list.setStyleSheet("QListWidget::item { height: 18px; }")
+        self.aux_ref_list.setStyleSheet("QListWidget::item { height: 18px; }")
     
     def set_config_widgets_enabled(self, enabled):
         """启用或禁用配置控件"""
