@@ -216,7 +216,7 @@ class InferenceThread(QThread):
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            text_prefix = self.params["text"][:10].strip().replace(' ', '_').replace('\n', '')
+            text_prefix = self.params["text"][:10].strip().replace(' ', '_').replace('\n', '').replace(':', '_')
             # 获取说话人和音色信息
             speaker_name = tts_params.get("spk", "default")
             emotion_name = tts_params.get("emotion_name", "default")
