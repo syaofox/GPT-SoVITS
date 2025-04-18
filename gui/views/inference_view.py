@@ -33,13 +33,30 @@ class PlainTextEdit(QTextEdit):
         text_option = QTextOption()
         text_option.setWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
         self.document().setDefaultTextOption(text_option)
+        # 禁用文本阴影效果
+        self.setStyleSheet("QTextEdit { background-color: white; color: black; }")
     
     def insertFromMimeData(self, source):
         """重写此方法以确保粘贴的是纯文本"""
         if source.hasText():
+            # 清除缓冲区中可能存在的任何残留文本格式
+            self.document().clear()
             # 只插入纯文本内容
             self.insertPlainText(source.text())
         # 不调用父类方法，避免富文本格式插入
+    
+    def keyPressEvent(self, event):
+        """重写按键事件，确保文本输入正确渲染"""
+        # 使用原生文本输入处理
+        super().keyPressEvent(event)
+        # 如果需要额外的处理，可以在这里添加
+        
+    def paintEvent(self, event):
+        """重写绘制事件，确保渲染清晰无残影"""
+        # 先清除当前视图
+        self.viewport().update()
+        # 调用父类方法进行正常绘制
+        super().paintEvent(event)
 
 class InferenceView(QWidget):
     """推理视图类"""
@@ -324,6 +341,15 @@ class InferenceView(QWidget):
         # 使用自定义的纯文本编辑框替代QTextEdit
         self.input_text = PlainTextEdit()
         self.input_text.setPlaceholderText("请在此输入需要转换为语音的文本...")
+        # 优化文本编辑性能设置
+        self.input_text.setUndoRedoEnabled(True)
+        self.input_text.setCursorWidth(2)  # 增加光标宽度提高可见性
+        self.input_text.setTabChangesFocus(True)  # Tab键切换焦点而非插入制表符
+        # 设置文本提示和自动调整大小
+        self.input_text.setMinimumHeight(100)
+        # 禁用复杂的文本渲染特性，减少残影
+        self.input_text.document().setDocumentMargin(6)
+        self.input_text.setAutoFormatting(QTextEdit.AutoNone)
         
         
         
