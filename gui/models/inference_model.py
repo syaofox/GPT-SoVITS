@@ -83,6 +83,7 @@ class InferenceModel:
             "cut_punc": "。！？.!?",
             "audio_format": "wav",
             "bit_depth": "int16",
+            "emotion_name": emotion_name,
         }
         
         # 覆盖用户自定义参数
@@ -215,8 +216,12 @@ class InferenceThread(QThread):
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            text_prefix = self.params["text"][:10].replace(' ', '_').replace('\n', '')
-            output_path = Path("output") / f"{text_prefix}_{timestamp}.wav"
+            text_prefix = self.params["text"][:10].strip().replace(' ', '_').replace('\n', '')
+            # 获取说话人和音色信息
+            speaker_name = tts_params.get("spk", "default")
+            emotion_name = tts_params.get("emotion_name", "default")
+            # 使用新的命名格式：说话人_音色_时间戳_截断的文本
+            output_path = Path("output") / f"{speaker_name}_{emotion_name}_{timestamp}_{text_prefix}.wav"
             
             self.progress_update.emit((5, {}))
             

@@ -103,7 +103,7 @@ class InferenceView(QWidget):
         panel4 = QVBoxLayout()
         panel4_widget = QWidget()
         panel4_widget.setLayout(panel4)
-        panel4_widget.setFixedWidth(200)  # 减小宽度，只包含历史列表
+        panel4_widget.setFixedWidth(300)  # 减小宽度，只包含历史列表
         
         # 设置第4块在垂直方向上的大小策略为自适应
         size_policy = panel4_widget.sizePolicy()
