@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
 from PySide6.QtGui import QFont, QTextOption
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices, QAudioDevice
 
 from gui.views.common.waveform_canvas import WaveformCanvas
 
@@ -260,6 +260,35 @@ class InferenceView(QWidget):
         aux_layout.addWidget(self.aux_ref_list)
         aux_group.setLayout(aux_layout)
         
+        # 音频设备设置
+        audio_device_group = QGroupBox("音频设备")
+        audio_device_layout = QFormLayout()
+        audio_device_layout.setContentsMargins(5, 5, 5, 5)
+        audio_device_layout.setSpacing(5)
+        
+        # 音频设备选择下拉框
+        self.audio_device_combo = QComboBox()
+        self.audio_device_combo.currentIndexChanged.connect(self.on_audio_device_changed)
+        
+        # 添加刷新按钮
+        refresh_device_layout = QHBoxLayout()
+        refresh_device_layout.addWidget(self.audio_device_combo, 1)  # 1表示可伸缩
+        
+        self.refresh_device_btn = QPushButton("刷新")
+        self.refresh_device_btn.clicked.connect(self.on_refresh_audio_devices)
+        refresh_device_layout.addWidget(self.refresh_device_btn)
+        
+        # 音量控制放在设备选择下方
+        self.global_volume_slider = QSlider(Qt.Horizontal)
+        self.global_volume_slider.setRange(0, 150)  # 扩大音量范围到150%
+        self.global_volume_slider.setValue(100)
+        self.global_volume_slider.valueChanged.connect(self.on_global_volume_changed)
+        
+        # 添加到布局
+        audio_device_layout.addRow("输出设备:", refresh_device_layout)
+        audio_device_layout.addRow("主音量:", self.global_volume_slider)
+        audio_device_group.setLayout(audio_device_layout)
+        
         # 参数区域
         params_group = QGroupBox("合成参数")
         params_layout = QFormLayout()
@@ -329,6 +358,7 @@ class InferenceView(QWidget):
         # 添加所有组件到第2块
         panel2.addWidget(ref_group, 0)  # 参考音频区域固定高度
         panel2.addWidget(aux_group, 1)  # 辅助参考音频区域自适应填充
+        panel2.addWidget(audio_device_group, 0)  # 音频设备设置固定大小
         panel2.addWidget(params_group, 0)  # 参数区域固定高度
         
         # === 第3块内容 - 待推理文本、开始推理-进度 ===
@@ -486,6 +516,9 @@ class InferenceView(QWidget):
         self.result_player.positionChanged.connect(self.on_result_position_changed)
         # 设置默认音量为80%
         self.result_audio_output.setVolume(0.8)
+        
+        # 初始化音频设备列表
+        self.refresh_audio_devices()
     
     def set_inference_widgets_enabled(self, enabled):
         """启用或禁用推理控件"""
@@ -495,7 +528,9 @@ class InferenceView(QWidget):
             self.sample_steps, self.pause_second, self.cut_punc,
             self.ref_free, self.if_sr, self.input_text, self.infer_btn,
             self.result_play_btn, self.result_save_btn,
-            self.ref_volume_slider, self.result_volume_slider  # 添加音量滑块
+            self.ref_volume_slider, self.result_volume_slider,
+            self.audio_device_combo, self.refresh_device_btn,  # 添加音频设备相关控件
+            self.global_volume_slider  # 添加全局音量滑块
         ]:
             widget.setEnabled(enabled)
     
@@ -741,7 +776,68 @@ class InferenceView(QWidget):
     def on_ref_volume_changed(self, value):
         """参考音频音量改变事件"""
         self.ref_audio_output.setVolume(value / 100.0)
+        # 更新全局音量滑块（如果不是由全局音量改变触发的）
+        if self.global_volume_slider.value() != value:
+            self.global_volume_slider.setValue(value)
     
     def on_result_volume_changed(self, value):
         """结果音频音量改变事件"""
-        self.result_audio_output.setVolume(value / 100.0) 
+        self.result_audio_output.setVolume(value / 100.0)
+        # 更新全局音量滑块（如果不是由全局音量改变触发的）
+        if self.global_volume_slider.value() != value:
+            self.global_volume_slider.setValue(value)
+    
+    def refresh_audio_devices(self):
+        """刷新音频设备列表"""
+        self.audio_device_combo.clear()
+        
+        # 获取所有可用的音频输出设备
+        output_devices = QMediaDevices.audioOutputs()
+        
+        # 添加设备到下拉框
+        for device in output_devices:
+            self.audio_device_combo.addItem(device.description(), device)
+        
+        # 添加默认设备选项
+        self.audio_device_combo.insertItem(0, "默认系统设备", None)
+        self.audio_device_combo.setCurrentIndex(0)  # 默认选择系统默认设备
+    
+    def on_refresh_audio_devices(self):
+        """刷新音频设备按钮点击事件"""
+        self.refresh_audio_devices()
+        self.show_message("提示", "已刷新音频设备列表")
+    
+    def on_audio_device_changed(self, index):
+        """音频设备选择改变事件"""
+        if index >= 0:
+            device = self.audio_device_combo.currentData()
+            self.set_audio_device(device)
+            
+            # # 如果选择了具体设备，显示提示
+            # if device:
+            #     self.show_message("设备切换", f"已切换到: {self.audio_device_combo.currentText()}")
+    
+    def set_audio_device(self, device):
+        """设置音频设备"""
+        if device:
+            # 设置两个播放器的音频设备
+            self.ref_audio_output.setDevice(device)
+            self.result_audio_output.setDevice(device)
+        else:
+            # 使用系统默认设备
+            default_device = QMediaDevices.defaultAudioOutput()
+            self.ref_audio_output.setDevice(default_device)
+            self.result_audio_output.setDevice(default_device)
+    
+    def on_global_volume_changed(self, value):
+        """全局音量改变事件"""
+        # 将0-150的值转换为0-1.5的浮点数，允许放大音量到150%
+        volume = value / 100.0
+        
+        # 设置两个播放器的音量
+        self.ref_audio_output.setVolume(volume)
+        self.result_audio_output.setVolume(volume)
+        
+        # 同步更新两个音量滑块
+        self.ref_volume_slider.setValue(value)
+        self.result_volume_slider.setValue(value) 
