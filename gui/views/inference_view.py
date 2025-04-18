@@ -215,7 +215,7 @@ class InferenceView(QWidget):
         # 音量控制标签和滑块
         volume_label = QLabel("音量:")
         self.ref_volume_slider = QSlider(Qt.Horizontal)
-        self.ref_volume_slider.setRange(0, 200)
+        self.ref_volume_slider.setRange(0, 100)
         self.ref_volume_slider.setValue(100)  
         self.ref_volume_slider.valueChanged.connect(self.on_ref_volume_changed)
         
@@ -356,7 +356,7 @@ class InferenceView(QWidget):
         # 音量控制标签和滑块
         volume_label = QLabel("音量:")
         self.result_volume_slider = QSlider(Qt.Horizontal)
-        self.result_volume_slider.setRange(0, 200)
+        self.result_volume_slider.setRange(0, 100)
         self.result_volume_slider.setValue(100) 
         self.result_volume_slider.valueChanged.connect(self.on_result_volume_changed)
         
