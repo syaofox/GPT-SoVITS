@@ -3,6 +3,7 @@
 负责处理语音合成的业务逻辑
 """
 import os
+import re
 from pathlib import Path
 from datetime import datetime
 from PySide6.QtCore import QThread, Signal
@@ -186,6 +187,27 @@ class InferenceThread(QThread):
         # 发出带有段落信息的进度更新信号
         self.progress_update.emit((progress_percent, segment_info))
     
+    def sanitize_filename(self, filename):
+        """清理文件名，移除所有非法字符
+        
+        Args:
+            filename: 原始文件名
+            
+        Returns:
+            清理后的合法文件名
+        """
+        # 替换Windows文件系统中的非法字符: \ / : * ? " < > |
+        # 以及其他可能导致问题的字符
+        illegal_chars = r'[\\/*?:"<>|]'
+        # 使用正则表达式替换所有非法字符为下划线
+        sanitized = re.sub(illegal_chars, '_', filename)
+        # 移除前导和尾随空格，并确保不为空
+        sanitized = sanitized.strip()
+        if not sanitized:
+            sanitized = "output"
+        # 确保文件名不超过255个字符(保守起见使用较小值)
+        return sanitized[:50]
+    
     def run(self):
         """运行推理"""
         try:
@@ -216,10 +238,12 @@ class InferenceThread(QThread):
             
             # 生成输出文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            text_prefix = self.params["text"][:10].strip().replace(' ', '_').replace('\n', '').replace(':', '_')
-            # 获取说话人和音色信息
-            speaker_name = tts_params.get("spk", "default")
-            emotion_name = tts_params.get("emotion_name", "default")
+            # 处理文本前缀，确保不含非法字符
+            raw_text_prefix = self.params["text"][:10].strip().replace(' ', '_').replace('\n', '_')
+            text_prefix = self.sanitize_filename(raw_text_prefix)
+            # 获取说话人和音色信息，确保它们也不含非法字符
+            speaker_name = self.sanitize_filename(tts_params.get("spk", "default"))
+            emotion_name = self.sanitize_filename(tts_params.get("emotion_name", "default"))
             # 使用新的命名格式：说话人_音色_时间戳_截断的文本
             output_path = Path("output") / f"{speaker_name}_{emotion_name}_{timestamp}_{text_prefix}.wav"
             
