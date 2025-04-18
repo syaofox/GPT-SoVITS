@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout,
     QLabel, QLineEdit, QComboBox, QPushButton, QListWidget, 
     QTextEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QProgressBar,
-    QMessageBox, QListWidgetItem, QFileDialog, QSplitter, QSizePolicy
+    QMessageBox, QListWidgetItem, QFileDialog, QSplitter, QSizePolicy,
+    QSlider
 )
 from PySide6.QtCore import Qt, Signal, Slot, QUrl, QEvent
 from PySide6.QtGui import QFont, QTextOption
@@ -63,6 +64,39 @@ class InferenceView(QWidget):
     
     def init_ui(self):
         """初始化用户界面"""
+        # 设置扁平化按钮样式
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #c0c0c0;
+                border-radius: 3px;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: #e0e0e0;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #4a86e8;
+                border: none;
+                width: 14px;
+                height: 14px;
+                margin: -4px 0;
+                border-radius: 7px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #4a86e8;
+                border-radius: 3px;
+            }
+        """)
+        
         # 主布局 - 四栏水平布局
         main_layout = QHBoxLayout(self)
         
@@ -168,14 +202,32 @@ class InferenceView(QWidget):
         self.ref_waveform.setFixedHeight(80)  # 设置固定高度
         self.ref_waveform.playback_position_changed.connect(self.on_ref_waveform_clicked)
         
+        # 播放控制和音量滑块放在同一行
+        control_layout = QHBoxLayout()
+        control_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
+        control_layout.setSpacing(10)  # 控件之间的间距
+        
         # 播放按钮
         self.ref_play_btn = QPushButton("播放")
         self.ref_play_btn.clicked.connect(self.on_ref_play_clicked)
+        self.ref_play_btn.setMinimumWidth(60)  # 设置最小宽度
+        
+        # 音量控制标签和滑块
+        volume_label = QLabel("音量:")
+        self.ref_volume_slider = QSlider(Qt.Horizontal)
+        self.ref_volume_slider.setRange(0, 200)
+        self.ref_volume_slider.setValue(100)  
+        self.ref_volume_slider.valueChanged.connect(self.on_ref_volume_changed)
+        
+        # 添加到水平布局
+        control_layout.addWidget(self.ref_play_btn)
+        control_layout.addWidget(volume_label)
+        control_layout.addWidget(self.ref_volume_slider, 1)  # 音量滑块占据剩余空间
         
         # 添加到布局
         ref_layout.addLayout(ref_info_layout)
         ref_layout.addWidget(self.ref_waveform)
-        ref_layout.addWidget(self.ref_play_btn)
+        ref_layout.addLayout(control_layout)  # 使用新的控制布局
         ref_group.setLayout(ref_layout)
         
         # 辅助参考音频区域
@@ -286,22 +338,37 @@ class InferenceView(QWidget):
         self.result_waveform.setFixedHeight(80)  # 设置与参考音频相同的固定高度
         self.result_waveform.playback_position_changed.connect(self.on_result_waveform_clicked)
         
-        # 播放控制
-        result_ctrl_layout = QHBoxLayout()
-        result_ctrl_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
-        result_ctrl_layout.setSpacing(5)  # 减小间距
+        # 播放控制和音量滑块放在同一行
+        control_layout = QHBoxLayout()
+        control_layout.setContentsMargins(0, 0, 0, 0)  # 减小内边距
+        control_layout.setSpacing(10)  # 控件之间的间距
+        
+        # 播放按钮
         self.result_play_btn = QPushButton("播放")
         self.result_play_btn.clicked.connect(self.on_result_play_clicked)
+        self.result_play_btn.setMinimumWidth(60)  # 设置最小宽度
         
+        # 保存按钮
         self.result_save_btn = QPushButton("另存为")
         self.result_save_btn.clicked.connect(self.on_result_save_clicked)
+        self.result_save_btn.setMinimumWidth(60)  # 设置最小宽度
         
-        result_ctrl_layout.addWidget(self.result_play_btn)
-        result_ctrl_layout.addWidget(self.result_save_btn)
+        # 音量控制标签和滑块
+        volume_label = QLabel("音量:")
+        self.result_volume_slider = QSlider(Qt.Horizontal)
+        self.result_volume_slider.setRange(0, 200)
+        self.result_volume_slider.setValue(100) 
+        self.result_volume_slider.valueChanged.connect(self.on_result_volume_changed)
+        
+        # 添加到水平布局
+        control_layout.addWidget(self.result_play_btn)
+        control_layout.addWidget(self.result_save_btn)
+        control_layout.addWidget(volume_label)
+        control_layout.addWidget(self.result_volume_slider, 1)  # 音量滑块占据剩余空间
         
         # 添加到布局
         result_layout.addWidget(self.result_waveform)
-        result_layout.addLayout(result_ctrl_layout)
+        result_layout.addLayout(control_layout)  # 使用新的控制布局
         result_group.setLayout(result_layout)
         
         # 将结果音频区域添加到第3块
@@ -382,6 +449,8 @@ class InferenceView(QWidget):
         self.ref_player.setAudioOutput(self.ref_audio_output)
         self.ref_player.playbackStateChanged.connect(self.on_ref_playback_state_changed)
         self.ref_player.positionChanged.connect(self.on_ref_position_changed)
+        # 设置默认音量为80%
+        self.ref_audio_output.setVolume(0.8)
         
         # 结果音频播放器
         self.result_player = QMediaPlayer()
@@ -389,6 +458,8 @@ class InferenceView(QWidget):
         self.result_player.setAudioOutput(self.result_audio_output)
         self.result_player.playbackStateChanged.connect(self.on_result_playback_state_changed)
         self.result_player.positionChanged.connect(self.on_result_position_changed)
+        # 设置默认音量为80%
+        self.result_audio_output.setVolume(0.8)
     
     def set_inference_widgets_enabled(self, enabled):
         """启用或禁用推理控件"""
@@ -397,7 +468,8 @@ class InferenceView(QWidget):
             self.speed, self.top_k, self.top_p, self.temperature,
             self.sample_steps, self.pause_second, self.cut_punc,
             self.ref_free, self.if_sr, self.input_text, self.infer_btn,
-            self.result_play_btn, self.result_save_btn
+            self.result_play_btn, self.result_save_btn,
+            self.ref_volume_slider, self.result_volume_slider  # 添加音量滑块
         ]:
             widget.setEnabled(enabled)
     
@@ -638,4 +710,12 @@ class InferenceView(QWidget):
     
     def on_refresh_role_clicked(self):
         """刷新角色按钮点击事件"""
-        self.role_refresh.emit() 
+        self.role_refresh.emit()
+    
+    def on_ref_volume_changed(self, value):
+        """参考音频音量改变事件"""
+        self.ref_audio_output.setVolume(value / 100.0)
+    
+    def on_result_volume_changed(self, value):
+        """结果音频音量改变事件"""
+        self.result_audio_output.setVolume(value / 100.0) 
