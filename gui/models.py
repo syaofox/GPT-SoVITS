@@ -151,6 +151,25 @@ class InferenceModel:
         self.output_dir.mkdir(exist_ok=True)
         self.inference_engine: Optional[GPTSoVITSInference] = None
         self.history: List[Dict] = []
+        self.current_gpt_path: str = ""
+        self.current_sovits_path: str = ""
+    
+    def reset_engine(self):
+        """重置推理引擎"""
+        if self.inference_engine is not None:
+            del self.inference_engine
+            self.inference_engine = None
+            self.current_gpt_path = ""
+            self.current_sovits_path = ""
+            # 强制垃圾回收以释放GPU内存
+            import gc
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except:
+                pass
     
     def initialize_engine(
         self, 
@@ -171,13 +190,23 @@ class InferenceModel:
         返回:
             初始化是否成功
         """
+        # 如果模型路径变化，需要重置引擎
+        if (self.inference_engine is not None and 
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
+            self.reset_engine()
+            
         try:
-            self.inference_engine = GPTSoVITSInference(
-                gpt_path=gpt_path,
-                sovits_path=sovits_path,
-                device=device,
-                half=half
-            )
+            if self.inference_engine is None:
+                import torch
+                self.inference_engine = GPTSoVITSInference(
+                    gpt_path=gpt_path,
+                    sovits_path=sovits_path,
+                    device=device,
+                    half=half
+                )
+                # 保存当前使用的模型路径
+                self.current_gpt_path = gpt_path
+                self.current_sovits_path = sovits_path
             return True
         except Exception as e:
             print(f"初始化推理引擎失败: {str(e)}")
@@ -193,15 +222,21 @@ class InferenceModel:
         返回:
             (是否成功, 输出文件路径)
         """
-        if not self.inference_engine:
-            gpt_path = config.get("gpt_path")
-            sovits_path = config.get("sovits_path")
-            if not gpt_path or not sovits_path:
-                return False, "未指定模型路径"
+        gpt_path = config.get("gpt_path")
+        sovits_path = config.get("sovits_path")
+        
+        if not gpt_path or not sovits_path:
+            return False, "未指定模型路径"
+        
+        # 检查模型路径是否变化
+        if (self.inference_engine is not None and 
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
+            self.reset_engine()
                 
-            success = self.initialize_engine(gpt_path, sovits_path)
-            if not success:
-                return False, "初始化推理引擎失败"
+        # 初始化或重新初始化推理引擎
+        success = self.initialize_engine(gpt_path, sovits_path)
+        if not success:
+            return False, "初始化推理引擎失败"
         
         try:
             # 生成语音
