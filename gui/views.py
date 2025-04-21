@@ -5,6 +5,7 @@ GUI视图层
 """
 
 import os
+import glob
 from pathlib import Path
 from typing import Dict, List, Optional
 from PySide6.QtCore import Qt, Signal, Slot, Property, QUrl
@@ -171,6 +172,10 @@ class ExperimentTab(QWidget):
         self.role_controller = role_controller
         self.inference_controller = inference_controller
         
+        # 模型路径字典
+        self.gpt_model_paths = {}
+        self.sovits_model_paths = {}
+        
         # 初始化
         self.init_ui()
         self.connect_signals()
@@ -227,22 +232,12 @@ class ExperimentTab(QWidget):
         synth_layout.addWidget(self.cut_method_combo, 3, 1, 1, 2)
         
         synth_layout.addWidget(QLabel("GPT模型:"), 4, 0)
-        self.gpt_path_edit = QLineEdit()
-        self.gpt_path_edit.setReadOnly(True)
-        synth_layout.addWidget(self.gpt_path_edit, 4, 1)
-        
-        self.gpt_browse_button = QPushButton("浏览...")
-        self.gpt_browse_button.clicked.connect(self.browse_gpt_model)
-        synth_layout.addWidget(self.gpt_browse_button, 4, 2)
+        self.gpt_model_combo = QComboBox()
+        synth_layout.addWidget(self.gpt_model_combo, 4, 1, 1, 2)
         
         synth_layout.addWidget(QLabel("SoVITS模型:"), 5, 0)
-        self.sovits_path_edit = QLineEdit()
-        self.sovits_path_edit.setReadOnly(True)
-        synth_layout.addWidget(self.sovits_path_edit, 5, 1)
-        
-        self.sovits_browse_button = QPushButton("浏览...")
-        self.sovits_browse_button.clicked.connect(self.browse_sovits_model)
-        synth_layout.addWidget(self.sovits_browse_button, 5, 2)
+        self.sovits_model_combo = QComboBox()
+        synth_layout.addWidget(self.sovits_model_combo, 5, 1, 1, 2)
         
         left_layout.addWidget(synth_group)
         
@@ -368,25 +363,40 @@ class ExperimentTab(QWidget):
         )
         if file_path:
             self.ref_path_edit.setText(file_path)
+            
+            # 提取文件名作为参考文本（去除路径和扩展名）
+            file_name = os.path.basename(file_path)
+            file_name_without_ext = os.path.splitext(file_name)[0]
+            
+            # 如果参考文本框为空，则填入文件名
+            if not self.prompt_text_edit.toPlainText().strip():
+                self.prompt_text_edit.setText(file_name_without_ext)
     
-    def browse_gpt_model(self):
-        """浏览GPT模型文件"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择GPT模型", "", "模型文件 (*.ckpt *.pth);;所有文件 (*.*)"
-        )
-        if file_path:
-            self.gpt_path_edit.setText(file_path)
+    def load_gpt_models(self, model_dict):
+        """加载GPT模型文件到下拉框"""
+        self.gpt_model_combo.clear()
+        self.gpt_model_paths = model_dict
+        
+        for display_name in model_dict.keys():
+            self.gpt_model_combo.addItem(display_name)
     
-    def browse_sovits_model(self):
-        """浏览SoVITS模型文件"""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择SoVITS模型", "", "模型文件 (*.pth);;所有文件 (*.*)"
-        )
-        if file_path:
-            self.sovits_path_edit.setText(file_path)
+    def load_sovits_models(self, model_dict):
+        """加载SoVITS模型文件到下拉框"""
+        self.sovits_model_combo.clear()
+        self.sovits_model_paths = model_dict
+        
+        for display_name in model_dict.keys():
+            self.sovits_model_combo.addItem(display_name)
     
     def get_current_config(self) -> Dict:
         """获取当前配置"""
+        # 获取选中的模型实际路径
+        gpt_display_name = self.gpt_model_combo.currentText()
+        sovits_display_name = self.sovits_model_combo.currentText()
+        
+        gpt_path = self.gpt_model_paths.get(gpt_display_name, "")
+        sovits_path = self.sovits_model_paths.get(sovits_display_name, "")
+        
         return {
             "ref_audio": self.ref_path_edit.text(),
             "prompt_text": self.prompt_text_edit.toPlainText(),
@@ -394,8 +404,8 @@ class ExperimentTab(QWidget):
             "text": self.text_edit.toPlainText(),
             "text_lang": self.text_lang_combo.currentText(),
             "how_to_cut": self.cut_method_combo.currentText(),
-            "gpt_path": self.gpt_path_edit.text(),
-            "sovits_path": self.sovits_path_edit.text(),
+            "gpt_path": gpt_path,
+            "sovits_path": sovits_path,
             "speed": self.speed_spin.value(),
             "top_k": self.top_k_spin.value(),
             "top_p": self.top_p_spin.value(),
@@ -683,8 +693,39 @@ class MainWindow(QMainWindow):
         self.role_controller = RoleController()
         self.inference_controller = InferenceController()
         
+        # 扫描模型文件
+        self.gpt_models = self.scan_models(["GPT_weights", "GPT_weights_v2", "GPT_weights_v3", "GPT_weights_v4"])
+        self.sovits_models = self.scan_models(["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3", "SoVITS_weights_v4"])
+        
         self.init_ui()
         self.connect_signals()
+        
+        # 加载模型到下拉框
+        self.experiment_tab.load_gpt_models(self.gpt_models)
+        self.experiment_tab.load_sovits_models(self.sovits_models)
+    
+    def scan_models(self, model_dirs):
+        """扫描模型文件夹，返回模型名称和路径的字典"""
+        models_dict = {}
+        
+        # 获取项目根目录
+        root_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        
+        # 扫描每个模型目录
+        for model_dir in model_dirs:
+            dir_path = root_dir / model_dir
+            if not dir_path.exists():
+                continue
+                
+            # 查找所有模型文件 (.pth, .ckpt)
+            for model_file in glob.glob(str(dir_path / "*.pth")) + glob.glob(str(dir_path / "*.ckpt")):
+                model_path = Path(model_file)
+                # 使用相对路径作为显示名称
+                display_name = f"{model_dir}/{model_path.name}"
+                # 使用绝对路径作为实际值
+                models_dict[display_name] = str(model_path.absolute())
+        
+        return models_dict
     
     def init_ui(self):
         """初始化界面"""
