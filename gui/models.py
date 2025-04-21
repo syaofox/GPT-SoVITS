@@ -116,15 +116,23 @@ class RoleModel:
                 for emotion_name, emotion_config in config.get("emotions", {}).items():
                     if "ref_audio" in emotion_config:
                         ref_audio = emotion_config["ref_audio"]
-                        if not os.path.isabs(ref_audio):
+                        # 如果只是文件名而不是路径，则添加角色目录路径
+                        if not os.path.isabs(ref_audio) and "/" not in ref_audio and "\\" not in ref_audio:
                             emotion_config["ref_audio"] = str(role_dir / ref_audio)
+                        elif not os.path.isabs(ref_audio):
+                            # 处理可能已包含部分路径的情况
+                            emotion_config["ref_audio"] = str(role_dir / os.path.basename(ref_audio))
                     
                     # 处理辅助参考音频
                     if "aux_refs" in emotion_config:
                         aux_refs = []
                         for aux_ref in emotion_config["aux_refs"]:
-                            if not os.path.isabs(aux_ref):
+                            if not os.path.isabs(aux_ref) and "/" not in aux_ref and "\\" not in aux_ref:
+                                # 如果只是文件名，添加角色目录路径
                                 aux_refs.append(str(role_dir / aux_ref))
+                            elif not os.path.isabs(aux_ref):
+                                # 处理可能已包含部分路径的情况
+                                aux_refs.append(str(role_dir / os.path.basename(aux_ref)))
                             else:
                                 aux_refs.append(aux_ref)
                         emotion_config["aux_refs"] = aux_refs
@@ -189,7 +197,7 @@ class RoleModel:
                             if ref_audio != str(new_path):
                                 import shutil
                                 shutil.copy2(ref_audio, new_path)
-                        # 保存为相对路径
+                        # 保存为相对路径（只保存文件名，不包含目录）
                         emotion_config["ref_audio"] = ref_audio_name
                 
                 # 处理辅助参考音频
@@ -205,10 +213,12 @@ class RoleModel:
                                 if aux_ref != str(new_path):
                                     import shutil
                                     shutil.copy2(aux_ref, new_path)
-                            # 保存为相对路径
+                            # 保存为相对路径（只保存文件名，不包含目录）
                             aux_refs.append(aux_ref_name)
                         else:
-                            aux_refs.append(aux_ref)
+                            # 对于已经是相对路径的文件，确保只保留文件名
+                            aux_ref_name = os.path.basename(aux_ref)
+                            aux_refs.append(aux_ref_name)
                     emotion_config["aux_refs"] = aux_refs
             
             with open(config_file, "w", encoding="utf-8") as f:
@@ -234,6 +244,10 @@ class InferenceModel:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+        
+        # 历史记录文件
+        self.history_file = Path("gui") / "history.json"
+        
         self.inference_engine: Optional[GPTSoVITSInference] = None
         self.history: List[Dict] = []
         self.current_gpt_path: str = ""
@@ -242,6 +256,9 @@ class InferenceModel:
         # 工作线程相关
         self.worker = None
         self.thread = None
+        
+        # 加载历史记录
+        self.load_history()
     
     def reset_engine(self):
         """重置推理引擎"""
@@ -372,6 +389,9 @@ class InferenceModel:
                 "text": self.worker.config.get("text", "")
             }
             self.history.append(history_entry)
+            
+            # 保存历史记录
+            self.save_history()
         
         # 调用外部回调
         if self._on_finished_callback:
@@ -450,6 +470,9 @@ class InferenceModel:
             }
             self.history.append(history_entry)
             
+            # 保存历史记录
+            self.save_history()
+            
             return True, str(output_path)
         except Exception as e:
             print(f"生成语音失败: {str(e)}")
@@ -457,4 +480,75 @@ class InferenceModel:
     
     def get_history(self) -> List[Dict]:
         """获取历史记录"""
-        return self.history 
+        return self.history
+    
+    def clear_history(self):
+        """清空历史记录"""
+        self.history = []
+        self.save_history()
+        return True
+    
+    def save_history(self):
+        """保存历史记录到文件"""
+        try:
+            # 确保目录存在
+            self.history_file.parent.mkdir(exist_ok=True)
+            
+            # 验证文件路径
+            valid_history = []
+            for entry in self.history:
+                # 检查音频文件是否仍然存在
+                path = entry.get("path", "")
+                if os.path.exists(path):
+                    valid_history.append(entry)
+            
+            # 保存到文件
+            with open(self.history_file, "w", encoding="utf-8") as f:
+                json.dump(valid_history, f, ensure_ascii=False, indent=4)
+                
+            print(f"已保存{len(valid_history)}条历史记录")
+            return True
+        except Exception as e:
+            print(f"保存历史记录失败: {str(e)}")
+            return False
+    
+    def load_history(self):
+        """从文件加载历史记录"""
+        self.history = []
+        
+        if not self.history_file.exists():
+            return
+            
+        try:
+            with open(self.history_file, "r", encoding="utf-8") as f:
+                loaded_history = json.load(f)
+            
+            need_save = False
+            
+            # 验证文件路径
+            for entry in loaded_history:
+                path = entry.get("path", "")
+                
+                # 修复可能的路径错误（如多余的目录结构）
+                if path and not os.path.exists(path):
+                    # 尝试从路径中提取文件名，然后在output目录中查找
+                    filename = os.path.basename(path)
+                    fixed_path = str(self.output_dir / filename)
+                    if os.path.exists(fixed_path):
+                        print(f"已修复音频文件路径: {path} -> {fixed_path}")
+                        entry["path"] = fixed_path
+                        need_save = True
+                
+                # 如果路径存在（原始或修复后），添加到历史记录
+                if os.path.exists(entry.get("path", "")):
+                    self.history.append(entry)
+            
+            print(f"已加载{len(self.history)}条历史记录")
+            
+            # 如果有修复的路径，重新保存历史记录
+            if need_save:
+                self.save_history()
+                print("已重新保存修复后的历史记录")
+                
+        except Exception as e:
+            print(f"加载历史记录失败: {str(e)}") 
