@@ -6,11 +6,131 @@ import re
 import torch
 from typing import List, Tuple, Dict, Any, Union
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 # 这些函数需要导入原始项目中的text模块
 # 在实际使用时，需确保这些模块可用
 # from text import chinese, cleaned_text_to_sequence
 # from text.cleaner import clean_text
 # from text.LangSegmenter import LangSegmenter
+
+
+def correct_initial_final(tone):
+    """校正声母韵母"""
+    from pypinyin.contrib.tone_convert import to_finals_tone3, to_initials
+    from text.symbols import punctuation
+    from text.chinese2 import pinyin_to_symbol_map
+    
+    init = ""
+    final = ""
+    if tone[0].isalpha():
+        init = to_initials(tone)
+        final = to_finals_tone3(tone, neutral_tone_with_five=True)
+    else:
+        init = tone
+        final = tone
+
+    if init == final:
+        assert init in punctuation
+        return init, init
+    else:
+        v_without_tone = final[:-1]
+        _tone = final[-1]
+
+        pinyin = init + v_without_tone
+        assert _tone in "12345"
+
+        if init:
+            # 多音节
+            v_rep_map = {
+                "uei": "ui",
+                "iou": "iu",
+                "uen": "un",
+            }
+            if v_without_tone in v_rep_map.keys():
+                pinyin = init + v_rep_map[v_without_tone]
+        else:
+            # 单音节
+            pinyin_rep_map = {
+                "ing": "ying",
+                "i": "yi",
+                "in": "yin",
+                "u": "wu",
+            }
+            if pinyin in pinyin_rep_map.keys():
+                pinyin = pinyin_rep_map[pinyin]
+            else:
+                single_rep_map = {
+                    "v": "yu",
+                    "e": "e",
+                    "i": "y",
+                    "u": "w",
+                }
+                if pinyin[0] in single_rep_map.keys():
+                    pinyin = single_rep_map[pinyin[0]] + pinyin[1:]
+
+        assert pinyin in pinyin_to_symbol_map.keys(), tone
+        new_init, new_final = pinyin_to_symbol_map[pinyin].split(" ")
+        new_final = new_final + _tone
+
+        return new_init, new_final
+
+def find_custom_tone(text: str):
+    """识别、提取文本中的多音字"""
+    tone_list = []
+    txts = []
+    # 识别 tone 标记，形如<tone as=shu4>数</tone>或<tone as=\"shu3\">数</tone>或<tone as=\"shù\">数</tone>
+    ptn1 = re.compile(r"<tone.*?>(.*?)</tone>")
+    # 清除 tone 标记中不需要的部分
+    ptn2 = re.compile(r"(</?tone)|(as)|([>\"'\s=])")
+    matches = list(re.finditer(ptn1, text))
+    offset = 0
+    for match in matches:
+        # tone 标记之前的文本
+        pre = text[offset : match.start()]
+        txts.append(pre)
+        # tone 标签中的单个多音字
+        tone_text = match.group(1)
+        txts.append(tone_text)
+        # 提取读音，支持识别 Style.TONE 和  Style.TONE3
+        tone = match.group(0)
+        tone = re.sub(ptn2, "", tone)
+        tone = tone.replace(tone_text, "")
+        # 多音字在当前文本中的索引位置
+        pos = sum([len(s) for s in txts])
+        offset = match.end()
+        init, final = correct_initial_final(tone)
+        data = [tone, init, final, pos]
+        tone_list.append(data)
+    # 不能忘了最后一个 tone 标签后面可能还有剩余的内容
+    if offset < len(text):
+        txts.append(text[offset:])
+
+    text = "".join(str(i) for i in txts)
+    text = text.replace(" ", "")  # 去除空格
+    return text, tone_list
+
+def revise_custom_tone(phones, word2ph, tone_data_list):
+    """修正自定义多音字"""
+    for td in tone_data_list:
+        tone = td[0]
+        init = td[1]
+        final = td[2]
+        pos = td[3]
+        if init == "" and final == "":
+            # 如果匹配拼音的时候失败，这里保持模型中默认提供的读音
+            continue
+
+        wd_pos = 0
+        for i in range(0, pos):
+            wd_pos += word2ph[i]
+        org_init = phones[wd_pos - 2]
+        org_final = phones[wd_pos - 1]
+        phones[wd_pos - 2] = init
+        phones[wd_pos - 1] = final
+        logger.info(f"[+]成功修改读音: {org_init}{org_final} => {tone}")
 
 
 def clean_text_inf(text: str, language: str, version: str) -> Tuple[List[int], List[int], str]:
@@ -29,8 +149,18 @@ def clean_text_inf(text: str, language: str, version: str) -> Tuple[List[int], L
     from text import cleaned_text_to_sequence
     
     language = language.replace("all_", "")
+
+    text, tone_data_list = find_custom_tone(text)
+    if tone_data_list:
+        logger.info(f"tone_data_list: {tone_data_list}")
+
+
     phones, word2ph, norm_text = clean_text(text, language, version)
+
+    revise_custom_tone(phones, word2ph, tone_data_list)
+
     phones = cleaned_text_to_sequence(phones, version)
+
     return phones, word2ph, norm_text
 
 
@@ -85,7 +215,7 @@ def get_bert_inf(tokenizer, bert_model, device, phones: List[int], word2ph: List
         BERT特征张量
     """
     language = language.replace("all_", "")
-    if language == "zh":
+    if language == "zh" or "<tone" in norm_text:
         bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
     else:
         bert = torch.zeros(
@@ -125,8 +255,11 @@ def get_phones_and_bert(
         formattext = text
         while "  " in formattext:
             formattext = formattext.replace("  ", " ")
-            
-        if language == "all_zh":
+        if language == "all_zh" and "<tone" in formattext:
+            phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
+            bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
+
+        elif language == "all_zh":
             if re.search(r"[A-Za-z]", formattext):
                 formattext = re.sub(r"[a-z]", lambda x: x.group(0).upper(), formattext)
                 formattext = chinese.mix_text_normalize(formattext)
