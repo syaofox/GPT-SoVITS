@@ -19,6 +19,9 @@ from .audio import (
     mel_spec_v3, mel_spec_v4, extract_ref_features
 )
 
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class GPTSoVITSInference:
     """
@@ -261,6 +264,38 @@ class GPTSoVITSInference:
         返回:
             采样率和合成音频数据
         """
+        print("-"*100)
+        logger.info(f"开始生成语音,参数如下:")
+        logger.info(f"device: {self.device}")
+        logger.info(f"is_half: {self.is_half}")
+        logger.info(f"version: {self.version}")
+        logger.info(f"model_version: {self.model_version}")
+        logger.info(f"if_lora_v3: {self.if_lora_v3}")
+       
+        logger.info(f"top_k: {top_k}")
+        logger.info(f"top_p: {top_p}")
+        logger.info(f"temperature: {temperature}")
+        logger.info(f"ref_free: {ref_free}")
+        logger.info(f"speed: {speed}")
+        logger.info(f"if_freeze: {if_freeze}")
+        logger.info(f"inp_refs: {inp_refs}")
+        logger.info(f"sample_steps: {sample_steps}")
+        logger.info(f"if_sr: {if_sr}")
+        logger.info(f"pause_second: {pause_second}")
+
+        logger.info(f"gpt_path: {self.gpt_path}")
+        logger.info(f"sovits_path: {self.sovits_path}")
+        logger.info(f"ref_wav_path: {ref_wav_path}")
+        logger.info(f"prompt_text: {prompt_text}")
+        logger.info(f"prompt_language: {prompt_language}")
+        
+        logger.info(f"how_to_cut: {how_to_cut}")
+
+        logger.info(f"text: {text}")
+        logger.info(f"text_language: {text_language}")
+        print("-"*100)
+
+        
         # 验证输入
         if not ref_wav_path:
             raise ValueError("请提供参考音频路径")
