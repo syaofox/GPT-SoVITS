@@ -113,6 +113,7 @@ class HistoryList(QWidget):
     """历史记录列表组件"""
     
     audio_selected = Signal(str)
+    history_cleared = Signal()  # 新增信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -160,7 +161,16 @@ class HistoryList(QWidget):
     
     def clear_history(self):
         """清空历史记录"""
-        self.history_model.clear()
+        reply = QMessageBox.question(
+            self,
+            "清空历史", 
+            "确定要清空所有历史记录吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.history_model.clear()
+            self.history_cleared.emit()
 
 
 class ExperimentTab(QWidget):
@@ -340,6 +350,7 @@ class ExperimentTab(QWidget):
         self.inference_controller.progress_updated.connect(self.update_progress)
         self.inference_controller.inference_started.connect(self.on_inference_started)
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
+        self.history_list.history_cleared.connect(self.inference_controller.clear_history)
     
     def update_history(self):
         """更新历史记录"""
@@ -579,6 +590,7 @@ class RoleTab(QWidget):
         self.inference_controller.progress_updated.connect(self.update_progress)
         self.inference_controller.inference_started.connect(self.on_inference_started)
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
+        self.history_list.history_cleared.connect(self.inference_controller.clear_history)
     
     def refresh_roles(self):
         """刷新角色列表"""
@@ -663,6 +675,22 @@ class RoleTab(QWidget):
             QMessageBox.warning(self, "警告", "无法获取角色配置")
             return
             
+        # 检查参考音频路径是否存在
+        ref_audio = config.get("ref_audio", "")
+        if ref_audio and not os.path.exists(ref_audio):
+            QMessageBox.warning(self, "警告", f"参考音频文件不存在: {ref_audio}")
+            return
+            
+        # 检查辅助参考音频
+        aux_refs = config.get("aux_refs", [])
+        valid_aux_refs = []
+        for aux_ref in aux_refs:
+            if os.path.exists(aux_ref):
+                valid_aux_refs.append(aux_ref)
+            else:
+                print(f"辅助参考音频不存在，已忽略: {aux_ref}")
+        config["aux_refs"] = valid_aux_refs
+            
         # 更新文本
         config["text"] = text
         
@@ -703,6 +731,9 @@ class MainWindow(QMainWindow):
         # 加载模型到下拉框
         self.experiment_tab.load_gpt_models(self.gpt_models)
         self.experiment_tab.load_sovits_models(self.sovits_models)
+        
+        # 加载并显示历史记录
+        self.update_history_display()
     
     def scan_models(self, model_dirs):
         """扫描模型文件夹，返回模型名称和路径的字典"""
@@ -765,7 +796,24 @@ class MainWindow(QMainWindow):
         self.inference_controller.inference_completed.connect(lambda _: self.status_bar.showMessage("生成完成"))
         self.inference_controller.inference_failed.connect(lambda err: self.status_bar.showMessage(f"生成失败: {err}"))
         self.inference_controller.progress_updated.connect(self.status_bar.showMessage)
+        
+        # 连接历史记录更新信号
+        self.inference_controller.history_updated.connect(self.update_history_display)
+    
+    def update_history_display(self):
+        """更新并显示历史记录"""
+        # 更新实验选项卡的历史记录
+        self.experiment_tab.update_history()
+        # 更新角色选项卡的历史记录
+        self.role_tab.update_history()
     
     def show_error(self, message: str):
         """显示错误信息"""
-        QMessageBox.critical(self, "错误", message) 
+        QMessageBox.critical(self, "错误", message)
+    
+    def closeEvent(self, event):
+        """窗口关闭事件处理"""
+        # 保存历史记录
+        self.inference_controller.save_history()
+        # 继续正常关闭
+        event.accept() 

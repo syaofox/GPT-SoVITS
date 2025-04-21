@@ -4,6 +4,7 @@ GUI控制器层
 处理用户交互和业务逻辑调用
 """
 
+import atexit
 from typing import Dict, List, Tuple, Optional, Any, Union
 from PySide6.QtCore import QObject, Signal, Slot, Property
 
@@ -80,6 +81,18 @@ class InferenceController(BaseController):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.inference_model = InferenceModel()
+        
+        # 注册程序退出时保存历史记录
+        atexit.register(self.save_history)
+    
+    def __del__(self):
+        """析构函数，确保保存历史记录"""
+        self.save_history()
+        # 取消注册退出函数，避免重复调用
+        try:
+            atexit.unregister(self.save_history)
+        except:
+            pass
     
     @Slot("QVariantMap")
     def generate_speech_async(self, config: Dict):
@@ -138,4 +151,15 @@ class InferenceController(BaseController):
     @Slot(result=list)
     def get_history(self) -> List[Dict]:
         """获取历史记录"""
-        return self.inference_model.get_history() 
+        return self.inference_model.get_history()
+    
+    @Slot()
+    def clear_history(self):
+        """清空历史记录"""
+        self.inference_model.clear_history()
+        self.history_updated.emit()
+    
+    @Slot()
+    def save_history(self):
+        """保存历史记录"""
+        self.inference_model.save_history() 
