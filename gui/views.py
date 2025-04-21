@@ -223,7 +223,7 @@ class ExperimentTab(QWidget):
         
         synth_layout.addWidget(QLabel("文本切分:"), 3, 0)
         self.cut_method_combo = QComboBox()
-        self.cut_method_combo.addItems(["凑四句一切", "按标点切", "按句切", "按段切"])
+        self.cut_method_combo.addItems(["按句切", "凑四句一切", "按标点切", "按段切"])        
         synth_layout.addWidget(self.cut_method_combo, 3, 1, 1, 2)
         
         synth_layout.addWidget(QLabel("GPT模型:"), 4, 0)
@@ -260,21 +260,21 @@ class ExperimentTab(QWidget):
         adv_layout.addWidget(QLabel("Top K:"), 1, 0)
         self.top_k_spin = QSpinBox()
         self.top_k_spin.setRange(1, 50)
-        self.top_k_spin.setValue(20)
+        self.top_k_spin.setValue(15)
         adv_layout.addWidget(self.top_k_spin, 1, 1)
         
         adv_layout.addWidget(QLabel("Top P:"), 2, 0)
         self.top_p_spin = QDoubleSpinBox()
         self.top_p_spin.setRange(0.0, 1.0)
         self.top_p_spin.setSingleStep(0.05)
-        self.top_p_spin.setValue(0.6)
+        self.top_p_spin.setValue(1.0)
         adv_layout.addWidget(self.top_p_spin, 2, 1)
         
         adv_layout.addWidget(QLabel("温度:"), 3, 0)
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.1, 2.0)
         self.temperature_spin.setSingleStep(0.05)
-        self.temperature_spin.setValue(0.6)
+        self.temperature_spin.setValue(1.0)
         adv_layout.addWidget(self.temperature_spin, 3, 1)
         
         adv_layout.addWidget(QLabel("采样步数:"), 4, 0)
