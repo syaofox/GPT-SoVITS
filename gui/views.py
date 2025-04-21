@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QTextEdit, QComboBox, QPushButton, QFileDialog,
     QTabWidget, QGroupBox, QListView, QSlider, QDoubleSpinBox, QSpinBox,
-    QCheckBox, QMessageBox, QSplitter, QScrollArea, QFrame, QProgressBar
+    QCheckBox, QMessageBox, QSplitter, QScrollArea, QFrame, QProgressBar,
+    QInputDialog
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
 
@@ -296,6 +297,12 @@ class ExperimentTab(QWidget):
         adv_layout.addWidget(self.sr_check, 6, 1)
         
         left_layout.addWidget(adv_group)
+
+        # 进度条
+        progress_layout = QHBoxLayout()
+        self.progress_label = QLabel("就绪")
+        progress_layout.addWidget(self.progress_label)
+        left_layout.addLayout(progress_layout)
         
         # 操作按钮
         buttons_layout = QHBoxLayout()
@@ -335,12 +342,24 @@ class ExperimentTab(QWidget):
         self.inference_controller.inference_completed.connect(self.on_inference_completed)
         self.inference_controller.inference_failed.connect(self.on_inference_failed)
         self.inference_controller.history_updated.connect(self.update_history)
+        self.inference_controller.progress_updated.connect(self.update_progress)
+        self.inference_controller.inference_started.connect(self.on_inference_started)
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
     
     def update_history(self):
         """更新历史记录"""
         history = self.inference_controller.get_history()
         self.history_list.update_history(history)
+    
+    def update_progress(self, message: str):
+        """更新进度信息"""
+        self.progress_label.setText(message)
+    
+    def on_inference_started(self):
+        """推理开始回调"""
+        self.generate_button.setEnabled(False)
+        self.save_role_button.setEnabled(False)
+        self.progress_label.setText("正在初始化...")
     
     def browse_ref_audio(self):
         """浏览参考音频文件"""
@@ -391,15 +410,21 @@ class ExperimentTab(QWidget):
     def generate_speech(self):
         """生成语音"""
         config = self.get_current_config()
-        result = self.inference_controller.generate_speech(config)
+        self.inference_controller.generate_speech_async(config)
     
     def on_inference_completed(self, file_path: str):
         """推理完成回调"""
+        self.generate_button.setEnabled(True)
+        self.save_role_button.setEnabled(True)
+        self.progress_label.setText("生成完成")
         self.audio_player.load_audio(file_path)
         QMessageBox.information(self, "生成成功", f"音频已保存至: {file_path}")
     
     def on_inference_failed(self, error_msg: str):
         """推理失败回调"""
+        self.generate_button.setEnabled(True)
+        self.save_role_button.setEnabled(True)
+        self.progress_label.setText("生成失败")
         QMessageBox.critical(self, "生成失败", error_msg)
     
     def save_as_role(self):
@@ -478,6 +503,10 @@ class RoleTab(QWidget):
         
         left_layout.addWidget(text_group)
         
+        # 进度信息
+        self.progress_label = QLabel("就绪")
+        left_layout.addWidget(self.progress_label)
+        
         # 生成按钮
         self.generate_button = QPushButton("生成语音")
         self.generate_button.clicked.connect(self.generate_speech)
@@ -508,6 +537,8 @@ class RoleTab(QWidget):
         self.inference_controller.inference_completed.connect(self.on_inference_completed)
         self.inference_controller.inference_failed.connect(self.on_inference_failed)
         self.inference_controller.history_updated.connect(self.update_history)
+        self.inference_controller.progress_updated.connect(self.update_progress)
+        self.inference_controller.inference_started.connect(self.on_inference_started)
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
     
     def refresh_roles(self):
@@ -567,6 +598,15 @@ class RoleTab(QWidget):
         history = self.inference_controller.get_history()
         self.history_list.update_history(history)
     
+    def update_progress(self, message: str):
+        """更新进度信息"""
+        self.progress_label.setText(message)
+    
+    def on_inference_started(self):
+        """推理开始回调"""
+        self.generate_button.setEnabled(False)
+        self.progress_label.setText("正在初始化...")
+    
     def generate_speech(self):
         """生成语音"""
         if not self.current_role or not self.current_emotion:
@@ -587,16 +627,20 @@ class RoleTab(QWidget):
         # 更新文本
         config["text"] = text
         
-        # 生成语音
-        result = self.inference_controller.generate_speech(config)
+        # 生成语音（异步）
+        self.inference_controller.generate_speech_async(config)
     
     def on_inference_completed(self, file_path: str):
         """推理完成回调"""
+        self.generate_button.setEnabled(True)
+        self.progress_label.setText("生成完成")
         self.audio_player.load_audio(file_path)
         QMessageBox.information(self, "生成成功", f"音频已保存至: {file_path}")
     
     def on_inference_failed(self, error_msg: str):
         """推理失败回调"""
+        self.generate_button.setEnabled(True)
+        self.progress_label.setText("生成失败")
         QMessageBox.critical(self, "生成失败", error_msg)
 
 
@@ -650,10 +694,8 @@ class MainWindow(QMainWindow):
         self.inference_controller.inference_started.connect(lambda: self.status_bar.showMessage("正在生成语音..."))
         self.inference_controller.inference_completed.connect(lambda _: self.status_bar.showMessage("生成完成"))
         self.inference_controller.inference_failed.connect(lambda err: self.status_bar.showMessage(f"生成失败: {err}"))
+        self.inference_controller.progress_updated.connect(self.status_bar.showMessage)
     
     def show_error(self, message: str):
         """显示错误信息"""
-        QMessageBox.critical(self, "错误", message)
-
-
-from PySide6.QtWidgets import QInputDialog 
+        QMessageBox.critical(self, "错误", message) 
