@@ -146,18 +146,38 @@ class RoleModel:
         return emotions.get(emotion_name, {})
     
     def save_role_config(self, role_name: str, config: Dict) -> bool:
-        """保存角色配置"""
+        """
+        保存角色配置
+        
+        如果角色已存在，会合并情感配置而不是完全覆盖
+        """
         role_dir = self.roles_dir / role_name
         role_dir.mkdir(exist_ok=True)
         
         config_file = role_dir / "config.json"
         
         try:
+            # 检查角色是否已存在，并读取现有配置
+            existing_config = {}
+            if role_name in self.roles:
+                existing_config = self.roles[role_name]
+            
+            # 合并情感配置
+            merged_config = existing_config.copy()
+            
+            # 确保emotions键存在
+            if "emotions" not in merged_config:
+                merged_config["emotions"] = {}
+                
             # 深拷贝配置，以防意外修改
-            config_copy = json.loads(json.dumps(config))
+            new_emotions = json.loads(json.dumps(config.get("emotions", {})))
+            
+            # 合并新的情感配置到现有配置
+            for emotion_name, emotion_config in new_emotions.items():
+                merged_config["emotions"][emotion_name] = emotion_config
             
             # 处理音频文件路径，将绝对路径转为相对路径保存
-            for emotion_name, emotion_config in config_copy.get("emotions", {}).items():
+            for emotion_name, emotion_config in merged_config.get("emotions", {}).items():
                 if "ref_audio" in emotion_config:
                     ref_audio = emotion_config["ref_audio"]
                     if os.path.isabs(ref_audio):
@@ -192,10 +212,10 @@ class RoleModel:
                     emotion_config["aux_refs"] = aux_refs
             
             with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(config_copy, f, ensure_ascii=False, indent=4)
+                json.dump(merged_config, f, ensure_ascii=False, indent=4)
             
             # 更新内存中的配置
-            self.roles[role_name] = config
+            self.roles[role_name] = merged_config
             return True
         except Exception as e:
             print(f"保存角色配置失败: {role_name}, 错误: {str(e)}")

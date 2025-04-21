@@ -436,6 +436,29 @@ class ExperimentTab(QWidget):
         emotion_name, ok = QInputDialog.getText(self, "保存情感", "情感名称:")
         if not ok or not emotion_name:
             return
+        
+        # 检查角色是否存在
+        exists = role_name in self.role_controller.get_role_names()
+        if exists:
+            emotions = self.role_controller.get_emotion_names(role_name)
+            if emotion_name in emotions:
+                # 情感已存在，提示将覆盖
+                reply = QMessageBox.question(
+                    self, 
+                    "情感已存在", 
+                    f"角色 '{role_name}' 中已存在名为 '{emotion_name}' 的情感，是否覆盖？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+            else:
+                # 角色存在但情感不存在，提示将添加
+                QMessageBox.information(
+                    self, 
+                    "添加情感", 
+                    f"将向角色 '{role_name}' 添加名为 '{emotion_name}' 的新情感"
+                )
             
         config = self.get_current_config()
         role_config = {
@@ -446,7 +469,13 @@ class ExperimentTab(QWidget):
         
         success = self.role_controller.save_role_config(role_name, role_config)
         if success:
-            QMessageBox.information(self, "保存成功", f"角色 {role_name} 保存成功")
+            if exists:
+                QMessageBox.information(self, "保存成功", f"角色 '{role_name}' 的情感 '{emotion_name}' 保存成功")
+            else:
+                QMessageBox.information(self, "保存成功", f"新角色 '{role_name}' 创建成功")
+                
+            # 刷新角色列表以显示更新
+            self.role_controller.refresh_roles()
 
 
 class RoleTab(QWidget):
