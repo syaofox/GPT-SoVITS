@@ -15,6 +15,71 @@ from datetime import datetime
 # 导入推理模块
 from gpt_sovits_inference import GPTSoVITSInference
 
+# 导入多线程支持
+from PySide6.QtCore import QObject, QThread, Signal
+
+class InferenceWorker(QObject):
+    """推理工作线程"""
+    
+    finished = Signal(bool, str)  # 成功标志，结果路径或错误信息
+    progress = Signal(str)  # 进度信息
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.config = {}
+        self.engine = None
+        self.output_dir = "output"
+    
+    def set_config(self, config: Dict, engine, output_dir: str):
+        """设置推理配置和引擎"""
+        self.config = config
+        self.engine = engine
+        self.output_dir = output_dir
+    
+    def run(self):
+        """执行推理任务"""
+        if not self.engine:
+            self.finished.emit(False, "推理引擎未初始化")
+            return
+            
+        try:
+            self.progress.emit("正在生成语音...")
+            
+            # 生成语音
+            sample_rate, audio_data = self.engine.generate_speech(
+                ref_wav_path=self.config.get("ref_audio", ""),
+                prompt_text=self.config.get("prompt_text", ""),
+                prompt_language=self.config.get("prompt_lang", "中文"),
+                text=self.config.get("text", ""),
+                text_language=self.config.get("text_lang", "中文"),
+                how_to_cut=self.config.get("how_to_cut", "凑四句一切"),
+                top_k=self.config.get("top_k", 20),
+                top_p=self.config.get("top_p", 0.6),
+                temperature=self.config.get("temperature", 0.6),
+                ref_free=self.config.get("ref_free", False),
+                speed=self.config.get("speed", 1.0),
+                inp_refs=self.config.get("aux_refs", []),
+                sample_steps=self.config.get("sample_steps", 8),
+                if_sr=self.config.get("if_sr", False),
+                pause_second=self.config.get("pause_second", 0.3),
+            )
+            
+            # 生成唯一文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_id = str(uuid.uuid4())[:8]
+            filename = f"{timestamp}_{unique_id}.wav"
+            output_path = Path(self.output_dir) / filename
+            
+            # 保存音频
+            self.progress.emit("正在保存音频...")
+            sf.write(output_path, audio_data, sample_rate)
+            
+            self.finished.emit(True, str(output_path))
+        except Exception as e:
+            error_msg = f"生成语音失败: {str(e)}"
+            print(error_msg)
+            self.finished.emit(False, error_msg)
+
 
 class RoleModel:
     """角色模型类，用于管理角色配置"""
@@ -153,6 +218,10 @@ class InferenceModel:
         self.history: List[Dict] = []
         self.current_gpt_path: str = ""
         self.current_sovits_path: str = ""
+        
+        # 工作线程相关
+        self.worker = None
+        self.thread = None
     
     def reset_engine(self):
         """重置推理引擎"""
@@ -212,9 +281,94 @@ class InferenceModel:
             print(f"初始化推理引擎失败: {str(e)}")
             return False
     
+    def generate_speech_async(self, config: Dict, on_finished, on_progress=None) -> bool:
+        """
+        异步生成语音
+        
+        参数:
+            config: 推理配置
+            on_finished: 完成回调函数
+            on_progress: 进度回调函数
+            
+        返回:
+            是否成功启动推理
+        """
+        gpt_path = config.get("gpt_path")
+        sovits_path = config.get("sovits_path")
+        
+        if not gpt_path or not sovits_path:
+            return False
+        
+        # 检查模型路径是否变化
+        if (self.inference_engine is not None and 
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
+            self.reset_engine()
+                
+        # 初始化或重新初始化推理引擎
+        success = self.initialize_engine(gpt_path, sovits_path)
+        if not success:
+            return False
+        
+        # 停止现有的工作线程（如果有）
+        if self.thread and self.thread.isRunning():
+            self.thread.quit()
+            self.thread.wait()
+        
+        # 创建新的工作线程
+        self.thread = QThread()
+        self.worker = InferenceWorker()
+        self.worker.moveToThread(self.thread)
+        
+        # 设置推理配置
+        self.worker.set_config(config, self.inference_engine, str(self.output_dir))
+        
+        # 连接信号
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self._on_worker_finished)
+        if on_progress:
+            self.worker.progress.connect(on_progress)
+        self.worker.finished.connect(lambda: self.thread.quit())
+        self.thread.finished.connect(lambda: self._cleanup_thread())
+        
+        # 保存回调函数
+        self._on_finished_callback = on_finished
+        
+        # 启动线程
+        self.thread.start()
+        
+        return True
+    
+    def _on_worker_finished(self, success: bool, result: str):
+        """工作线程完成回调"""
+        if success:
+            # 生成唯一文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # 添加到历史记录
+            history_entry = {
+                "timestamp": timestamp,
+                "path": result,
+                "config": {k: v for k, v in self.worker.config.items() if k != "aux_refs"},
+                "text": self.worker.config.get("text", "")
+            }
+            self.history.append(history_entry)
+        
+        # 调用外部回调
+        if self._on_finished_callback:
+            self._on_finished_callback(success, result)
+    
+    def _cleanup_thread(self):
+        """清理线程资源"""
+        if self.worker:
+            self.worker.deleteLater()
+            self.worker = None
+        if self.thread:
+            self.thread.deleteLater()
+            self.thread = None
+    
     def generate_speech(self, config: Dict) -> Tuple[bool, str]:
         """
-        生成语音
+        同步生成语音（保留以兼容现有代码）
         
         参数:
             config: 推理配置
