@@ -101,6 +101,9 @@ class ExperimentTab(QWidget):
         
         synth_layout.addWidget(QLabel("合成文本:"), 0, 0)
         self.text_edit = QTextEdit()
+        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.text_edit.setAcceptRichText(False)
         synth_layout.addWidget(self.text_edit, 0, 1, 2, 2)
         
         synth_layout.addWidget(QLabel("文本语言:"), 2, 0)

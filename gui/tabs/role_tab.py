@@ -75,6 +75,10 @@ class RoleTab(QWidget):
         text_layout = QVBoxLayout(text_group)
         
         self.text_edit = QTextEdit()
+        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.text_edit.setAcceptRichText(False)
+        
         text_layout.addWidget(self.text_edit)
         
         left_layout.addWidget(text_group)
