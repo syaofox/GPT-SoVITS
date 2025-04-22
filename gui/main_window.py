@@ -230,6 +230,15 @@ class MainWindow(QMainWindow):
                 self.show_error(f"参考音频文件不存在: {config['ref_audio']}")
                 return
                 
+            # 验证辅助参考音频
+            aux_refs = config.get("aux_refs", [])
+            valid_aux_refs = []
+            for aux_ref in aux_refs:
+                if os.path.exists(aux_ref):
+                    valid_aux_refs.append(aux_ref)
+                else:
+                    self.show_error(f"辅助参考音频文件不存在，已忽略: {aux_ref}")
+            
             # 转换参数名称以匹配推理控制器期望的格式
             api_config = {
                 "ref_audio": config["ref_audio"],
@@ -248,7 +257,7 @@ class MainWindow(QMainWindow):
                 "pause_second": config["pause_time"],
                 "ref_free": config["ref_free"],
                 "if_sr": config["sr"],
-                "aux_refs": []  # 实验选项卡不支持多参考音频融合
+                "aux_refs": valid_aux_refs  # 使用有效的辅助参考音频
             }
                 
             # 调用推理控制器
@@ -278,6 +287,18 @@ class MainWindow(QMainWindow):
             if ref_audio and not os.path.exists(ref_audio):
                 self.show_error(f"参考音频文件不存在: {ref_audio}")
                 return
+                
+            # 检查辅助参考音频
+            aux_refs = config.get("aux_refs", [])
+            valid_aux_refs = []
+            for aux_ref in aux_refs:
+                if os.path.exists(aux_ref):
+                    valid_aux_refs.append(aux_ref)
+                else:
+                    self.show_error(f"辅助参考音频文件不存在，已忽略: {aux_ref}")
+            
+            # 更新有效的辅助参考音频
+            config["aux_refs"] = valid_aux_refs
                 
             # 添加当前文本到配置中 - 确保配置与InferenceController期望的一致
             config["text"] = text
