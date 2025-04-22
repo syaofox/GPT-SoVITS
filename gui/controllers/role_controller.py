@@ -49,6 +49,12 @@ class RoleController(BaseController):
         if not role_name:
             self.error_occurred.emit("角色名不能为空")
             return False
+        
+        # 移除不需要保存的字段
+        if "emotions" in config:
+            for emotion_name, emotion_config in config["emotions"].items():
+                if "text" in emotion_config:
+                    del emotion_config["text"]
             
         result = self.role_model.save_role_config(role_name, config)
         if result:
@@ -69,12 +75,17 @@ class RoleController(BaseController):
         if not emotion_name:
             self.error_occurred.emit("情感名不能为空")
             return False
-            
+        
         try:
+            # 移除不需要保存的字段
+            config_copy = config.copy()
+            if "text" in config_copy:
+                del config_copy["text"]
+            
             # 创建角色配置结构
             role_config = {
                 "emotions": {
-                    emotion_name: config
+                    emotion_name: config_copy
                 }
             }
             
@@ -85,12 +96,12 @@ class RoleController(BaseController):
                 if emotion_name in emotions:
                     # 更新现有情感
                     existing_config = self.role_model.get_role_config(role_name)
-                    existing_config["emotions"][emotion_name] = config
+                    existing_config["emotions"][emotion_name] = config_copy
                     result = self.role_model.save_role_config(role_name, existing_config)
                 else:
                     # 添加新情感到现有角色
                     existing_config = self.role_model.get_role_config(role_name)
-                    existing_config["emotions"][emotion_name] = config
+                    existing_config["emotions"][emotion_name] = config_copy
                     result = self.role_model.save_role_config(role_name, existing_config)
             else:
                 # 创建新角色
