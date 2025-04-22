@@ -175,28 +175,25 @@ class ExperimentTab(QWidget):
         
         left_layout.addWidget(adv_group)
 
-        # 保存为角色按钮
-        buttons_layout = QHBoxLayout()
+        # 保存为角色相关控件放在同一行
+        role_save_layout = QHBoxLayout()
         
-        # 添加角色名和情绪输入框
-        role_name_layout = QHBoxLayout()
-        role_name_layout.addWidget(QLabel("角色名:"))
+        # 角色名输入框
+        role_save_layout.addWidget(QLabel("角色名:"))
         self.role_name_edit = QLineEdit()
-        role_name_layout.addWidget(self.role_name_edit)
+        role_save_layout.addWidget(self.role_name_edit)
         
-        emotion_name_layout = QHBoxLayout()
-        emotion_name_layout.addWidget(QLabel("情绪:"))
+        # 情绪输入框
+        role_save_layout.addWidget(QLabel("情绪:"))
         self.emotion_name_edit = QLineEdit()
-        emotion_name_layout.addWidget(self.emotion_name_edit)
+        role_save_layout.addWidget(self.emotion_name_edit)
         
-        left_layout.addLayout(role_name_layout)
-        left_layout.addLayout(emotion_name_layout)
-        
+        # 保存按钮
         self.save_role_button = QPushButton("保存为角色")
         self.save_role_button.clicked.connect(self.save_as_role)
-        buttons_layout.addWidget(self.save_role_button)
+        role_save_layout.addWidget(self.save_role_button)
         
-        left_layout.addLayout(buttons_layout)
+        left_layout.addLayout(role_save_layout)
         
         # 如果需要内置播放器和历史记录
         if not self.shared_controls:
