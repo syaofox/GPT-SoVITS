@@ -22,6 +22,8 @@ class RoleTab(QWidget):
     
     # 添加生成请求信号
     generate_requested = Signal(dict, str, bool)
+    # 添加角色配置更新信号
+    role_config_selected = Signal(dict)
     
     def __init__(self, role_controller, inference_controller, shared_controls=True, parent=None):
         super().__init__(parent)
@@ -155,6 +157,12 @@ class RoleTab(QWidget):
         if current_emotion and current_emotion in emotions:
             index = self.emotion_combo.findText(current_emotion)
             self.emotion_combo.setCurrentIndex(index)
+        elif emotions:
+            # 默认选择第一个情感并更新配置
+            self.emotion_combo.setCurrentIndex(0)
+        
+        # 情感更新后获取当前配置
+        self.get_current_emotion_config()
     
     def on_emotion_changed(self, index):
         """情感改变回调"""
@@ -162,12 +170,44 @@ class RoleTab(QWidget):
             return
             
         self.current_emotion = self.emotion_combo.currentText()
+        # 情感改变时获取当前配置
+        self.get_current_emotion_config()
+    
+    def get_current_emotion_config(self):
+        """获取当前选中角色和情感的配置，并发射信号更新试听配置"""
+        if not self.current_role or not self.current_emotion:
+            return
+            
+        # 获取当前情感配置
+        emotion_config = self.role_controller.get_emotion_config(self.current_role, self.current_emotion)
+        if emotion_config:
+            # 打印调试信息以便追踪
+            print(f"获取角色配置: {self.current_role}/{self.current_emotion}")
+            print(f"配置中的模型: gpt={emotion_config.get('gpt_model', '未设置')}, sovits={emotion_config.get('sovits_model', '未设置')}")
+            
+            # 发射配置更新信号
+            self.role_config_selected.emit(emotion_config)
     
     def update_history(self):
         """更新历史记录"""
         if not self.shared_controls:
             history = self.inference_controller.get_history()
             self.history_list.update_history(history)
+    
+    def get_inference_config(self):
+        """获取用于推理的配置"""
+        if not self.current_role or not self.current_emotion:
+            return None
+            
+        # 获取角色配置
+        config = self.role_controller.get_emotion_config(self.current_role, self.current_emotion)
+        if not config:
+            return None
+        
+        # 添加文本
+        config["text"] = self.text_edit.toPlainText()
+        
+        return config
     
     def on_inference_failed(self, error_msg: str):
         """推理失败回调"""
