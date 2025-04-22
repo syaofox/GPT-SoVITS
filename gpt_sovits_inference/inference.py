@@ -377,7 +377,7 @@ class GPTSoVITSInference:
         # 分割文本行
         texts = text.split("\n")
         texts = self.text_cutter.process_text(texts)
-        texts = self.text_cutter.merge_short_text(texts, 5)
+        # texts = self.text_cutter.merge_short_text(texts, 5)
         
         # 音频输出列表
         audio_opt = []
