@@ -193,7 +193,7 @@ class RoleTab(QWidget):
         if emotion_config:
             # 打印调试信息以便追踪
             print(f"获取角色配置: {self.current_role}/{self.current_emotion}")
-            print(f"配置中的模型: gpt={emotion_config.get('gpt_model', '未设置')}, sovits={emotion_config.get('sovits_model', '未设置')}")
+            print(f"配置中的模型: gpt={emotion_config.get('gpt_path', '未设置')}, sovits={emotion_config.get('sovits_path', '未设置')}")
             
             # 发射配置更新信号
             self.role_config_selected.emit(emotion_config)

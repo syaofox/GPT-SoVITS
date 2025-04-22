@@ -262,62 +262,67 @@ class ExperimentTab(QWidget):
         self.sovits_model_combo.clear()
         self.sovits_model_combo.addItems(list(model_dict.keys()))
     
-    def get_current_config(self) -> Dict:
-        """获取当前配置"""
-        # 获取参考音频和文本
-        ref_audio = self.ref_path_edit.text()
-        prompt_text = self.prompt_text_edit.toPlainText()
+    def get_inference_config(self):
+        """获取当前推理配置"""
+        config = {}
         
-        # 获取辅助参考音频
+        # 获取基本配置
+        text = self.text_edit.toPlainText().strip()
+        if not text:
+            return None
+        
+        config["text"] = text
+        config["text_lang"] = self.text_lang_combo.currentText()
+        config["how_to_cut"] = self.cut_method_combo.currentText()
+        
+        # 获取模型选择
+        gpt_model_name = self.gpt_model_combo.currentText()
+        sovits_model_name = self.sovits_model_combo.currentText()
+        
+        if not gpt_model_name or not sovits_model_name:
+            return None
+            
+        # 转换为实际路径
+        if hasattr(self, "gpt_model_paths") and gpt_model_name in self.gpt_model_paths:
+            config["gpt_path"] = self.gpt_model_paths[gpt_model_name]
+        else:
+            return None
+            
+        if hasattr(self, "sovits_model_paths") and sovits_model_name in self.sovits_model_paths:
+            config["sovits_path"] = self.sovits_model_paths[sovits_model_name]
+        else:
+            return None
+        
+        # 获取参考音频
+        ref_audio_path = self.ref_path_edit.text()
+        if not ref_audio_path and not self.ref_free_check.isChecked():
+            return None
+            
+        config["ref_audio"] = ref_audio_path
+        config["prompt_text"] = self.prompt_text_edit.toPlainText().strip()
+        config["prompt_lang"] = self.prompt_lang_combo.currentText()
+        
+        # 高级设置
+        config["speed"] = self.speed_spin.value()
+        config["top_k"] = self.top_k_spin.value()
+        config["top_p"] = self.top_p_spin.value()
+        config["temperature"] = self.temperature_spin.value()
+        config["sample_steps"] = self.sample_steps_spin.value()
+        config["pause_second"] = self.pause_spin.value()
+        
+        # 选项
+        config["ref_free"] = self.ref_free_check.isChecked()
+        config["if_sr"] = self.sr_check.isChecked()
+        
+        # 辅助参考音频
         aux_refs = []
         for i in range(self.aux_refs_list.count()):
-            item = self.aux_refs_list.item(i)
-            aux_refs.append(item.data(Qt.UserRole))
+            aux_refs.append(self.aux_refs_list.item(i).data(Qt.UserRole))
         
-        # 获取合成文本和语言
-        text = self.text_edit.toPlainText()
-        text_lang = self.text_lang_combo.currentText()
-        prompt_lang = self.prompt_lang_combo.currentText()
-        
-        # 获取模型路径
-        gpt_model_key = self.gpt_model_combo.currentText()
-        sovits_model_key = self.sovits_model_combo.currentText()
-        gpt_model = self.gpt_model_paths.get(gpt_model_key, "")
-        sovits_model = self.sovits_model_paths.get(sovits_model_key, "")
-        
-        # 获取高级参数
-        how_to_cut = self.cut_method_combo.currentText()
-        speed = self.speed_spin.value()
-        top_k = self.top_k_spin.value()
-        top_p = self.top_p_spin.value()
-        temperature = self.temperature_spin.value()
-        sample_steps = self.sample_steps_spin.value()
-        pause_second = self.pause_spin.value()
-        
-        # 获取选项
-        ref_free = self.ref_free_check.isChecked()
-        if_sr = self.sr_check.isChecked()
-        
-        # 返回配置字典
-        return {
-            "ref_audio": ref_audio,
-            "prompt_text": prompt_text,
-            "prompt_lang": prompt_lang,
-            "text": text,
-            "text_lang": text_lang,
-            "how_to_cut": how_to_cut,
-            "gpt_model": gpt_model,
-            "sovits_model": sovits_model,
-            "speed": speed,
-            "top_k": top_k,
-            "top_p": top_p,
-            "temperature": temperature,
-            "sample_steps": sample_steps,
-            "pause_second": pause_second,
-            "ref_free": ref_free,
-            "if_sr": if_sr,
-            "aux_refs": aux_refs  # 添加辅助参考音频
-        }
+        if aux_refs:
+            config["aux_refs"] = aux_refs
+            
+        return config
     
     def generate_with_config(self):
         """使用当前配置生成语音"""
@@ -328,14 +333,14 @@ class ExperimentTab(QWidget):
             return False
             
         # 获取当前配置
-        config = self.get_current_config()
+        config = self.get_inference_config()
         
         # 检查必要参数
-        if not config["gpt_model"]:
+        if not config["gpt_path"]:
             QMessageBox.warning(self, "警告", "请选择GPT模型")
             return False
             
-        if not config["sovits_model"]:
+        if not config["sovits_path"]:
             QMessageBox.warning(self, "警告", "请选择SoVITS模型")
             return False
             
@@ -355,7 +360,7 @@ class ExperimentTab(QWidget):
         """生成语音"""
         if self.shared_controls:
             # 在共享模式下，发送信号给主窗口处理
-            config = self.get_current_config()
+            config = self.get_inference_config()
             text = self.text_edit.toPlainText()
             self.generate_requested.emit(config, text, False)
         else:
@@ -391,7 +396,7 @@ class ExperimentTab(QWidget):
             return
             
         # 获取当前配置
-        config = self.get_current_config()
+        config = self.get_inference_config()
         
         # 保存角色
         try:

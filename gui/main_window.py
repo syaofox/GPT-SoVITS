@@ -7,7 +7,7 @@
 import os
 import glob
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QListWidgetItem
 from PySide6.QtCore import Qt, QSize
 
 from gui.controllers import RoleController, InferenceController
@@ -156,44 +156,39 @@ class MainWindow(QMainWindow):
     
     def apply_role_config_to_experiment(self, role_config):
         """将角色配置应用到试听配置标签页"""
-        if not role_config:
-            return
-            
-        # 填充参考音频和文本
-        self.experiment_tab.ref_path_edit.setText(role_config.get("ref_audio", ""))
-        self.experiment_tab.prompt_text_edit.setPlainText(role_config.get("prompt_text", ""))
         
-        # 设置下拉框选项
+        # 设置参考音频和文本
+        ref_audio = role_config.get("ref_audio", "")
+        if ref_audio and os.path.exists(ref_audio):
+            self.experiment_tab.ref_path_edit.setText(ref_audio)
+        
+        # 设置参考文本和语言
+        self.experiment_tab.prompt_text_edit.setText(role_config.get("prompt_text", ""))
+        
         prompt_lang = role_config.get("prompt_lang", "中文")
+        index = self.experiment_tab.prompt_lang_combo.findText(prompt_lang)
+        if index >= 0:
+            self.experiment_tab.prompt_lang_combo.setCurrentIndex(index)
+        
+        # 设置文本语言
         text_lang = role_config.get("text_lang", "中文")
-        cut_method = role_config.get("how_to_cut", "按句切")
+        index = self.experiment_tab.text_lang_combo.findText(text_lang)
+        if index >= 0:
+            self.experiment_tab.text_lang_combo.setCurrentIndex(index)
         
-        # 查找并设置下拉框索引
-        prompt_lang_index = self.experiment_tab.prompt_lang_combo.findText(prompt_lang)
-        if prompt_lang_index >= 0:
-            self.experiment_tab.prompt_lang_combo.setCurrentIndex(prompt_lang_index)
-            
-        text_lang_index = self.experiment_tab.text_lang_combo.findText(text_lang)
-        if text_lang_index >= 0:
-            self.experiment_tab.text_lang_combo.setCurrentIndex(text_lang_index)
-            
-        cut_method_index = self.experiment_tab.cut_method_combo.findText(cut_method)
-        if cut_method_index >= 0:
-            self.experiment_tab.cut_method_combo.setCurrentIndex(cut_method_index)
+        # 设置文本切分方式
+        how_to_cut = role_config.get("how_to_cut", "按句切")
+        index = self.experiment_tab.cut_method_combo.findText(how_to_cut)
+        if index >= 0:
+            self.experiment_tab.cut_method_combo.setCurrentIndex(index)
         
-        # 获取模型路径
-        gpt_model = role_config.get("gpt_model", "")
-        sovits_model = role_config.get("sovits_model", "")
-        
-        # 打印调试信息
-        print(f"应用角色配置: gpt={gpt_model}, sovits={sovits_model}")
-        
-        # 改进后的模型匹配逻辑
-        if gpt_model:
+        # 设置模型
+        gpt_path = role_config.get("gpt_path")
+        if gpt_path:
             # 尝试直接匹配完整路径
             gpt_matched = False
             for display_name, path in self.gpt_models.items():
-                if path == gpt_model:
+                if path == gpt_path:
                     index = self.experiment_tab.gpt_model_combo.findText(display_name)
                     if index >= 0:
                         self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
@@ -202,7 +197,7 @@ class MainWindow(QMainWindow):
             
             # 如果直接匹配失败，尝试匹配文件名
             if not gpt_matched:
-                gpt_filename = os.path.basename(gpt_model)
+                gpt_filename = os.path.basename(gpt_path)
                 for display_name, path in self.gpt_models.items():
                     if os.path.basename(path) == gpt_filename:
                         index = self.experiment_tab.gpt_model_combo.findText(display_name)
@@ -210,11 +205,13 @@ class MainWindow(QMainWindow):
                             self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
                             break
         
-        if sovits_model:
+        sovits_path = role_config.get("sovits_path")
+        
+        if sovits_path:
             # 尝试直接匹配完整路径
             sovits_matched = False
             for display_name, path in self.sovits_models.items():
-                if path == sovits_model:
+                if path == sovits_path:
                     index = self.experiment_tab.sovits_model_combo.findText(display_name)
                     if index >= 0:
                         self.experiment_tab.sovits_model_combo.setCurrentIndex(index)
@@ -223,7 +220,7 @@ class MainWindow(QMainWindow):
             
             # 如果直接匹配失败，尝试匹配文件名
             if not sovits_matched:
-                sovits_filename = os.path.basename(sovits_model)
+                sovits_filename = os.path.basename(sovits_path)
                 for display_name, path in self.sovits_models.items():
                     if os.path.basename(path) == sovits_filename:
                         index = self.experiment_tab.sovits_model_combo.findText(display_name)
@@ -245,16 +242,15 @@ class MainWindow(QMainWindow):
         
         # 清空并添加辅助参考音频
         self.experiment_tab.aux_refs_list.clear()
-        aux_refs = role_config.get("aux_refs", [])
-        valid_aux_refs = []
-        for aux_ref in aux_refs:
-            if os.path.exists(aux_ref):
-                item = self.experiment_tab.create_aux_ref_item(aux_ref)
-                self.experiment_tab.aux_refs_list.addItem(item)
-                valid_aux_refs.append(aux_ref)
         
-        # 更新有效的辅助参考音频
-        role_config["aux_refs"] = valid_aux_refs
+        aux_refs = role_config.get("aux_refs", [])
+        for aux_ref in aux_refs:
+            if aux_ref and os.path.exists(aux_ref):
+                # 添加到列表
+                basename = os.path.basename(aux_ref)
+                item = QListWidgetItem(basename)
+                item.setData(Qt.UserRole, aux_ref)
+                self.experiment_tab.aux_refs_list.addItem(item)
     
     def apply_role_info_to_experiment(self, role_name, emotion_name):
         """将角色名和情绪信息应用到试听配置标签页"""
@@ -322,7 +318,7 @@ class MainWindow(QMainWindow):
         current_index = self.tab_widget.currentIndex()
         
         if current_index == 0:  # 实验选项卡
-            config = self.experiment_tab.get_current_config()
+            config = self.experiment_tab.get_inference_config()
             text = self.experiment_tab.text_edit.toPlainText()
             
             # 验证必要参数
@@ -330,11 +326,11 @@ class MainWindow(QMainWindow):
                 self.show_error("请输入要合成的文本")
                 return
                 
-            if not config["gpt_model"]:
+            if not config["gpt_path"]:
                 self.show_error("请选择GPT模型")
                 return
                 
-            if not config["sovits_model"]:
+            if not config["sovits_path"]:
                 self.show_error("请选择SoVITS模型")
                 return
                 
