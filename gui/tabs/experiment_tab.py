@@ -62,8 +62,7 @@ class ExperimentTab(QWidget):
         ref_layout.addWidget(self.ref_browse_button, 0, 2)
         
         ref_layout.addWidget(QLabel("参考文本:"), 1, 0)
-        self.prompt_text_edit = QTextEdit()
-        self.prompt_text_edit.setMaximumHeight(60)
+        self.prompt_text_edit = QLineEdit()
         ref_layout.addWidget(self.prompt_text_edit, 1, 1, 1, 2)
         
         ref_layout.addWidget(QLabel("参考语言:"), 2, 0)
@@ -260,7 +259,7 @@ class ExperimentTab(QWidget):
             filename_without_ext = os.path.splitext(filename)[0]
             
             # 将文件名设置到参考文本编辑框（直接覆盖）
-            self.prompt_text_edit.setPlainText(filename_without_ext)
+            self.prompt_text_edit.setText(filename_without_ext)
     
     def load_gpt_models(self, model_dict):
         """加载GPT模型列表"""
@@ -315,7 +314,7 @@ class ExperimentTab(QWidget):
             return None
             
         config["ref_audio"] = ref_audio_path
-        config["prompt_text"] = self.prompt_text_edit.toPlainText().strip()
+        config["prompt_text"] = self.prompt_text_edit.text().strip()
         config["prompt_lang"] = self.prompt_lang_combo.currentText()
         
         # 高级设置
