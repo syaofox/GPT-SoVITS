@@ -2,7 +2,11 @@
 GPT-SoVITS 推理模块主文件
 """
 
-import os
+import os,sys
+now_dir = os.getcwd()
+sys.path.append(now_dir)
+sys.path.append("%s/GPT_SoVITS"%(now_dir))
+
 import json
 import torch
 import numpy as np
