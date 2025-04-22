@@ -35,20 +35,13 @@ class InferenceModel:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        # 历史记录文件
-        self.history_file = Path("gui") / "history.json"
-        
         self.inference_engine: Optional[GPTSoVITSInference] = None
-        self.history: List[Dict] = []
         self.current_gpt_path: str = ""
         self.current_sovits_path: str = ""
         
         # 工作线程相关
         self.worker = None
         self.thread = None
-        
-        # 加载历史记录
-        self.load_history()
     
     def reset_engine(self):
         """重置推理引擎"""
@@ -126,20 +119,6 @@ class InferenceModel:
                 self.inference_engine = self.worker.engine
                 self.current_gpt_path = self.worker.gpt_path
                 self.current_sovits_path = self.worker.sovits_path
-            
-            # 添加到历史记录
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            history_entry = {
-                "timestamp": timestamp,
-                "path": result,
-                "config": {k: v for k, v in self.worker.config.items() if k != "aux_refs"},
-                "text": self.worker.config.get("text", "")
-            }
-            self.history.append(history_entry)
-            
-            # 保存历史记录
-            self.save_history()
         
         # 调用外部回调
         if self._on_finished_callback:
@@ -185,49 +164,25 @@ class InferenceModel:
         return future_result["success"], future_result["result"]
     
     def get_history(self) -> List[Dict]:
-        """获取历史记录"""
-        return self.history
-    
-    def clear_history(self):
-        """清空历史记录"""
-        self.history = []
-        self.save_history()
-    
-    def save_history(self):
-        """保存历史记录"""
+        """获取历史记录（直接从输出目录读取音频文件）"""
+        history_list = []
+        
         try:
-            # 将历史记录转换为JSON
-            history_data = []
-            for entry in self.history:
-                # 创建一个新的条目副本用于保存
-                entry_copy = entry.copy()
-                
-                # 解决JSON序列化问题
-                entry_copy.pop("config", None)  # 暂时不保存配置
-                
-                history_data.append(entry_copy)
-                
-            # 保存到文件
-            with open(self.history_file, "w", encoding="utf-8") as f:
-                json.dump(history_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"保存历史记录失败: {str(e)}")
-    
-    def load_history(self):
-        """加载历史记录"""
-        try:
-            if os.path.exists(self.history_file):
-                with open(self.history_file, "r", encoding="utf-8") as f:
-                    self.history = json.load(f)
+            # 遍历输出目录中的所有文件
+            for file_path in sorted(self.output_dir.glob("*.wav"), key=os.path.getctime, reverse=True):
+                if file_path.is_file() and file_path.suffix.lower() in ['.wav', '.mp3', '.ogg']:
+                    # 获取文件创建时间作为时间戳
+                    timestamp = datetime.fromtimestamp(os.path.getctime(file_path)).strftime("%Y%m%d_%H%M%S")
                     
-                # 过滤出有效的记录
-                valid_history = []
-                for entry in self.history:
-                    path = entry.get("path", "")
-                    if path and os.path.exists(path):
-                        valid_history.append(entry)
-                        
-                self.history = valid_history
+                    # 创建历史记录条目
+                    entry = {
+                        "timestamp": timestamp,
+                        "path": str(file_path),
+                        "text": ""  # 没有文本信息
+                    }
+                    
+                    history_list.append(entry)
         except Exception as e:
-            print(f"加载历史记录失败: {str(e)}")
-            self.history = [] 
+            print(f"读取输出目录失败: {str(e)}")
+        
+        return history_list 
