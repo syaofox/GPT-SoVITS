@@ -32,6 +32,9 @@ class InferenceWorker(QObject):
         self.sovits_path = ""
         self.device = None
         self.half = True
+        self.text_segments = []
+        self.total_segments = 0
+        self.current_segment = 0
     
     def set_config(self, config: Dict, engine, output_dir: str):
         """设置推理配置和引擎（如果已有）"""
@@ -73,6 +76,30 @@ class InferenceWorker(QObject):
         # 限制长度
         return sanitized[:30] if len(sanitized) > 30 else sanitized
     
+    def preprocess_text(self, text, how_to_cut):
+        """预处理文本并计算分段数量"""
+        try:
+            # 导入需要的模块来切分文本
+            from gpt_sovits_inference.text import cut_text
+            
+            # 切分文本获取分段
+            segments = cut_text(text, how_to_cut)
+            self.text_segments = segments
+            self.total_segments = len(segments)
+            
+            # 更新进度信息
+            self.progress.emit(f"文本已分割为 {self.total_segments} 个片段")
+            
+            return segments
+        except Exception as e:
+            print(f"文本预处理失败: {str(e)}")
+            return [text]  # 如果失败，返回整段文本作为单个分段
+    
+    def progress_callback(self, current_segment):
+        """进度回调函数"""
+        self.current_segment = current_segment
+        self.progress.emit(f"正在合成: {current_segment}/{self.total_segments}")
+    
     def run(self):
         """执行推理任务"""
         # 检查是否需要初始化引擎
@@ -87,16 +114,21 @@ class InferenceWorker(QObject):
             return
             
         try:
-            self.progress.emit("正在生成语音...")
+            # 预处理文本，计算分段
+            text = self.config.get("text", "")
+            how_to_cut = self.config.get("how_to_cut", "凑四句一切")
+            self.preprocess_text(text, how_to_cut)
+            
+            self.progress.emit(f"开始生成语音 (0/{self.total_segments})...")
             
             # 生成语音
             sample_rate, audio_data = self.engine.generate_speech(
                 ref_wav_path=self.config.get("ref_audio", ""),
                 prompt_text=self.config.get("prompt_text", ""),
                 prompt_language=self.config.get("prompt_lang", "中文"),
-                text=self.config.get("text", ""),
+                text=text,
                 text_language=self.config.get("text_lang", "中文"),
-                how_to_cut=self.config.get("how_to_cut", "凑四句一切"),
+                how_to_cut=how_to_cut,
                 top_k=self.config.get("top_k", 20),
                 top_p=self.config.get("top_p", 0.6),
                 temperature=self.config.get("temperature", 0.6),
@@ -106,6 +138,7 @@ class InferenceWorker(QObject):
                 sample_steps=self.config.get("sample_steps", 8),
                 if_sr=self.config.get("if_sr", False),
                 pause_second=self.config.get("pause_second", 0.3),
+                progress_callback=self.progress_callback
             )
             
             # 生成文件名

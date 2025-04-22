@@ -142,6 +142,12 @@ class MainWindow(QMainWindow):
         
         # 状态显示
         self.progress_label = QLabel("就绪")
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        font = self.progress_label.font()
+        font.setPointSize(12)
+        font.setBold(True)
+        self.progress_label.setFont(font)
+        self.progress_label.setMinimumHeight(30)
         right_layout.addWidget(self.progress_label)
         
         # 生成语音按钮
@@ -330,8 +336,10 @@ class MainWindow(QMainWindow):
     
     def update_progress(self, message: str):
         """更新进度信息"""
-        self.status_bar.showMessage(message)
         self.progress_label.setText(message)
+        # 如果是合成进度信息，更新状态栏
+        if "正在合成:" in message:
+            self.status_bar.showMessage(message)
     
     def on_generate_requested(self, config=None, text="", is_role=False):
         """处理来自标签页的生成请求"""

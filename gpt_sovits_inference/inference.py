@@ -243,6 +243,7 @@ class GPTSoVITSInference:
         sample_steps: int = 8,
         if_sr: bool = False,
         pause_second: float = 0.3,
+        progress_callback = None,
     ) -> Tuple[int, np.ndarray]:
         """
         生成语音
@@ -264,6 +265,7 @@ class GPTSoVITSInference:
             sample_steps: 采样步数
             if_sr: 是否使用超分辨率增强音频
             pause_second: 句间停顿秒数
+            progress_callback: 进度回调函数，接收当前处理的文本段索引（从1开始）
             
         返回:
             采样率和合成音频数据
@@ -396,6 +398,10 @@ class GPTSoVITSInference:
         
         # 处理每句文本
         for i_text, text in enumerate(texts):
+            # 调用进度回调函数（如果提供）
+            if progress_callback and callable(progress_callback):
+                progress_callback(i_text + 1)  # 从1开始计数
+                
             # 跳过空行
             if len(text.strip()) == 0:
                 continue
