@@ -25,16 +25,13 @@ class InferenceController(BaseController):
         super().__init__(parent)
         self.inference_model = InferenceModel()
         
-        # 注册程序退出时保存历史记录
-        atexit.register(self.save_history)
+        # 不再需要注册程序退出时保存历史记录
+        # atexit.register(self.save_history)
     
     def __del__(self):
-        """析构函数，取消注册退出保存函数"""
-        # 已经通过atexit注册退出时的保存函数，这里只需取消注册
-        try:
-            atexit.unregister(self.save_history)
-        except:
-            pass
+        """析构函数"""
+        # 不再需要取消注册退出保存函数
+        pass
     
     @Slot("QVariantMap")
     def generate_speech_async(self, config: Dict):
@@ -105,15 +102,4 @@ class InferenceController(BaseController):
     @Slot(result=list)
     def get_history(self) -> List[Dict]:
         """获取历史记录"""
-        return self.inference_model.get_history()
-    
-    @Slot()
-    def clear_history(self):
-        """清空历史记录"""
-        self.inference_model.clear_history()
-        self.history_updated.emit()
-    
-    @Slot()
-    def save_history(self):
-        """保存历史记录"""
-        self.inference_model.save_history() 
+        return self.inference_model.get_history() 
