@@ -178,6 +178,20 @@ class ExperimentTab(QWidget):
         # 保存为角色按钮
         buttons_layout = QHBoxLayout()
         
+        # 添加角色名和情绪输入框
+        role_name_layout = QHBoxLayout()
+        role_name_layout.addWidget(QLabel("角色名:"))
+        self.role_name_edit = QLineEdit()
+        role_name_layout.addWidget(self.role_name_edit)
+        
+        emotion_name_layout = QHBoxLayout()
+        emotion_name_layout.addWidget(QLabel("情绪:"))
+        self.emotion_name_edit = QLineEdit()
+        emotion_name_layout.addWidget(self.emotion_name_edit)
+        
+        left_layout.addLayout(role_name_layout)
+        left_layout.addLayout(emotion_name_layout)
+        
         self.save_role_button = QPushButton("保存为角色")
         self.save_role_button.clicked.connect(self.save_as_role)
         buttons_layout.addWidget(self.save_role_button)
@@ -366,14 +380,17 @@ class ExperimentTab(QWidget):
     
     def save_as_role(self):
         """保存为角色配置"""
-        # 获取角色名称
-        role_name, ok = QInputDialog.getText(self, "保存角色", "请输入角色名称:")
-        if not ok or not role_name:
+        # 从输入框获取角色名称和情绪
+        role_name = self.role_name_edit.text().strip()
+        emotion_name = self.emotion_name_edit.text().strip()
+        
+        # 验证输入
+        if not role_name:
+            QMessageBox.warning(self, "警告", "请输入角色名称")
             return
             
-        # 获取情感名称
-        emotion_name, ok = QInputDialog.getText(self, "保存角色", "请输入情感名称:")
-        if not ok or not emotion_name:
+        if not emotion_name:
+            QMessageBox.warning(self, "警告", "请输入情绪名称")
             return
             
         # 获取当前配置
