@@ -57,4 +57,53 @@ class RoleController(BaseController):
         else:
             self.error_occurred.emit(f"保存角色配置失败: {role_name}")
         
-        return result 
+        return result
+        
+    @Slot(str, str, "QVariantMap", result=bool)
+    def save_role(self, role_name: str, emotion_name: str, config: Dict) -> bool:
+        """保存角色的情感配置"""
+        if not role_name:
+            self.error_occurred.emit("角色名不能为空")
+            return False
+            
+        if not emotion_name:
+            self.error_occurred.emit("情感名不能为空")
+            return False
+            
+        try:
+            # 创建角色配置结构
+            role_config = {
+                "emotions": {
+                    emotion_name: config
+                }
+            }
+            
+            # 检查角色是否已存在
+            if role_name in self.get_role_names():
+                # 获取现有角色的情感列表
+                emotions = self.get_emotion_names(role_name)
+                if emotion_name in emotions:
+                    # 更新现有情感
+                    existing_config = self.role_model.get_role_config(role_name)
+                    existing_config["emotions"][emotion_name] = config
+                    result = self.role_model.save_role_config(role_name, existing_config)
+                else:
+                    # 添加新情感到现有角色
+                    existing_config = self.role_model.get_role_config(role_name)
+                    existing_config["emotions"][emotion_name] = config
+                    result = self.role_model.save_role_config(role_name, existing_config)
+            else:
+                # 创建新角色
+                result = self.role_model.save_role_config(role_name, role_config)
+            
+            if result:
+                self.role_saved.emit(role_name)
+                self.roles_changed.emit()
+                self.refresh_roles()
+                return True
+            else:
+                self.error_occurred.emit(f"保存角色配置失败: {role_name}/{emotion_name}")
+                return False
+        except Exception as e:
+            self.error_occurred.emit(f"保存角色时发生错误: {str(e)}")
+            return False 

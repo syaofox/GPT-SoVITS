@@ -6,7 +6,7 @@
 
 import os
 from typing import Dict
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
     QGroupBox, QLabel, QLineEdit, QTextEdit, QComboBox, 
@@ -21,11 +21,15 @@ from gui.components.history_list import HistoryList
 class ExperimentTab(QWidget):
     """实验选项卡，用于试听和创建角色配置"""
     
-    def __init__(self, role_controller, inference_controller, parent=None):
+    # 添加生成请求信号
+    generate_requested = Signal(dict, str, bool)
+    
+    def __init__(self, role_controller, inference_controller, shared_controls=True, parent=None):
         super().__init__(parent)
         
         self.role_controller = role_controller
         self.inference_controller = inference_controller
+        self.shared_controls = shared_controls
         
         # 模型路径字典
         self.gpt_model_paths = {}
@@ -148,18 +152,8 @@ class ExperimentTab(QWidget):
         
         left_layout.addWidget(adv_group)
 
-        # 进度条
-        progress_layout = QHBoxLayout()
-        self.progress_label = QLabel("就绪")
-        progress_layout.addWidget(self.progress_label)
-        left_layout.addLayout(progress_layout)
-        
-        # 操作按钮
+        # 保存为角色按钮
         buttons_layout = QHBoxLayout()
-        
-        self.generate_button = QPushButton("生成语音")
-        self.generate_button.clicked.connect(self.generate_speech)
-        buttons_layout.addWidget(self.generate_button)
         
         self.save_role_button = QPushButton("保存为角色")
         self.save_role_button.clicked.connect(self.save_as_role)
@@ -167,178 +161,197 @@ class ExperimentTab(QWidget):
         
         left_layout.addLayout(buttons_layout)
         
-        # 右侧面板
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        
-        # 音频播放器
-        self.audio_player = AudioPlayer()
-        right_layout.addWidget(self.audio_player)
-        
-        # 历史记录
-        self.history_list = HistoryList()
-        right_layout.addWidget(self.history_list)
-        
-        # 添加到主布局
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(left_panel)
-        splitter.addWidget(right_panel)
-        splitter.setSizes([500, 300])
-        
-        main_layout.addWidget(splitter)
+        # 如果需要内置播放器和历史记录
+        if not self.shared_controls:
+            # 右侧面板
+            right_panel = QWidget()
+            right_layout = QVBoxLayout(right_panel)
+            
+            # 音频播放器
+            self.audio_player = AudioPlayer()
+            right_layout.addWidget(self.audio_player)
+            
+            # 历史记录
+            self.history_list = HistoryList()
+            right_layout.addWidget(self.history_list)
+            
+            # 添加到主布局
+            splitter = QSplitter(Qt.Horizontal)
+            splitter.addWidget(left_panel)
+            splitter.addWidget(right_panel)
+            splitter.setSizes([500, 300])
+            
+            main_layout.addWidget(splitter)
+        else:
+            # 只添加左侧配置面板
+            main_layout.addWidget(left_panel)
     
     def connect_signals(self):
         """连接信号槽"""
-        self.inference_controller.inference_completed.connect(self.on_inference_completed)
         self.inference_controller.inference_failed.connect(self.on_inference_failed)
-        self.inference_controller.history_updated.connect(self.update_history)
-        self.inference_controller.progress_updated.connect(self.update_progress)
-        self.inference_controller.inference_started.connect(self.on_inference_started)
-        self.history_list.audio_selected.connect(self.audio_player.load_audio)
-        self.history_list.history_cleared.connect(self.inference_controller.clear_history)
+        
+        # 只有在非共享模式下才需要连接这些信号
+        if not self.shared_controls:
+            self.inference_controller.inference_completed.connect(self.on_inference_completed)
+            self.inference_controller.history_updated.connect(self.update_history)
+            self.history_list.audio_selected.connect(self.audio_player.load_audio)
+            self.history_list.history_cleared.connect(self.inference_controller.clear_history)
     
     def update_history(self):
         """更新历史记录"""
-        history = self.inference_controller.get_history()
-        self.history_list.update_history(history)
-    
-    def update_progress(self, message: str):
-        """更新进度信息"""
-        self.progress_label.setText(message)
-    
-    def on_inference_started(self):
-        """推理开始回调"""
-        self.generate_button.setEnabled(False)
-        self.save_role_button.setEnabled(False)
-        self.progress_label.setText("正在初始化...")
+        if not self.shared_controls:
+            history = self.inference_controller.get_history()
+            self.history_list.update_history(history)
     
     def browse_ref_audio(self):
         """浏览参考音频文件"""
+        # 打开文件对话框
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "选择参考音频", "", "音频文件 (*.wav *.mp3);;所有文件 (*.*)"
+            self,
+            "选择参考音频文件",
+            "",
+            "音频文件 (*.wav *.mp3 *.flac *.ogg);;所有文件 (*)"
         )
+        
         if file_path:
             self.ref_path_edit.setText(file_path)
-            
-            # 提取文件名作为参考文本（去除路径和扩展名）
-            file_name = os.path.basename(file_path)
-            file_name_without_ext = os.path.splitext(file_name)[0]
-            
-            # 如果参考文本框为空，则填入文件名
-            if not self.prompt_text_edit.toPlainText().strip():
-                self.prompt_text_edit.setText(file_name_without_ext)
     
     def load_gpt_models(self, model_dict):
-        """加载GPT模型文件到下拉框"""
-        self.gpt_model_combo.clear()
+        """加载GPT模型列表"""
         self.gpt_model_paths = model_dict
-        
-        for display_name in model_dict.keys():
-            self.gpt_model_combo.addItem(display_name)
+        self.gpt_model_combo.clear()
+        self.gpt_model_combo.addItems(list(model_dict.keys()))
     
     def load_sovits_models(self, model_dict):
-        """加载SoVITS模型文件到下拉框"""
-        self.sovits_model_combo.clear()
+        """加载SoVITS模型列表"""
         self.sovits_model_paths = model_dict
-        
-        for display_name in model_dict.keys():
-            self.sovits_model_combo.addItem(display_name)
+        self.sovits_model_combo.clear()
+        self.sovits_model_combo.addItems(list(model_dict.keys()))
     
     def get_current_config(self) -> Dict:
         """获取当前配置"""
-        # 获取选中的模型实际路径
-        gpt_display_name = self.gpt_model_combo.currentText()
-        sovits_display_name = self.sovits_model_combo.currentText()
+        # 获取参考音频和文本
+        ref_audio = self.ref_path_edit.text()
+        prompt_text = self.prompt_text_edit.toPlainText()
         
-        gpt_path = self.gpt_model_paths.get(gpt_display_name, "")
-        sovits_path = self.sovits_model_paths.get(sovits_display_name, "")
+        # 获取合成文本和语言
+        text = self.text_edit.toPlainText()
+        text_language = self.text_lang_combo.currentText()
+        prompt_language = self.prompt_lang_combo.currentText()
         
+        # 获取模型路径
+        gpt_model_key = self.gpt_model_combo.currentText()
+        sovits_model_key = self.sovits_model_combo.currentText()
+        gpt_model = self.gpt_model_paths.get(gpt_model_key, "")
+        sovits_model = self.sovits_model_paths.get(sovits_model_key, "")
+        
+        # 获取高级参数
+        cut_method = self.cut_method_combo.currentText()
+        speed = self.speed_spin.value()
+        top_k = self.top_k_spin.value()
+        top_p = self.top_p_spin.value()
+        temperature = self.temperature_spin.value()
+        sample_steps = self.sample_steps_spin.value()
+        pause_time = self.pause_spin.value()
+        
+        # 获取选项
+        ref_free = self.ref_free_check.isChecked()
+        sr = self.sr_check.isChecked()
+        
+        # 返回配置字典
         return {
-            "ref_audio": self.ref_path_edit.text(),
-            "prompt_text": self.prompt_text_edit.toPlainText(),
-            "prompt_lang": self.prompt_lang_combo.currentText(),
-            "text": self.text_edit.toPlainText(),
-            "text_lang": self.text_lang_combo.currentText(),
-            "how_to_cut": self.cut_method_combo.currentText(),
-            "gpt_path": gpt_path,
-            "sovits_path": sovits_path,
-            "speed": self.speed_spin.value(),
-            "top_k": self.top_k_spin.value(),
-            "top_p": self.top_p_spin.value(),
-            "temperature": self.temperature_spin.value(),
-            "sample_steps": self.sample_steps_spin.value(),
-            "pause_second": self.pause_spin.value(),
-            "ref_free": self.ref_free_check.isChecked(),
-            "if_sr": self.sr_check.isChecked(),
-            "aux_refs": []  # 实验选项卡不支持多参考音频融合
+            "ref_audio": ref_audio,
+            "prompt_text": prompt_text,
+            "prompt_language": prompt_language,
+            "text": text,
+            "text_language": text_language,
+            "cut_method": cut_method,
+            "gpt_model": gpt_model,
+            "sovits_model": sovits_model,
+            "speed": speed,
+            "top_k": top_k,
+            "top_p": top_p,
+            "temperature": temperature,
+            "sample_steps": sample_steps,
+            "pause_time": pause_time,
+            "ref_free": ref_free,
+            "sr": sr
         }
+    
+    def generate_with_config(self):
+        """使用当前配置生成语音"""
+        # 获取合成文本
+        text = self.text_edit.toPlainText()
+        if not text:
+            QMessageBox.warning(self, "警告", "请输入要合成的文本")
+            return False
+            
+        # 获取当前配置
+        config = self.get_current_config()
+        
+        # 检查必要参数
+        if not config["gpt_model"]:
+            QMessageBox.warning(self, "警告", "请选择GPT模型")
+            return False
+            
+        if not config["sovits_model"]:
+            QMessageBox.warning(self, "警告", "请选择SoVITS模型")
+            return False
+            
+        if not config["ref_free"] and not config["ref_audio"]:
+            QMessageBox.warning(self, "警告", "请选择参考音频文件或勾选无参考文本")
+            return False
+            
+        if not config["ref_free"] and not os.path.exists(config["ref_audio"]):
+            QMessageBox.warning(self, "警告", f"参考音频文件不存在: {config['ref_audio']}")
+            return False
+            
+        # 调用推理控制器
+        self.inference_controller.generate_speech_async(config)
+        return True
     
     def generate_speech(self):
         """生成语音"""
-        config = self.get_current_config()
-        self.inference_controller.generate_speech_async(config)
+        if self.shared_controls:
+            # 在共享模式下，发送信号给主窗口处理
+            config = self.get_current_config()
+            text = self.text_edit.toPlainText()
+            self.generate_requested.emit(config, text, False)
+        else:
+            # 在非共享模式下，直接处理
+            self.generate_with_config()
     
     def on_inference_completed(self, file_path: str):
         """推理完成回调"""
-        self.generate_button.setEnabled(True)
-        self.save_role_button.setEnabled(True)
-        self.progress_label.setText("生成完成")
-        self.audio_player.load_audio(file_path)
-        QMessageBox.information(self, "生成成功", f"音频已保存至: {file_path}")
+        if not self.shared_controls:
+            self.generate_button.setEnabled(True)
+            self.progress_label.setText("生成完成")
+            self.audio_player.load_audio(file_path)
     
     def on_inference_failed(self, error_msg: str):
         """推理失败回调"""
-        self.generate_button.setEnabled(True)
-        self.save_role_button.setEnabled(True)
-        self.progress_label.setText("生成失败")
-        QMessageBox.critical(self, "生成失败", error_msg)
+        if not self.shared_controls:
+            self.generate_button.setEnabled(True)
+            self.progress_label.setText(f"生成失败: {error_msg}")
     
     def save_as_role(self):
         """保存为角色配置"""
-        role_name, ok = QInputDialog.getText(self, "保存角色", "角色名称:")
+        # 获取角色名称
+        role_name, ok = QInputDialog.getText(self, "保存角色", "请输入角色名称:")
         if not ok or not role_name:
             return
             
-        emotion_name, ok = QInputDialog.getText(self, "保存情感", "情感名称:")
+        # 获取情感名称
+        emotion_name, ok = QInputDialog.getText(self, "保存角色", "请输入情感名称:")
         if not ok or not emotion_name:
             return
-        
-        # 检查角色是否存在
-        exists = role_name in self.role_controller.get_role_names()
-        if exists:
-            emotions = self.role_controller.get_emotion_names(role_name)
-            if emotion_name in emotions:
-                # 情感已存在，提示将覆盖
-                reply = QMessageBox.question(
-                    self, 
-                    "情感已存在", 
-                    f"角色 '{role_name}' 中已存在名为 '{emotion_name}' 的情感，是否覆盖？",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
-                )
-                if reply == QMessageBox.No:
-                    return
-            else:
-                # 角色存在但情感不存在，提示将添加
-                QMessageBox.information(
-                    self, 
-                    "添加情感", 
-                    f"将向角色 '{role_name}' 添加名为 '{emotion_name}' 的新情感"
-                )
             
+        # 获取当前配置
         config = self.get_current_config()
-        role_config = {
-            "emotions": {
-                emotion_name: config
-            }
-        }
         
-        success = self.role_controller.save_role_config(role_name, role_config)
-        if success:
-            if exists:
-                QMessageBox.information(self, "保存成功", f"角色 '{role_name}' 的情感 '{emotion_name}' 保存成功")
-            else:
-                QMessageBox.information(self, "保存成功", f"新角色 '{role_name}' 创建成功")
-                
-            # 刷新角色列表以显示更新
-            self.role_controller.refresh_roles() 
+        # 保存角色
+        try:
+            self.role_controller.save_role(role_name, emotion_name, config)
+            QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}") 
