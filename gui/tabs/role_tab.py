@@ -24,6 +24,8 @@ class RoleTab(QWidget):
     generate_requested = Signal(dict, str, bool)
     # 添加角色配置更新信号
     role_config_selected = Signal(dict)
+    # 添加角色名和情感名更新信号
+    role_info_selected = Signal(str, str)
     
     def __init__(self, role_controller, inference_controller, shared_controls=True, parent=None):
         super().__init__(parent)
@@ -137,6 +139,10 @@ class RoleTab(QWidget):
             
         self.current_role = self.role_combo.currentText()
         self.update_emotions()
+        
+        # 发射角色和情感更新信号
+        if self.current_role and self.current_emotion:
+            self.role_info_selected.emit(self.current_role, self.current_emotion)
     
     def update_emotions(self):
         """更新情感列表"""
@@ -172,6 +178,10 @@ class RoleTab(QWidget):
         self.current_emotion = self.emotion_combo.currentText()
         # 情感改变时获取当前配置
         self.get_current_emotion_config()
+        
+        # 发射角色和情感更新信号
+        if self.current_role and self.current_emotion:
+            self.role_info_selected.emit(self.current_role, self.current_emotion)
     
     def get_current_emotion_config(self):
         """获取当前选中角色和情感的配置，并发射信号更新试听配置"""

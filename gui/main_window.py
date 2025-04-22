@@ -151,6 +151,8 @@ class MainWindow(QMainWindow):
         
         # 连接角色选择信号
         self.role_tab.role_config_selected.connect(self.apply_role_config_to_experiment)
+        # 连接角色信息选择信号
+        self.role_tab.role_info_selected.connect(self.apply_role_info_to_experiment)
     
     def apply_role_config_to_experiment(self, role_config):
         """将角色配置应用到试听配置标签页"""
@@ -253,6 +255,15 @@ class MainWindow(QMainWindow):
         
         # 更新有效的辅助参考音频
         role_config["aux_refs"] = valid_aux_refs
+    
+    def apply_role_info_to_experiment(self, role_name, emotion_name):
+        """将角色名和情绪信息应用到试听配置标签页"""
+        if not role_name or not emotion_name:
+            return
+        
+        # 填充角色名和情绪到实验页面的输入框
+        self.experiment_tab.role_name_edit.setText(role_name)
+        self.experiment_tab.emotion_name_edit.setText(emotion_name)
     
     def update_history_display(self):
         """更新历史记录显示"""
