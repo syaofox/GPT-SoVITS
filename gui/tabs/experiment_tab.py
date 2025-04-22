@@ -121,7 +121,7 @@ class ExperimentTab(QWidget):
         adv_layout.addWidget(QLabel("语速:"), 0, 2)
         self.speed_spin = QDoubleSpinBox()
         self.speed_spin.setRange(0.6, 1.65)
-        self.speed_spin.setSingleStep(0.05)
+        self.speed_spin.setSingleStep(0.01)
         self.speed_spin.setValue(1.0)
         adv_layout.addWidget(self.speed_spin, 0, 3)
         
@@ -134,14 +134,14 @@ class ExperimentTab(QWidget):
         adv_layout.addWidget(QLabel("Top P:"), 2, 2)
         self.top_p_spin = QDoubleSpinBox()
         self.top_p_spin.setRange(0.0, 1.0)
-        self.top_p_spin.setSingleStep(0.05)
+        self.top_p_spin.setSingleStep(0.01)
         self.top_p_spin.setValue(1.0)
         adv_layout.addWidget(self.top_p_spin, 2, 3)
         
         adv_layout.addWidget(QLabel("温度:"), 3, 2)
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.1, 2.0)
-        self.temperature_spin.setSingleStep(0.05)
+        self.temperature_spin.setSingleStep(0.01)
         self.temperature_spin.setValue(1.0)
         adv_layout.addWidget(self.temperature_spin, 3, 3)
         
