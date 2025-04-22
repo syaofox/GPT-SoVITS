@@ -217,6 +217,10 @@ class RoleTab(QWidget):
         # 添加文本
         config["text"] = self.text_edit.toPlainText()
         
+        # 确保角色名和情绪名存在于配置中
+        config["role_name"] = self.current_role
+        config["emotion_name"] = self.current_emotion
+        
         return config
     
     def on_inference_failed(self, error_msg: str):

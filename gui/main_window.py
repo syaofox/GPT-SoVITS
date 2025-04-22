@@ -336,6 +336,12 @@ class MainWindow(QMainWindow):
             if not config["ref_free"] and not os.path.exists(config["ref_audio"]):
                 self.show_error(f"参考音频文件不存在: {config['ref_audio']}")
                 return
+            
+            # 确保角色名和情绪名存在
+            if not config.get("role_name"):
+                config["role_name"] = self.experiment_tab.role_name_edit.text().strip() or "未知角色"
+            if not config.get("emotion_name"):
+                config["emotion_name"] = self.experiment_tab.emotion_name_edit.text().strip() or "未知情绪"
                 
             # 验证辅助参考音频
             aux_refs = config.get("aux_refs", [])
@@ -370,6 +376,12 @@ class MainWindow(QMainWindow):
             if not config:
                 self.show_error("无法获取角色配置")
                 return
+            
+            # 确保角色名和情绪名存在
+            if not config.get("role_name"):
+                config["role_name"] = role_name
+            if not config.get("emotion_name"):
+                config["emotion_name"] = emotion_name
                 
             # 检查参考音频路径是否存在
             ref_audio = config.get("ref_audio", "")
