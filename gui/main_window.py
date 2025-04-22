@@ -195,9 +195,8 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """窗口关闭事件处理"""
-        # 保存历史记录
-        self.inference_controller.save_history()
-        # 继续正常关闭
+        # InferenceController已经通过atexit注册了程序退出时的保存函数，不需要重复调用
+        # 直接继续正常关闭
         event.accept()
 
     def generate_speech(self):
