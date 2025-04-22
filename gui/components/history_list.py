@@ -5,6 +5,7 @@
 """
 
 import os
+import subprocess
 from typing import Dict, List
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListView, QMessageBox
@@ -31,6 +32,11 @@ class HistoryList(QWidget):
         self.history_view = QListView()
         self.history_view.setModel(self.history_model)
         self.history_view.clicked.connect(self.on_item_clicked)
+        self.history_view.doubleClicked.connect(self.on_item_double_clicked)
+        
+        # 设置为不可编辑
+        self.history_view.setEditTriggers(QListView.NoEditTriggers)
+        
         self.layout.addWidget(self.history_view)
         
         # 清空按钮
@@ -60,6 +66,31 @@ class HistoryList(QWidget):
         path = item.data(Qt.UserRole)
         if path and os.path.exists(path):
             self.audio_selected.emit(path)
+    
+    def on_item_double_clicked(self, index):
+        """历史项双击回调 - 使用系统播放器打开"""
+        if not index.isValid():
+            return
+            
+        item = self.history_model.itemFromIndex(index)
+        path = item.data(Qt.UserRole)
+        if path and os.path.exists(path):
+            try:
+                # 使用系统默认程序打开音频文件
+                if os.name == 'nt':  # Windows
+                    os.startfile(path)
+                elif os.name == 'posix':  # macOS/Linux
+                    # 对于macOS，用open命令；对于Linux，用xdg-open命令
+                    if os.uname().sysname == 'Darwin':  # macOS
+                        subprocess.Popen(['open', path])
+                    else:  # Linux
+                        subprocess.Popen(['xdg-open', path])
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "打开失败",
+                    f"无法使用系统播放器打开文件: {str(e)}"
+                )
     
     def clear_history(self):
         """清空历史记录"""
