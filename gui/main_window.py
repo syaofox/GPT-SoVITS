@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QT
 from PySide6.QtCore import Qt, QSize
 
 from gui.controllers import RoleController, InferenceController
-from gui.tabs import ExperimentTab, RoleTab
+from gui.tabs import ExperimentTab, RoleTab, ReplaceTab
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
 
@@ -30,10 +30,11 @@ class MainWindow(QMainWindow):
         self.gpt_models = self.scan_models(["GPT_weights", "GPT_weights_v2", "GPT_weights_v3", "GPT_weights_v4"])
         self.sovits_models = self.scan_models(["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3", "SoVITS_weights_v4"])
         
+        self.init_ui()
+        
         # 加载文字替换规则
         self.word_replace_rules = self.load_word_replace_rules()
         
-        self.init_ui()
         self.connect_signals()
         
         # 加载模型到下拉框
@@ -79,7 +80,11 @@ class MainWindow(QMainWindow):
                         if line and ' ' in line:
                             source, target = line.split(' ', 1)
                             replace_rules[source] = target
-                self.status_bar.showMessage(f"已加载 {len(replace_rules)} 条文字替换规则")
+                
+                # 如果状态栏已初始化则显示加载信息
+                if hasattr(self, 'status_bar'):
+                    self.status_bar.showMessage(f"已加载 {len(replace_rules)} 条文字替换规则")
+                
         except Exception as e:
             print(f"加载替换规则失败: {e}")
         
@@ -124,6 +129,10 @@ class MainWindow(QMainWindow):
         # 角色选项卡 - 创建为共享控件版本
         self.role_tab = RoleTab(self.role_controller, self.inference_controller, shared_controls=True)
         self.tab_widget.addTab(self.role_tab, "角色推理")
+        
+        # 替换规则编辑标签页
+        self.replace_tab = ReplaceTab()
+        self.tab_widget.addTab(self.replace_tab, "替换规则")
         
         left_layout.addWidget(self.tab_widget)
         
@@ -185,6 +194,9 @@ class MainWindow(QMainWindow):
         self.role_tab.role_config_selected.connect(self.apply_role_config_to_experiment)
         # 连接角色信息选择信号
         self.role_tab.role_info_selected.connect(self.apply_role_info_to_experiment)
+        
+        # 连接替换规则更新信号
+        self.replace_tab.rules_updated.connect(self.update_replace_rules)
     
     def apply_role_config_to_experiment(self, role_config):
         """将角色配置应用到试听配置标签页"""
@@ -326,11 +338,18 @@ class MainWindow(QMainWindow):
         if is_role:
             # 角色推理
             if config and text:
+                # 应用文字替换规则
+                text = self.apply_word_replace(text)
                 config["text"] = text
                 self.inference_controller.generate_speech_async(config)
         else:
             # 实验模式推理
             if config:
+                # 应用文字替换规则
+                text = config.get("text", "")
+                if text:
+                    text = self.apply_word_replace(text)
+                    config["text"] = text
                 self.inference_controller.generate_speech_async(config)
     
     def show_error(self, message: str):
@@ -455,4 +474,9 @@ class MainWindow(QMainWindow):
         if index == 1:  # 切换到角色选项卡
             # 如果当前角色和情感有选择，则触发配置加载
             if self.role_tab.current_role and self.role_tab.current_emotion:
-                self.role_tab.get_current_emotion_config() 
+                self.role_tab.get_current_emotion_config()
+    
+    def update_replace_rules(self, new_rules):
+        """更新替换规则"""
+        self.word_replace_rules = new_rules
+        self.status_bar.showMessage(f"已更新替换规则，共 {len(new_rules)} 条") 
