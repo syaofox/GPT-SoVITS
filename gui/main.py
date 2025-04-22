@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTranslator, QLocale
 
-from gui.views import MainWindow
+from gui.main_window import MainWindow
 
 
 def setup_environment():
