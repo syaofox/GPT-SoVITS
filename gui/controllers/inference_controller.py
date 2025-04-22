@@ -29,9 +29,8 @@ class InferenceController(BaseController):
         atexit.register(self.save_history)
     
     def __del__(self):
-        """析构函数，确保保存历史记录"""
-        self.save_history()
-        # 取消注册退出函数，避免重复调用
+        """析构函数，取消注册退出保存函数"""
+        # 已经通过atexit注册退出时的保存函数，这里只需取消注册
         try:
             atexit.unregister(self.save_history)
         except:
