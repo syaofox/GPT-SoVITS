@@ -36,9 +36,6 @@ class MainWindow(QMainWindow):
         # 加载模型到下拉框
         self.experiment_tab.load_gpt_models(self.gpt_models)
         self.experiment_tab.load_sovits_models(self.sovits_models)
-        
-        # 加载并显示历史记录
-        self.update_history_display()
     
     def scan_models(self, model_dirs):
         """扫描模型文件夹，返回模型名称和路径的字典"""
@@ -141,9 +138,8 @@ class MainWindow(QMainWindow):
         self.inference_controller.progress_updated.connect(self.update_progress)
         
         # 共享组件信号
-        self.inference_controller.history_updated.connect(self.update_history_display)
+        self.inference_controller.inference_completed.connect(self.on_new_audio_generated)
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
-        self.history_list.history_cleared.connect(self.inference_controller.clear_history)
         
         # 标签页生成按钮信号
         self.experiment_tab.generate_requested.connect(self.on_generate_requested)
@@ -261,10 +257,9 @@ class MainWindow(QMainWindow):
         self.experiment_tab.role_name_edit.setText(role_name)
         self.experiment_tab.emotion_name_edit.setText(emotion_name)
     
-    def update_history_display(self):
-        """更新历史记录显示"""
-        history = self.inference_controller.get_history()
-        self.history_list.update_history(history)
+    def on_new_audio_generated(self, file_path: str):
+        """新音频生成后刷新历史列表"""
+        self.history_list.load_output_files()
     
     def on_inference_started(self):
         """推理开始回调"""
@@ -402,9 +397,4 @@ class MainWindow(QMainWindow):
         if index == 1:  # 切换到角色选项卡
             # 如果当前角色和情感有选择，则触发配置加载
             if self.role_tab.current_role and self.role_tab.current_emotion:
-                self.role_tab.get_current_emotion_config()
-    
-    def update_history_display(self):
-        """更新历史记录显示"""
-        history = self.inference_controller.get_history()
-        self.history_list.update_history(history) 
+                self.role_tab.get_current_emotion_config() 
