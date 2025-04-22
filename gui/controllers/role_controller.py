@@ -75,6 +75,10 @@ class RoleController(BaseController):
         if not emotion_name:
             self.error_occurred.emit("情感名不能为空")
             return False
+            
+        if config is None:
+            self.error_occurred.emit("配置不能为空")
+            return False
         
         try:
             # 移除不需要保存的字段
