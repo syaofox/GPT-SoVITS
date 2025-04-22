@@ -43,9 +43,15 @@ class InferenceController(BaseController):
             self.error_occurred.emit("文本不能为空")
             return
             
-        if not config.get("ref_audio"):
+        if not config.get("ref_free") and not config.get("ref_audio"):
             self.error_occurred.emit("参考音频不能为空")
             return
+            
+        # 确保角色和情感信息存在
+        if not config.get("role_name"):
+            config["role_name"] = "未知角色"
+        if not config.get("emotion_name"):
+            config["emotion_name"] = "未知情绪"
             
         self.inference_started.emit()
         
@@ -74,9 +80,15 @@ class InferenceController(BaseController):
             self.error_occurred.emit("文本不能为空")
             return ""
             
-        if not config.get("ref_audio"):
+        if not config.get("ref_free") and not config.get("ref_audio"):
             self.error_occurred.emit("参考音频不能为空")
             return ""
+            
+        # 确保角色和情感信息存在
+        if not config.get("role_name"):
+            config["role_name"] = "未知角色"
+        if not config.get("emotion_name"):
+            config["emotion_name"] = "未知情绪"
             
         self.inference_started.emit()
         

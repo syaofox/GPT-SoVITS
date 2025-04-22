@@ -283,6 +283,10 @@ class ExperimentTab(QWidget):
         config["text_lang"] = self.text_lang_combo.currentText()
         config["how_to_cut"] = self.cut_method_combo.currentText()
         
+        # 获取角色名和情绪名
+        config["role_name"] = self.role_name_edit.text().strip()
+        config["emotion_name"] = self.emotion_name_edit.text().strip()
+        
         # 获取模型选择
         gpt_model_name = self.gpt_model_combo.currentText()
         sovits_model_name = self.sovits_model_combo.currentText()

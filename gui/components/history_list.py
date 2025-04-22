@@ -7,6 +7,7 @@
 import os
 import subprocess
 import glob
+import re
 from pathlib import Path
 from datetime import datetime
 from PySide6.QtCore import Qt, Signal
@@ -55,6 +56,38 @@ class HistoryList(QWidget):
         # components目录的上级是gui，再上级是项目根目录
         return current_dir.parent.parent.parent
     
+    def parse_filename(self, file_name):
+        """解析文件名，提取时间戳、角色、情绪和文本"""
+        # 尝试匹配新格式的文件名: 时间戳_角色_情绪_文本前10字.wav
+        pattern = r'(\d{8}_\d{6})_([^_]*)_([^_]*)_([^.]*)'
+        match = re.match(pattern, file_name)
+        
+        if match:
+            timestamp_str, role, emotion, text_prefix = match.groups()
+            try:
+                timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                return {
+                    "timestamp": timestamp,
+                    "role": role.replace('_', ' '),
+                    "emotion": emotion.replace('_', ' '),
+                    "text_prefix": text_prefix.replace('_', ' ')
+                }
+            except ValueError:
+                pass
+        
+        # 如果不是新格式，尝试旧格式: 时间戳_uuid.wav
+        try:
+            timestamp_part = file_name[:15]  # 取前15个字符 (YYYYMMDD_HHMMSS)
+            timestamp = datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
+            return {
+                "timestamp": timestamp,
+                "role": "未知",
+                "emotion": "未知",
+                "text_prefix": ""
+            }
+        except (ValueError, IndexError):
+            return None
+    
     def load_output_files(self):
         """加载output目录下的音频文件"""
         self.history_model.clear()
@@ -72,17 +105,24 @@ class HistoryList(QWidget):
         
         for wav_file in wav_files:
             file_path = Path(wav_file)
-            # 提取文件名作为显示文本
             file_name = file_path.name
             
-            # 尝试从文件名解析时间戳
-            try:
-                # 假设文件名格式为 YYYYMMDD_HHMMSS_*.wav
-                timestamp_part = file_name[:15]  # 取前15个字符 (YYYYMMDD_HHMMSS)
-                timestamp = datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
-                display_text = f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {file_name}"
-            except (ValueError, IndexError):
-                # 如果无法解析时间戳，直接使用文件名
+            # 解析文件名
+            file_info = self.parse_filename(file_name)
+            
+            if file_info and file_info.get("timestamp"):
+                timestamp = file_info["timestamp"]
+                role = file_info.get("role", "未知")
+                emotion = file_info.get("emotion", "未知")
+                text_prefix = file_info.get("text_prefix", "")
+                
+                # 构建显示文本
+                if role != "未知" and emotion != "未知" and text_prefix:
+                    display_text = f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} | {role}/{emotion} | {text_prefix}..."
+                else:
+                    display_text = f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')} | {file_name}"
+            else:
+                # 如果解析失败，直接使用文件名
                 display_text = file_name
             
             item = QStandardItem(display_text)

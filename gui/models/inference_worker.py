@@ -5,6 +5,7 @@
 """
 
 import uuid
+import re
 from datetime import datetime
 from typing import Dict, Any
 from pathlib import Path
@@ -59,6 +60,19 @@ class InferenceWorker(QObject):
             print(error_msg)
             return False
     
+    def sanitize_filename(self, text):
+        """处理文件名以确保合法性"""
+        # 替换非法字符为下划线
+        # 对Windows和UNIX都有效的文件名处理
+        illegal_chars = r'[\\/*?:"<>|]'
+        sanitized = re.sub(illegal_chars, '_', text)
+        # 移除空格和换行符
+        sanitized = sanitized.replace(' ', '_').replace('\n', '_').replace('\r', '_')
+        # 替换连续的下划线为单个下划线
+        sanitized = re.sub(r'_+', '_', sanitized)
+        # 限制长度
+        return sanitized[:30] if len(sanitized) > 30 else sanitized
+    
     def run(self):
         """执行推理任务"""
         # 检查是否需要初始化引擎
@@ -94,10 +108,22 @@ class InferenceWorker(QObject):
                 pause_second=self.config.get("pause_second", 0.3),
             )
             
-            # 生成唯一文件名
+            # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_id = str(uuid.uuid4())[:8]
-            filename = f"{timestamp}_{unique_id}.wav"
+            
+            # 获取角色名、情绪名和文本
+            role_name = self.sanitize_filename(self.config.get("role_name", "未知角色"))
+            emotion_name = self.sanitize_filename(self.config.get("emotion_name", "未知情绪"))
+            text = self.config.get("text", "")
+            
+            # 提取文本的前10个字符并确保合法性
+            text_prefix = self.sanitize_filename(text[:10])
+            if not text_prefix:
+                text_prefix = "无文本"
+            
+            # 组合文件名: 时间戳_角色_情绪_文本前10字
+            filename = f"{timestamp}_{role_name}_{emotion_name}_{text_prefix}.wav"
+            
             output_path = Path(self.output_dir) / filename
             
             # 保存音频
