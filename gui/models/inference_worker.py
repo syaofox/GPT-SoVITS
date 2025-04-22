@@ -76,28 +76,31 @@ class InferenceWorker(QObject):
         # 限制长度
         return sanitized[:30] if len(sanitized) > 30 else sanitized
     
-    def preprocess_text(self, text, how_to_cut):
-        """预处理文本并计算分段数量"""
-        try:
-            # 导入需要的模块来切分文本
-            from gpt_sovits_inference.text import cut_text
+    def progress_callback(self, current_segment, total_segments=None):
+        """进度回调函数，直接使用从推理引擎获取的进度信息"""
+        # 更新总段数（如果提供）
+        if total_segments is not None:
+            self.total_segments = total_segments
+            # 如果是初始通知（current_segment=0），显示分段信息
+            if current_segment == 0:
+                self.progress.emit(f"文本已分割为 {self.total_segments} 个片段")
+                return
+        
+        # 确保数值有效
+        if current_segment <= 0:
+            current_segment = 1
             
-            # 切分文本获取分段
-            segments = cut_text(text, how_to_cut)
-            self.text_segments = segments
-            self.total_segments = len(segments)
-            
-            # 更新进度信息
-            self.progress.emit(f"文本已分割为 {self.total_segments} 个片段")
-            
-            return segments
-        except Exception as e:
-            print(f"文本预处理失败: {str(e)}")
-            return [text]  # 如果失败，返回整段文本作为单个分段
-    
-    def progress_callback(self, current_segment):
-        """进度回调函数"""
+        # 确保total_segments有效
+        if self.total_segments <= 0:
+            self.total_segments = max(1, current_segment)
+        
+        # 确保current不会超过total
+        current_segment = min(current_segment, self.total_segments)
+        
+        # 更新当前段索引
         self.current_segment = current_segment
+        
+        # 发送进度信息
         self.progress.emit(f"正在合成: {current_segment}/{self.total_segments}")
     
     def run(self):
@@ -114,14 +117,18 @@ class InferenceWorker(QObject):
             return
             
         try:
-            # 预处理文本，计算分段
+            # 获取配置参数
             text = self.config.get("text", "")
             how_to_cut = self.config.get("how_to_cut", "凑四句一切")
-            self.preprocess_text(text, how_to_cut)
             
-            self.progress.emit(f"开始生成语音 (0/{self.total_segments})...")
+            # 重置进度信息
+            self.total_segments = 0
+            self.current_segment = 0
             
-            # 生成语音
+            # 显示开始消息
+            self.progress.emit("准备生成语音...")
+            
+            # 生成语音（GPTSoVITSInference会计算文本分段并通过回调提供进度）
             sample_rate, audio_data = self.engine.generate_speech(
                 ref_wav_path=self.config.get("ref_audio", ""),
                 prompt_text=self.config.get("prompt_text", ""),
@@ -147,7 +154,6 @@ class InferenceWorker(QObject):
             # 获取角色名、情绪名和文本
             role_name = self.sanitize_filename(self.config.get("role_name", "未知角色"))
             emotion_name = self.sanitize_filename(self.config.get("emotion_name", "未知情绪"))
-            text = self.config.get("text", "")
             
             # 提取文本的前10个字符并确保合法性
             text_prefix = self.sanitize_filename(text[:10])
