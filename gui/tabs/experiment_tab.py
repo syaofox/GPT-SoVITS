@@ -265,8 +265,8 @@ class ExperimentTab(QWidget):
         
         # 获取合成文本和语言
         text = self.text_edit.toPlainText()
-        text_language = self.text_lang_combo.currentText()
-        prompt_language = self.prompt_lang_combo.currentText()
+        text_lang = self.text_lang_combo.currentText()
+        prompt_lang = self.prompt_lang_combo.currentText()
         
         # 获取模型路径
         gpt_model_key = self.gpt_model_combo.currentText()
@@ -275,26 +275,26 @@ class ExperimentTab(QWidget):
         sovits_model = self.sovits_model_paths.get(sovits_model_key, "")
         
         # 获取高级参数
-        cut_method = self.cut_method_combo.currentText()
+        how_to_cut = self.cut_method_combo.currentText()
         speed = self.speed_spin.value()
         top_k = self.top_k_spin.value()
         top_p = self.top_p_spin.value()
         temperature = self.temperature_spin.value()
         sample_steps = self.sample_steps_spin.value()
-        pause_time = self.pause_spin.value()
+        pause_second = self.pause_spin.value()
         
         # 获取选项
         ref_free = self.ref_free_check.isChecked()
-        sr = self.sr_check.isChecked()
+        if_sr = self.sr_check.isChecked()
         
         # 返回配置字典
         return {
             "ref_audio": ref_audio,
             "prompt_text": prompt_text,
-            "prompt_language": prompt_language,
+            "prompt_lang": prompt_lang,
             "text": text,
-            "text_language": text_language,
-            "cut_method": cut_method,
+            "text_lang": text_lang,
+            "how_to_cut": how_to_cut,
             "gpt_model": gpt_model,
             "sovits_model": sovits_model,
             "speed": speed,
@@ -302,9 +302,9 @@ class ExperimentTab(QWidget):
             "top_p": top_p,
             "temperature": temperature,
             "sample_steps": sample_steps,
-            "pause_time": pause_time,
+            "pause_second": pause_second,
             "ref_free": ref_free,
-            "sr": sr,
+            "if_sr": if_sr,
             "aux_refs": aux_refs  # 添加辅助参考音频
         }
     
@@ -408,9 +408,14 @@ class ExperimentTab(QWidget):
                 
                 if not exists:
                     # 添加到列表
-                    item = QListWidgetItem(os.path.basename(file_path))
-                    item.setData(Qt.UserRole, file_path)
+                    item = self.create_aux_ref_item(file_path)
                     self.aux_refs_list.addItem(item)
+    
+    def create_aux_ref_item(self, file_path):
+        """创建辅助参考音频列表项"""
+        item = QListWidgetItem(os.path.basename(file_path))
+        item.setData(Qt.UserRole, file_path)
+        return item
     
     def remove_aux_ref_audio(self):
         """删除选中的辅助参考音频"""

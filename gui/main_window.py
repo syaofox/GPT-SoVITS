@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
         
         # 选项卡
         self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
         
         # 实验选项卡 - 创建为共享控件版本
         self.experiment_tab = ExperimentTab(self.role_controller, self.inference_controller, shared_controls=True)
@@ -147,6 +148,111 @@ class MainWindow(QMainWindow):
         # 标签页生成按钮信号
         self.experiment_tab.generate_requested.connect(self.on_generate_requested)
         self.role_tab.generate_requested.connect(self.on_generate_requested)
+        
+        # 连接角色选择信号
+        self.role_tab.role_config_selected.connect(self.apply_role_config_to_experiment)
+    
+    def apply_role_config_to_experiment(self, role_config):
+        """将角色配置应用到试听配置标签页"""
+        if not role_config:
+            return
+            
+        # 填充参考音频和文本
+        self.experiment_tab.ref_path_edit.setText(role_config.get("ref_audio", ""))
+        self.experiment_tab.prompt_text_edit.setPlainText(role_config.get("prompt_text", ""))
+        
+        # 设置下拉框选项
+        prompt_lang = role_config.get("prompt_lang", "中文")
+        text_lang = role_config.get("text_lang", "中文")
+        cut_method = role_config.get("how_to_cut", "按句切")
+        
+        # 查找并设置下拉框索引
+        prompt_lang_index = self.experiment_tab.prompt_lang_combo.findText(prompt_lang)
+        if prompt_lang_index >= 0:
+            self.experiment_tab.prompt_lang_combo.setCurrentIndex(prompt_lang_index)
+            
+        text_lang_index = self.experiment_tab.text_lang_combo.findText(text_lang)
+        if text_lang_index >= 0:
+            self.experiment_tab.text_lang_combo.setCurrentIndex(text_lang_index)
+            
+        cut_method_index = self.experiment_tab.cut_method_combo.findText(cut_method)
+        if cut_method_index >= 0:
+            self.experiment_tab.cut_method_combo.setCurrentIndex(cut_method_index)
+        
+        # 获取模型路径
+        gpt_model = role_config.get("gpt_model", "")
+        sovits_model = role_config.get("sovits_model", "")
+        
+        # 打印调试信息
+        print(f"应用角色配置: gpt={gpt_model}, sovits={sovits_model}")
+        
+        # 改进后的模型匹配逻辑
+        if gpt_model:
+            # 尝试直接匹配完整路径
+            gpt_matched = False
+            for display_name, path in self.gpt_models.items():
+                if path == gpt_model:
+                    index = self.experiment_tab.gpt_model_combo.findText(display_name)
+                    if index >= 0:
+                        self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
+                        gpt_matched = True
+                        break
+            
+            # 如果直接匹配失败，尝试匹配文件名
+            if not gpt_matched:
+                gpt_filename = os.path.basename(gpt_model)
+                for display_name, path in self.gpt_models.items():
+                    if os.path.basename(path) == gpt_filename:
+                        index = self.experiment_tab.gpt_model_combo.findText(display_name)
+                        if index >= 0:
+                            self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
+                            break
+        
+        if sovits_model:
+            # 尝试直接匹配完整路径
+            sovits_matched = False
+            for display_name, path in self.sovits_models.items():
+                if path == sovits_model:
+                    index = self.experiment_tab.sovits_model_combo.findText(display_name)
+                    if index >= 0:
+                        self.experiment_tab.sovits_model_combo.setCurrentIndex(index)
+                        sovits_matched = True
+                        break
+            
+            # 如果直接匹配失败，尝试匹配文件名
+            if not sovits_matched:
+                sovits_filename = os.path.basename(sovits_model)
+                for display_name, path in self.sovits_models.items():
+                    if os.path.basename(path) == sovits_filename:
+                        index = self.experiment_tab.sovits_model_combo.findText(display_name)
+                        if index >= 0:
+                            self.experiment_tab.sovits_model_combo.setCurrentIndex(index)
+                            break
+        
+        # 设置高级参数
+        self.experiment_tab.speed_spin.setValue(role_config.get("speed", 1.0))
+        self.experiment_tab.top_k_spin.setValue(role_config.get("top_k", 15))
+        self.experiment_tab.top_p_spin.setValue(role_config.get("top_p", 1.0))
+        self.experiment_tab.temperature_spin.setValue(role_config.get("temperature", 1.0))
+        self.experiment_tab.sample_steps_spin.setValue(role_config.get("sample_steps", 8))
+        self.experiment_tab.pause_spin.setValue(role_config.get("pause_second", 0.3))
+        
+        # 设置选项
+        self.experiment_tab.ref_free_check.setChecked(role_config.get("ref_free", False))
+        self.experiment_tab.sr_check.setChecked(role_config.get("if_sr", False))
+        
+        # 清空并添加辅助参考音频
+        self.experiment_tab.aux_refs_list.clear()
+        aux_refs = role_config.get("aux_refs", [])
+        valid_aux_refs = []
+        for aux_ref in aux_refs:
+            if os.path.exists(aux_ref):
+                item = self.experiment_tab.create_aux_ref_item(aux_ref)
+                self.experiment_tab.aux_refs_list.addItem(item)
+                valid_aux_refs.append(aux_ref)
+        
+        # 更新有效的辅助参考音频
+        role_config["aux_refs"] = valid_aux_refs
     
     def update_history_display(self):
         """更新历史记录显示"""
@@ -238,29 +344,11 @@ class MainWindow(QMainWindow):
                 else:
                     self.show_error(f"辅助参考音频文件不存在，已忽略: {aux_ref}")
             
-            # 转换参数名称以匹配推理控制器期望的格式
-            api_config = {
-                "ref_audio": config["ref_audio"],
-                "prompt_text": config["prompt_text"],
-                "prompt_lang": config["prompt_language"],
-                "text": config["text"],
-                "text_lang": config["text_language"],
-                "how_to_cut": config["cut_method"],
-                "gpt_path": config["gpt_model"],
-                "sovits_path": config["sovits_model"],
-                "speed": config["speed"],
-                "top_k": config["top_k"],
-                "top_p": config["top_p"],
-                "temperature": config["temperature"],
-                "sample_steps": config["sample_steps"],
-                "pause_second": config["pause_time"],
-                "ref_free": config["ref_free"],
-                "if_sr": config["sr"],
-                "aux_refs": valid_aux_refs  # 使用有效的辅助参考音频
-            }
+            # 更新有效的辅助参考音频
+            config["aux_refs"] = valid_aux_refs
                 
             # 调用推理控制器
-            self.inference_controller.generate_speech_async(api_config)
+            self.inference_controller.generate_speech_async(config)
             
         elif current_index == 1:  # 角色选项卡
             role_name = self.role_tab.current_role
@@ -275,15 +363,15 @@ class MainWindow(QMainWindow):
                 self.show_error("请输入要合成的文本")
                 return
                 
-            # 获取角色配置
-            config = self.role_controller.get_emotion_config(role_name, emotion_name)
+            # 获取推理配置
+            config = self.role_tab.get_inference_config()
             if not config:
                 self.show_error("无法获取角色配置")
                 return
                 
             # 检查参考音频路径是否存在
             ref_audio = config.get("ref_audio", "")
-            if ref_audio and not os.path.exists(ref_audio):
+            if not config.get("ref_free", False) and ref_audio and not os.path.exists(ref_audio):
                 self.show_error(f"参考音频文件不存在: {ref_audio}")
                 return
                 
@@ -299,30 +387,17 @@ class MainWindow(QMainWindow):
             # 更新有效的辅助参考音频
             config["aux_refs"] = valid_aux_refs
                 
-            # 添加当前文本到配置中 - 确保配置与InferenceController期望的一致
-            config["text"] = text
-            
-            # 检查并处理可能的字段名称不匹配问题
-            if "prompt_language" in config and "prompt_lang" not in config:
-                config["prompt_lang"] = config["prompt_language"]
-                
-            if "text_language" in config and "text_lang" not in config:
-                config["text_lang"] = config["text_language"]
-                
-            if "cut_method" in config and "how_to_cut" not in config:
-                config["how_to_cut"] = config["cut_method"]
-                
-            if "gpt_model" in config and "gpt_path" not in config:
-                config["gpt_path"] = config["gpt_model"]
-                
-            if "sovits_model" in config and "sovits_path" not in config:
-                config["sovits_path"] = config["sovits_model"]
-                
-            if "pause_time" in config and "pause_second" not in config:
-                config["pause_second"] = config["pause_time"]
-                
-            if "sr" in config and "if_sr" not in config:
-                config["if_sr"] = config["sr"]
-                
             # 调用推理控制器
-            self.inference_controller.generate_speech_async(config) 
+            self.inference_controller.generate_speech_async(config)
+    
+    def on_tab_changed(self, index):
+        """处理标签页切换"""
+        if index == 1:  # 切换到角色选项卡
+            # 如果当前角色和情感有选择，则触发配置加载
+            if self.role_tab.current_role and self.role_tab.current_emotion:
+                self.role_tab.get_current_emotion_config()
+    
+    def update_history_display(self):
+        """更新历史记录显示"""
+        history = self.inference_controller.get_history()
+        self.history_list.update_history(history) 

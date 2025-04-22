@@ -66,7 +66,7 @@ class RoleModel:
                             else:
                                 aux_refs.append(aux_ref)
                         emotion_config["aux_refs"] = aux_refs
-                
+                    
                 self.roles[role_dir.name] = config
             except Exception as e:
                 print(f"加载角色配置失败: {role_dir.name}, 错误: {str(e)}")
