@@ -83,6 +83,10 @@ class RoleModel:
         emotions = self.get_role_emotions(role_name)
         return emotions.get(emotion_name, {})
     
+    def get_role_config(self, role_name: str) -> Dict:
+        """获取角色的完整配置"""
+        return self.roles.get(role_name, {"emotions": {}})
+    
     def save_role_config(self, role_name: str, config: Dict) -> bool:
         """
         保存角色配置
