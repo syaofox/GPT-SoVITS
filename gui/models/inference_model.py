@@ -1,235 +1,25 @@
 """
-GUI模型层
+推理模型
 
-处理数据和业务逻辑
+管理语音合成推理和历史记录
 """
 
 import os
 import json
 import uuid
+import gc
+import torch
 import soundfile as sf
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Dict, List, Tuple, Optional, Any, Union, Callable
 from datetime import datetime
+
+# 导入多线程支持
+from PySide6.QtCore import QThread
 
 # 导入推理模块
 from gpt_sovits_inference import GPTSoVITSInference
-
-# 导入多线程支持
-from PySide6.QtCore import QObject, QThread, Signal
-
-class InferenceWorker(QObject):
-    """推理工作线程"""
-    
-    finished = Signal(bool, str)  # 成功标志，结果路径或错误信息
-    progress = Signal(str)  # 进度信息
-    
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.config = {}
-        self.engine = None
-        self.output_dir = "output"
-    
-    def set_config(self, config: Dict, engine, output_dir: str):
-        """设置推理配置和引擎"""
-        self.config = config
-        self.engine = engine
-        self.output_dir = output_dir
-    
-    def run(self):
-        """执行推理任务"""
-        if not self.engine:
-            self.finished.emit(False, "推理引擎未初始化")
-            return
-            
-        try:
-            self.progress.emit("正在生成语音...")
-            
-            # 生成语音
-            sample_rate, audio_data = self.engine.generate_speech(
-                ref_wav_path=self.config.get("ref_audio", ""),
-                prompt_text=self.config.get("prompt_text", ""),
-                prompt_language=self.config.get("prompt_lang", "中文"),
-                text=self.config.get("text", ""),
-                text_language=self.config.get("text_lang", "中文"),
-                how_to_cut=self.config.get("how_to_cut", "凑四句一切"),
-                top_k=self.config.get("top_k", 20),
-                top_p=self.config.get("top_p", 0.6),
-                temperature=self.config.get("temperature", 0.6),
-                ref_free=self.config.get("ref_free", False),
-                speed=self.config.get("speed", 1.0),
-                inp_refs=self.config.get("aux_refs", []),
-                sample_steps=self.config.get("sample_steps", 8),
-                if_sr=self.config.get("if_sr", False),
-                pause_second=self.config.get("pause_second", 0.3),
-            )
-            
-            # 生成唯一文件名
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_id = str(uuid.uuid4())[:8]
-            filename = f"{timestamp}_{unique_id}.wav"
-            output_path = Path(self.output_dir) / filename
-            
-            # 保存音频
-            self.progress.emit("正在保存音频...")
-            sf.write(output_path, audio_data, sample_rate)
-            
-            self.finished.emit(True, str(output_path))
-        except Exception as e:
-            error_msg = f"生成语音失败: {str(e)}"
-            print(error_msg)
-            self.finished.emit(False, error_msg)
-
-
-class RoleModel:
-    """角色模型类，用于管理角色配置"""
-    
-    def __init__(self, roles_dir: str = "gui/roles"):
-        """
-        初始化角色模型
-        
-        参数:
-            roles_dir: 角色配置目录
-        """
-        self.roles_dir = Path(roles_dir)
-        self.roles_dir.mkdir(exist_ok=True)
-        self.roles: Dict[str, Dict] = {}
-        self.load_roles()
-    
-    def load_roles(self) -> Dict[str, Dict]:
-        """加载所有角色配置"""
-        self.roles = {}
-        
-        for role_dir in self.roles_dir.iterdir():
-            if not role_dir.is_dir():
-                continue
-                
-            config_file = role_dir / "config.json"
-            if not config_file.exists():
-                continue
-                
-            try:
-                with open(config_file, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                
-                # 将相对路径的音频文件转换为绝对路径
-                for emotion_name, emotion_config in config.get("emotions", {}).items():
-                    if "ref_audio" in emotion_config:
-                        ref_audio = emotion_config["ref_audio"]
-                        # 如果只是文件名而不是路径，则添加角色目录路径
-                        if not os.path.isabs(ref_audio) and "/" not in ref_audio and "\\" not in ref_audio:
-                            emotion_config["ref_audio"] = str(role_dir / ref_audio)
-                        elif not os.path.isabs(ref_audio):
-                            # 处理可能已包含部分路径的情况
-                            emotion_config["ref_audio"] = str(role_dir / os.path.basename(ref_audio))
-                    
-                    # 处理辅助参考音频
-                    if "aux_refs" in emotion_config:
-                        aux_refs = []
-                        for aux_ref in emotion_config["aux_refs"]:
-                            if not os.path.isabs(aux_ref) and "/" not in aux_ref and "\\" not in aux_ref:
-                                # 如果只是文件名，添加角色目录路径
-                                aux_refs.append(str(role_dir / aux_ref))
-                            elif not os.path.isabs(aux_ref):
-                                # 处理可能已包含部分路径的情况
-                                aux_refs.append(str(role_dir / os.path.basename(aux_ref)))
-                            else:
-                                aux_refs.append(aux_ref)
-                        emotion_config["aux_refs"] = aux_refs
-                
-                self.roles[role_dir.name] = config
-            except Exception as e:
-                print(f"加载角色配置失败: {role_dir.name}, 错误: {str(e)}")
-        
-        return self.roles
-    
-    def get_role_emotions(self, role_name: str) -> Dict[str, Dict]:
-        """获取角色的所有情感配置"""
-        role_config = self.roles.get(role_name, {})
-        return role_config.get("emotions", {})
-    
-    def get_emotion_config(self, role_name: str, emotion_name: str) -> Dict:
-        """获取特定角色的特定情感配置"""
-        emotions = self.get_role_emotions(role_name)
-        return emotions.get(emotion_name, {})
-    
-    def save_role_config(self, role_name: str, config: Dict) -> bool:
-        """
-        保存角色配置
-        
-        如果角色已存在，会合并情感配置而不是完全覆盖
-        """
-        role_dir = self.roles_dir / role_name
-        role_dir.mkdir(exist_ok=True)
-        
-        config_file = role_dir / "config.json"
-        
-        try:
-            # 检查角色是否已存在，并读取现有配置
-            existing_config = {}
-            if role_name in self.roles:
-                existing_config = self.roles[role_name]
-            
-            # 合并情感配置
-            merged_config = existing_config.copy()
-            
-            # 确保emotions键存在
-            if "emotions" not in merged_config:
-                merged_config["emotions"] = {}
-                
-            # 深拷贝配置，以防意外修改
-            new_emotions = json.loads(json.dumps(config.get("emotions", {})))
-            
-            # 合并新的情感配置到现有配置
-            for emotion_name, emotion_config in new_emotions.items():
-                merged_config["emotions"][emotion_name] = emotion_config
-            
-            # 处理音频文件路径，将绝对路径转为相对路径保存
-            for emotion_name, emotion_config in merged_config.get("emotions", {}).items():
-                if "ref_audio" in emotion_config:
-                    ref_audio = emotion_config["ref_audio"]
-                    if os.path.isabs(ref_audio):
-                        # 获取文件名
-                        ref_audio_name = os.path.basename(ref_audio)
-                        # 复制音频文件到角色目录
-                        if os.path.exists(ref_audio):
-                            new_path = role_dir / ref_audio_name
-                            if ref_audio != str(new_path):
-                                import shutil
-                                shutil.copy2(ref_audio, new_path)
-                        # 保存为相对路径（只保存文件名，不包含目录）
-                        emotion_config["ref_audio"] = ref_audio_name
-                
-                # 处理辅助参考音频
-                if "aux_refs" in emotion_config:
-                    aux_refs = []
-                    for aux_ref in emotion_config["aux_refs"]:
-                        if os.path.isabs(aux_ref):
-                            # 获取文件名
-                            aux_ref_name = os.path.basename(aux_ref)
-                            # 复制音频文件到角色目录
-                            if os.path.exists(aux_ref):
-                                new_path = role_dir / aux_ref_name
-                                if aux_ref != str(new_path):
-                                    import shutil
-                                    shutil.copy2(aux_ref, new_path)
-                            # 保存为相对路径（只保存文件名，不包含目录）
-                            aux_refs.append(aux_ref_name)
-                        else:
-                            # 对于已经是相对路径的文件，确保只保留文件名
-                            aux_ref_name = os.path.basename(aux_ref)
-                            aux_refs.append(aux_ref_name)
-                    emotion_config["aux_refs"] = aux_refs
-            
-            with open(config_file, "w", encoding="utf-8") as f:
-                json.dump(merged_config, f, ensure_ascii=False, indent=4)
-            
-            # 更新内存中的配置
-            self.roles[role_name] = merged_config
-            return True
-        except Exception as e:
-            print(f"保存角色配置失败: {role_name}, 错误: {str(e)}")
-            return False
+from gui.models.inference_worker import InferenceWorker
 
 
 class InferenceModel:
@@ -268,10 +58,8 @@ class InferenceModel:
             self.current_gpt_path = ""
             self.current_sovits_path = ""
             # 强制垃圾回收以释放GPU内存
-            import gc
             gc.collect()
             try:
-                import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
             except:
@@ -303,7 +91,6 @@ class InferenceModel:
             
         try:
             if self.inference_engine is None:
-                import torch
                 self.inference_engine = GPTSoVITSInference(
                     gpt_path=gpt_path,
                     sovits_path=sovits_path,
@@ -318,7 +105,7 @@ class InferenceModel:
             print(f"初始化推理引擎失败: {str(e)}")
             return False
     
-    def generate_speech_async(self, config: Dict, on_finished, on_progress=None) -> bool:
+    def generate_speech_async(self, config: Dict, on_finished: Callable, on_progress=None) -> bool:
         """
         异步生成语音
         
