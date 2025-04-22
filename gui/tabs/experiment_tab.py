@@ -248,7 +248,15 @@ class ExperimentTab(QWidget):
         )
         
         if file_path:
+            # 设置文件路径到参考音频文本框
             self.ref_path_edit.setText(file_path)
+            
+            # 提取文件名（不含扩展名）作为参考文本
+            filename = os.path.basename(file_path)
+            filename_without_ext = os.path.splitext(filename)[0]
+            
+            # 将文件名设置到参考文本编辑框（直接覆盖）
+            self.prompt_text_edit.setPlainText(filename_without_ext)
     
     def load_gpt_models(self, model_dict):
         """加载GPT模型列表"""
