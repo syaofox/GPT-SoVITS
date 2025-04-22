@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
     QGroupBox, QLabel, QLineEdit, QTextEdit, QComboBox, 
     QPushButton, QFileDialog, QMessageBox, QSpinBox,
-    QDoubleSpinBox, QCheckBox, QSplitter, QInputDialog
+    QDoubleSpinBox, QCheckBox, QSplitter, QInputDialog,
+    QListWidget, QListWidgetItem
 )
 
 from gui.components.audio_player import AudioPlayer
@@ -69,6 +70,28 @@ class ExperimentTab(QWidget):
         self.prompt_lang_combo = QComboBox()
         self.prompt_lang_combo.addItems(["中文", "英文", "日文"])
         ref_layout.addWidget(self.prompt_lang_combo, 2, 1, 1, 2)
+        
+        # 辅助参考音频
+        ref_layout.addWidget(QLabel("辅助参考音频:"), 3, 0)
+        aux_refs_layout = QHBoxLayout()
+        
+        self.aux_refs_list = QListWidget()
+        self.aux_refs_list.setMaximumHeight(80)
+        aux_refs_layout.addWidget(self.aux_refs_list, 3)
+        
+        aux_buttons_layout = QVBoxLayout()
+        self.add_aux_ref_button = QPushButton("+")
+        self.add_aux_ref_button.setMaximumWidth(40)
+        self.add_aux_ref_button.clicked.connect(self.add_aux_ref_audio)
+        aux_buttons_layout.addWidget(self.add_aux_ref_button)
+        
+        self.remove_aux_ref_button = QPushButton("-")
+        self.remove_aux_ref_button.setMaximumWidth(40)
+        self.remove_aux_ref_button.clicked.connect(self.remove_aux_ref_audio)
+        aux_buttons_layout.addWidget(self.remove_aux_ref_button)
+        
+        aux_refs_layout.addLayout(aux_buttons_layout)
+        ref_layout.addLayout(aux_refs_layout, 3, 1, 1, 2)
         
         left_layout.addWidget(ref_group)
         
@@ -234,6 +257,12 @@ class ExperimentTab(QWidget):
         ref_audio = self.ref_path_edit.text()
         prompt_text = self.prompt_text_edit.toPlainText()
         
+        # 获取辅助参考音频
+        aux_refs = []
+        for i in range(self.aux_refs_list.count()):
+            item = self.aux_refs_list.item(i)
+            aux_refs.append(item.data(Qt.UserRole))
+        
         # 获取合成文本和语言
         text = self.text_edit.toPlainText()
         text_language = self.text_lang_combo.currentText()
@@ -275,7 +304,8 @@ class ExperimentTab(QWidget):
             "sample_steps": sample_steps,
             "pause_time": pause_time,
             "ref_free": ref_free,
-            "sr": sr
+            "sr": sr,
+            "aux_refs": aux_refs  # 添加辅助参考音频
         }
     
     def generate_with_config(self):
@@ -354,4 +384,36 @@ class ExperimentTab(QWidget):
             self.role_controller.save_role(role_name, emotion_name, config)
             QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}") 
+            QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}")
+    
+    def add_aux_ref_audio(self):
+        """添加辅助参考音频"""
+        # 打开文件对话框
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "选择辅助参考音频文件",
+            "",
+            "音频文件 (*.wav *.mp3 *.flac *.ogg);;所有文件 (*)"
+        )
+        
+        for file_path in file_paths:
+            if file_path:
+                # 检查是否已经存在
+                exists = False
+                for i in range(self.aux_refs_list.count()):
+                    item = self.aux_refs_list.item(i)
+                    if item.data(Qt.UserRole) == file_path:
+                        exists = True
+                        break
+                
+                if not exists:
+                    # 添加到列表
+                    item = QListWidgetItem(os.path.basename(file_path))
+                    item.setData(Qt.UserRole, file_path)
+                    self.aux_refs_list.addItem(item)
+    
+    def remove_aux_ref_audio(self):
+        """删除选中的辅助参考音频"""
+        selected_items = self.aux_refs_list.selectedItems()
+        for item in selected_items:
+            self.aux_refs_list.takeItem(self.aux_refs_list.row(item)) 
