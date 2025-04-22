@@ -30,6 +30,9 @@ class MainWindow(QMainWindow):
         self.gpt_models = self.scan_models(["GPT_weights", "GPT_weights_v2", "GPT_weights_v3", "GPT_weights_v4"])
         self.sovits_models = self.scan_models(["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3", "SoVITS_weights_v4"])
         
+        # 加载文字替换规则
+        self.word_replace_rules = self.load_word_replace_rules()
+        
         self.init_ui()
         self.connect_signals()
         
@@ -59,6 +62,39 @@ class MainWindow(QMainWindow):
                 models_dict[display_name] = str(model_path.absolute())
         
         return models_dict
+    
+    def load_word_replace_rules(self):
+        """加载文字替换规则"""
+        replace_rules = {}
+        
+        # 获取项目根目录
+        root_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        replace_file = root_dir / "gui" / "word_replace.txt"
+        
+        try:
+            if replace_file.exists():
+                with open(replace_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and ' ' in line:
+                            source, target = line.split(' ', 1)
+                            replace_rules[source] = target
+                self.status_bar.showMessage(f"已加载 {len(replace_rules)} 条文字替换规则")
+        except Exception as e:
+            print(f"加载替换规则失败: {e}")
+        
+        return replace_rules
+    
+    def apply_word_replace(self, text):
+        """应用文字替换规则"""
+        if not self.word_replace_rules:
+            return text
+            
+        result = text
+        for source, target in self.word_replace_rules.items():
+            result = result.replace(source, target)
+        
+        return result
     
     def init_ui(self):
         """初始化界面"""
@@ -316,6 +352,10 @@ class MainWindow(QMainWindow):
             config = self.experiment_tab.get_inference_config()
             text = self.experiment_tab.text_edit.toPlainText()
             
+            # 应用文字替换规则
+            text = self.apply_word_replace(text)
+            config["text"] = text
+            
             # 验证必要参数
             if not text:
                 self.show_error("请输入要合成的文本")
@@ -363,6 +403,9 @@ class MainWindow(QMainWindow):
             emotion_name = self.role_tab.current_emotion
             text = self.role_tab.text_edit.toPlainText()
             
+            # 应用文字替换规则
+            text = self.apply_word_replace(text)
+            
             if not role_name or not emotion_name:
                 self.show_error("请先选择角色和情感")
                 return
@@ -376,6 +419,9 @@ class MainWindow(QMainWindow):
             if not config:
                 self.show_error("无法获取角色配置")
                 return
+            
+            # 更新处理后的文本
+            config["text"] = text
             
             # 确保角色名和情绪名存在
             if not config.get("role_name"):
