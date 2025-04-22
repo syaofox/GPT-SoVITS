@@ -122,13 +122,13 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
         
+        # 角色选项卡 - 创建为共享控件版本，移至第一位
+        self.role_tab = RoleTab(self.role_controller, self.inference_controller, shared_controls=True)
+        self.tab_widget.addTab(self.role_tab, "角色推理")
+        
         # 实验选项卡 - 创建为共享控件版本
         self.experiment_tab = ExperimentTab(self.role_controller, self.inference_controller, shared_controls=True)
         self.tab_widget.addTab(self.experiment_tab, "试听配置")
-        
-        # 角色选项卡 - 创建为共享控件版本
-        self.role_tab = RoleTab(self.role_controller, self.inference_controller, shared_controls=True)
-        self.tab_widget.addTab(self.role_tab, "角色推理")
         
         # 替换规则编辑标签页
         self.replace_tab = ReplaceTab()
@@ -335,6 +335,10 @@ class MainWindow(QMainWindow):
     
     def on_generate_requested(self, config=None, text="", is_role=False):
         """处理来自标签页的生成请求"""
+        if config is None:
+            self.show_error("无效的配置")
+            return
+            
         if is_role:
             # 角色推理
             if config and text:
@@ -367,7 +371,7 @@ class MainWindow(QMainWindow):
         # 根据当前选中的标签页决定使用哪种生成方法
         current_index = self.tab_widget.currentIndex()
         
-        if current_index == 0:  # 实验选项卡
+        if current_index == 1:  # 实验选项卡
             config = self.experiment_tab.get_inference_config()
             text = self.experiment_tab.text_edit.toPlainText()
             
@@ -417,7 +421,7 @@ class MainWindow(QMainWindow):
             # 调用推理控制器
             self.inference_controller.generate_speech_async(config)
             
-        elif current_index == 1:  # 角色选项卡
+        elif current_index == 0:  # 角色选项卡
             role_name = self.role_tab.current_role
             emotion_name = self.role_tab.current_emotion
             text = self.role_tab.text_edit.toPlainText()
@@ -471,7 +475,7 @@ class MainWindow(QMainWindow):
     
     def on_tab_changed(self, index):
         """处理标签页切换"""
-        if index == 1:  # 切换到角色选项卡
+        if index == 0:  # 切换到角色选项卡
             # 如果当前角色和情感有选择，则触发配置加载
             if self.role_tab.current_role and self.role_tab.current_emotion:
                 self.role_tab.get_current_emotion_config()

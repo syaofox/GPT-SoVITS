@@ -350,6 +350,11 @@ class ExperimentTab(QWidget):
         # 获取当前配置
         config = self.get_inference_config()
         
+        # 检查配置是否有效
+        if config is None:
+            QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
+            return False
+            
         # 检查必要参数
         if not config["gpt_path"]:
             QMessageBox.warning(self, "警告", "请选择GPT模型")
@@ -376,6 +381,10 @@ class ExperimentTab(QWidget):
         if self.shared_controls:
             # 在共享模式下，发送信号给主窗口处理
             config = self.get_inference_config()
+            if config is None:
+                QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
+                return
+                
             text = self.text_edit.toPlainText()
             self.generate_requested.emit(config, text, False)
         else:
@@ -413,6 +422,11 @@ class ExperimentTab(QWidget):
         # 获取当前配置
         config = self.get_inference_config()
         
+        # 检查配置是否有效
+        if config is None:
+            QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
+            return
+            
         # 保存角色
         try:
             self.role_controller.save_role(role_name, emotion_name, config)
