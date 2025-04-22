@@ -128,8 +128,13 @@ class RoleModel:
                         # 复制音频文件到角色目录
                         if os.path.exists(ref_audio):
                             new_path = role_dir / ref_audio_name
-                            if ref_audio != str(new_path):
-                                shutil.copy2(ref_audio, new_path)
+                            # 检查源文件和目标文件是否相同，或目标是否已存在
+                            if os.path.abspath(ref_audio) != os.path.abspath(new_path):
+                                # 源文件和目标文件不同，才进行复制
+                                try:
+                                    shutil.copy2(ref_audio, new_path)
+                                except Exception as e:
+                                    print(f"复制音频文件失败，但继续处理: {str(e)}")
                         # 保存为相对路径（只保存文件名，不包含目录）
                         emotion_config["ref_audio"] = ref_audio_name
                 
@@ -143,8 +148,13 @@ class RoleModel:
                             # 复制音频文件到角色目录
                             if os.path.exists(aux_ref):
                                 new_path = role_dir / aux_ref_name
-                                if aux_ref != str(new_path):
-                                    shutil.copy2(aux_ref, new_path)
+                                # 检查源文件和目标文件是否相同，或目标是否已存在
+                                if os.path.abspath(aux_ref) != os.path.abspath(new_path):
+                                    # 源文件和目标文件不同，才进行复制
+                                    try:
+                                        shutil.copy2(aux_ref, new_path)
+                                    except Exception as e:
+                                        print(f"复制辅助音频文件失败，但继续处理: {str(e)}")
                             # 保存为相对路径（只保存文件名，不包含目录）
                             aux_refs.append(aux_ref_name)
                         else:
