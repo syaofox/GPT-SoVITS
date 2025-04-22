@@ -149,6 +149,32 @@ def clean_text_inf(text: str, language: str, version: str) -> Tuple[List[int], L
     from text import cleaned_text_to_sequence
     
     language = language.replace("all_", "")
+    phones, word2ph, norm_text = clean_text(text, language, version)
+    phones = cleaned_text_to_sequence(phones, version)
+
+    return phones, word2ph, norm_text
+
+
+def clean_text_inf_tone(text: str, language: str, version: str) -> Tuple[List[int], List[int], str]:
+    """
+    清理文本并转换为音素序列
+    
+    参数:
+        text: 输入文本
+        language: 语言代码
+        version: 模型版本
+        
+    返回:
+        (phones, word2ph, norm_text): 音素序列、字到音素的映射、标准化文本
+    """
+    from text.cleaner import clean_text
+    from text import cleaned_text_to_sequence
+    
+    language = language.replace("all_", "")
+    
+    # 正则表达式替换
+    text = re.sub(r"“|”|\"|\'|‘|’|《|》|【|】", "", text)
+    text = re.sub(r"…+", "…", text)
 
     text, tone_data_list = find_custom_tone(text)
     if tone_data_list:
@@ -255,8 +281,12 @@ def get_phones_and_bert(
         formattext = text
         while "  " in formattext:
             formattext = formattext.replace("  ", " ")
-        if language == "all_zh" and "<tone" in formattext:
-            phones, word2ph, norm_text = clean_text_inf(formattext, language, version)
+        if "<tone" in formattext:
+            print("--------------------------------")
+            print("有<tone>标记")
+            print(formattext)
+            print("--------------------------------")
+            phones, word2ph, norm_text = clean_text_inf_tone(formattext, language, version)
             bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
 
         elif language == "all_zh":
