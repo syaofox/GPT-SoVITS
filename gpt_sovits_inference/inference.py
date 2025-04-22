@@ -330,9 +330,18 @@ class GPTSoVITSInference:
                 prompt_text += "。" if prompt_language != "en" else "."
             print(f"实际输入的参考文本: {prompt_text}")
             
-        # 处理目标文本
+        # 处理目标文本  
         text = text.strip("\n")
         print(f"实际输入的目标文本: {text}")
+
+        # 替换空行为<brbrbrbrbr>段落停顿标记
+        sub_texts = []
+        for sub_text in text.split("\n"):
+            if sub_text == "":
+                sub_text = "<brbrbrbrbr>"
+            sub_texts.append(sub_text)
+
+        text = "\n".join(sub_texts)
         
         # 创建停顿音频
         zero_wav = np.zeros(
@@ -389,6 +398,11 @@ class GPTSoVITSInference:
         for i_text, text in enumerate(texts):
             # 跳过空行
             if len(text.strip()) == 0:
+                continue
+
+            if text == "<brbrbrbrbr>":
+                audio_opt.append(zero_wav_torch)
+                logger.info(f"插入空白音频")
                 continue
                 
             # 确保文本以标点结尾
