@@ -230,8 +230,29 @@ class MainWindow(QMainWindow):
                 self.show_error(f"参考音频文件不存在: {config['ref_audio']}")
                 return
                 
+            # 转换参数名称以匹配推理控制器期望的格式
+            api_config = {
+                "ref_audio": config["ref_audio"],
+                "prompt_text": config["prompt_text"],
+                "prompt_lang": config["prompt_language"],
+                "text": config["text"],
+                "text_lang": config["text_language"],
+                "how_to_cut": config["cut_method"],
+                "gpt_path": config["gpt_model"],
+                "sovits_path": config["sovits_model"],
+                "speed": config["speed"],
+                "top_k": config["top_k"],
+                "top_p": config["top_p"],
+                "temperature": config["temperature"],
+                "sample_steps": config["sample_steps"],
+                "pause_second": config["pause_time"],
+                "ref_free": config["ref_free"],
+                "if_sr": config["sr"],
+                "aux_refs": []  # 实验选项卡不支持多参考音频融合
+            }
+                
             # 调用推理控制器
-            self.inference_controller.generate_speech_async(config)
+            self.inference_controller.generate_speech_async(api_config)
             
         elif current_index == 1:  # 角色选项卡
             role_name = self.role_tab.current_role
@@ -258,8 +279,30 @@ class MainWindow(QMainWindow):
                 self.show_error(f"参考音频文件不存在: {ref_audio}")
                 return
                 
-            # 添加当前文本到配置中
+            # 添加当前文本到配置中 - 确保配置与InferenceController期望的一致
             config["text"] = text
+            
+            # 检查并处理可能的字段名称不匹配问题
+            if "prompt_language" in config and "prompt_lang" not in config:
+                config["prompt_lang"] = config["prompt_language"]
+                
+            if "text_language" in config and "text_lang" not in config:
+                config["text_lang"] = config["text_language"]
+                
+            if "cut_method" in config and "how_to_cut" not in config:
+                config["how_to_cut"] = config["cut_method"]
+                
+            if "gpt_model" in config and "gpt_path" not in config:
+                config["gpt_path"] = config["gpt_model"]
+                
+            if "sovits_model" in config and "sovits_path" not in config:
+                config["sovits_path"] = config["sovits_model"]
+                
+            if "pause_time" in config and "pause_second" not in config:
+                config["pause_second"] = config["pause_time"]
+                
+            if "sr" in config and "if_sr" not in config:
+                config["if_sr"] = config["sr"]
                 
             # 调用推理控制器
             self.inference_controller.generate_speech_async(config) 
