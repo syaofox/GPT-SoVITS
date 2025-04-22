@@ -7,7 +7,7 @@
 import os
 import glob
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QListWidgetItem
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QListWidgetItem, QProgressBar
 from PySide6.QtCore import Qt, QSize
 
 from gui.controllers import RoleController, InferenceController
@@ -140,15 +140,23 @@ class MainWindow(QMainWindow):
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
         
-        # 状态显示
+        # 进度显示区域
+        progress_layout = QVBoxLayout()
+        
+        # 状态文字显示
         self.progress_label = QLabel("就绪")
-        self.progress_label.setAlignment(Qt.AlignCenter)
-        font = self.progress_label.font()
-        font.setPointSize(12)
-        font.setBold(True)
-        self.progress_label.setFont(font)
-        self.progress_label.setMinimumHeight(30)
-        right_layout.addWidget(self.progress_label)
+        self.progress_label.setAlignment(Qt.AlignLeft)
+        progress_layout.addWidget(self.progress_label)
+        
+        # 添加进度条
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)  # 不在进度条上显示文字
+        progress_layout.addWidget(self.progress_bar)
+        
+        right_layout.addLayout(progress_layout)
         
         # 生成语音按钮
         self.generate_button = QPushButton("生成语音")
@@ -320,12 +328,14 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("正在生成语音...")
         self.generate_button.setEnabled(False)
         self.progress_label.setText("正在处理...")
+        self.progress_bar.setValue(0)
     
     def on_inference_completed(self, file_path: str):
         """推理完成回调"""
         self.status_bar.showMessage("生成完成")
         self.generate_button.setEnabled(True)
         self.progress_label.setText("就绪")
+        self.progress_bar.setValue(0)
         self.audio_player.load_audio(file_path)
     
     def on_inference_failed(self, error_msg: str):
@@ -333,13 +343,58 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"生成失败: {error_msg}")
         self.generate_button.setEnabled(True)
         self.progress_label.setText(f"失败: {error_msg}")
+        self.progress_bar.setValue(0)
     
     def update_progress(self, message: str):
         """更新进度信息"""
         self.progress_label.setText(message)
-        # 如果是合成进度信息，更新状态栏
+        
+        # 如果是合成进度信息，更新状态栏和进度条
         if "正在合成:" in message:
             self.status_bar.showMessage(message)
+            
+            # 从消息中提取进度信息
+            try:
+                # 解析"正在合成: X/Y"格式的消息
+                parts = message.split(":")
+                if len(parts) == 2:
+                    numbers = parts[1].strip().split("/")
+                    if len(numbers) == 2:
+                        current = int(numbers[0])
+                        total = int(numbers[1])
+                        if total > 0:  # 防止除零错误
+                            progress_value = int((current / total) * 100)
+                            # 确保进度值在有效范围内
+                            progress_value = max(0, min(100, progress_value))
+                            self.progress_bar.setValue(progress_value)
+            except Exception as e:
+                print(f"解析进度信息失败: {e}")
+        
+        # 文本预处理完成，重置进度条为起始状态
+        elif "文本已分割为" in message:
+            try:
+                # 从消息中提取片段数量，显示初始进度
+                parts = message.split("文本已分割为")
+                if len(parts) == 2:
+                    segments_str = parts[1].strip().split(" ")[0]
+                    if segments_str.isdigit() and int(segments_str) > 0:
+                        # 设置一个较小的初始进度值，表示准备开始
+                        self.progress_bar.setValue(1)
+                    else:
+                        self.progress_bar.setValue(0)
+                else:
+                    self.progress_bar.setValue(0)
+            except Exception as e:
+                print(f"解析文本分段信息失败: {e}")
+                self.progress_bar.setValue(0)
+        
+        # 生成开始，设置初始进度
+        elif "开始生成语音" in message:
+            self.progress_bar.setValue(1)  # 设置为1%表示开始
+        
+        # 保存音频，设置进度条为完成状态
+        elif "正在保存音频" in message:
+            self.progress_bar.setValue(100)
     
     def on_generate_requested(self, config=None, text="", is_role=False):
         """处理来自标签页的生成请求"""

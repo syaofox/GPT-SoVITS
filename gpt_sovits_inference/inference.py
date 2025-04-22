@@ -265,7 +265,7 @@ class GPTSoVITSInference:
             sample_steps: 采样步数
             if_sr: 是否使用超分辨率增强音频
             pause_second: 句间停顿秒数
-            progress_callback: 进度回调函数，接收当前处理的文本段索引（从1开始）
+            progress_callback: 进度回调函数，接收当前处理的文本段索引（从1开始）和总段数
             
         返回:
             采样率和合成音频数据
@@ -381,6 +381,15 @@ class GPTSoVITSInference:
         texts = self.text_cutter.process_text(texts)
         # texts = self.text_cutter.merge_short_text(texts, 5)
         
+        # 获取总文本段数
+        total_segments = len(texts)
+        logger.info(f"文本总段数: {total_segments}")
+        
+        # 如果有回调函数，通知总段数
+        if progress_callback and callable(progress_callback):
+            # 发送段数信息（使用0作为当前段表示准备开始）
+            progress_callback(0, total_segments)
+        
         # 音频输出列表
         audio_opt = []
         
@@ -400,7 +409,8 @@ class GPTSoVITSInference:
         for i_text, text in enumerate(texts):
             # 调用进度回调函数（如果提供）
             if progress_callback and callable(progress_callback):
-                progress_callback(i_text + 1)  # 从1开始计数
+                # 发送当前进度和总段数（索引从1开始）
+                progress_callback(i_text + 1, total_segments)
                 
             # 跳过空行
             if len(text.strip()) == 0:
