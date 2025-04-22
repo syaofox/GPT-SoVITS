@@ -95,67 +95,56 @@ class ExperimentTab(QWidget):
         
         left_layout.addWidget(ref_group)
         
-        # 合成设置
-        synth_group = QGroupBox("合成设置")
-        synth_layout = QGridLayout(synth_group)
-        
-        synth_layout.addWidget(QLabel("合成文本:"), 0, 0)
-        self.text_edit = QTextEdit()
-        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.text_edit.setAcceptRichText(False)
-        synth_layout.addWidget(self.text_edit, 0, 1, 2, 2)
-        
-        synth_layout.addWidget(QLabel("文本语言:"), 2, 0)
-        self.text_lang_combo = QComboBox()
-        self.text_lang_combo.addItems(["中文", "英文", "日文", "粤语", "韩文", "中英混合", "日英混合", "粤英混合", "韩英混合", "多语种混合", "多语种混合(粤语)"])
-        synth_layout.addWidget(self.text_lang_combo, 2, 1, 1, 2)
-        
-        synth_layout.addWidget(QLabel("文本切分:"), 3, 0)
-        self.cut_method_combo = QComboBox()
-        self.cut_method_combo.addItems(["按句切", "凑四句一切", "按标点切", "按段切"])        
-        synth_layout.addWidget(self.cut_method_combo, 3, 1, 1, 2)
-        
-        synth_layout.addWidget(QLabel("GPT模型:"), 4, 0)
-        self.gpt_model_combo = QComboBox()
-        synth_layout.addWidget(self.gpt_model_combo, 4, 1, 1, 2)
-        
-        synth_layout.addWidget(QLabel("SoVITS模型:"), 5, 0)
-        self.sovits_model_combo = QComboBox()
-        synth_layout.addWidget(self.sovits_model_combo, 5, 1, 1, 2)
-        
-        left_layout.addWidget(synth_group)
-        
-        # 高级设置
+        # 高级设置（合并原合成设置和高级设置）
         adv_group = QGroupBox("高级设置")
         adv_layout = QGridLayout(adv_group)
         
-        adv_layout.addWidget(QLabel("语速:"), 0, 0)
+        # 第一列内容（原合成设置部分）
+        adv_layout.addWidget(QLabel("文本语言:"), 0, 0)
+        self.text_lang_combo = QComboBox()
+        self.text_lang_combo.addItems(["中文", "英文", "日文", "粤语", "韩文", "中英混合", "日英混合", "粤英混合", "韩英混合", "多语种混合", "多语种混合(粤语)"])
+        adv_layout.addWidget(self.text_lang_combo, 0, 1)
+        
+        adv_layout.addWidget(QLabel("文本切分:"), 1, 0)
+        self.cut_method_combo = QComboBox()
+        self.cut_method_combo.addItems(["按句切", "凑四句一切", "按标点切", "按段切"])        
+        adv_layout.addWidget(self.cut_method_combo, 1, 1)
+        
+        adv_layout.addWidget(QLabel("GPT模型:"), 2, 0)
+        self.gpt_model_combo = QComboBox()
+        adv_layout.addWidget(self.gpt_model_combo, 2, 1)
+        
+        adv_layout.addWidget(QLabel("SoVITS模型:"), 3, 0)
+        self.sovits_model_combo = QComboBox()
+        adv_layout.addWidget(self.sovits_model_combo, 3, 1)
+        
+        # 第二列内容（原高级设置部分）
+        adv_layout.addWidget(QLabel("语速:"), 0, 2)
         self.speed_spin = QDoubleSpinBox()
         self.speed_spin.setRange(0.6, 1.65)
         self.speed_spin.setSingleStep(0.05)
         self.speed_spin.setValue(1.0)
-        adv_layout.addWidget(self.speed_spin, 0, 1)
+        adv_layout.addWidget(self.speed_spin, 0, 3)
         
-        adv_layout.addWidget(QLabel("Top K:"), 1, 0)
+        adv_layout.addWidget(QLabel("Top K:"), 1, 2)
         self.top_k_spin = QSpinBox()
         self.top_k_spin.setRange(1, 50)
         self.top_k_spin.setValue(15)
-        adv_layout.addWidget(self.top_k_spin, 1, 1)
+        adv_layout.addWidget(self.top_k_spin, 1, 3)
         
-        adv_layout.addWidget(QLabel("Top P:"), 2, 0)
+        adv_layout.addWidget(QLabel("Top P:"), 2, 2)
         self.top_p_spin = QDoubleSpinBox()
         self.top_p_spin.setRange(0.0, 1.0)
         self.top_p_spin.setSingleStep(0.05)
         self.top_p_spin.setValue(1.0)
-        adv_layout.addWidget(self.top_p_spin, 2, 1)
+        adv_layout.addWidget(self.top_p_spin, 2, 3)
         
-        adv_layout.addWidget(QLabel("温度:"), 3, 0)
+        adv_layout.addWidget(QLabel("温度:"), 3, 2)
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.1, 2.0)
         self.temperature_spin.setSingleStep(0.05)
         self.temperature_spin.setValue(1.0)
-        adv_layout.addWidget(self.temperature_spin, 3, 1)
+        adv_layout.addWidget(self.temperature_spin, 3, 3)
         
         adv_layout.addWidget(QLabel("采样步数:"), 4, 0)
         self.sample_steps_spin = QSpinBox()
@@ -163,20 +152,32 @@ class ExperimentTab(QWidget):
         self.sample_steps_spin.setValue(8)
         adv_layout.addWidget(self.sample_steps_spin, 4, 1)
         
-        adv_layout.addWidget(QLabel("句间停顿:"), 5, 0)
+        adv_layout.addWidget(QLabel("句间停顿:"), 4, 2)
         self.pause_spin = QDoubleSpinBox()
         self.pause_spin.setRange(0.0, 2.0)
         self.pause_spin.setSingleStep(0.1)
         self.pause_spin.setValue(0.3)
-        adv_layout.addWidget(self.pause_spin, 5, 1)
+        adv_layout.addWidget(self.pause_spin, 4, 3)
         
         self.ref_free_check = QCheckBox("无参考文本")
-        adv_layout.addWidget(self.ref_free_check, 6, 0)
+        adv_layout.addWidget(self.ref_free_check, 5, 0, 1, 2)
         
         self.sr_check = QCheckBox("超采样(V3)")
-        adv_layout.addWidget(self.sr_check, 6, 1)
+        adv_layout.addWidget(self.sr_check, 5, 2, 1, 2)
         
         left_layout.addWidget(adv_group)
+        
+        # 合成文本（单独一个组）
+        text_group = QGroupBox("合成文本")
+        text_layout = QVBoxLayout(text_group)
+        
+        self.text_edit = QTextEdit()
+        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+        self.text_edit.setAcceptRichText(False)
+        text_layout.addWidget(self.text_edit)
+        
+        left_layout.addWidget(text_group)
 
         # 保存为角色相关控件放在同一行
         role_save_layout = QHBoxLayout()
@@ -192,7 +193,7 @@ class ExperimentTab(QWidget):
         role_save_layout.addWidget(self.emotion_name_edit)
         
         # 保存按钮
-        self.save_role_button = QPushButton("保存为角色")
+        self.save_role_button = QPushButton("保存/更新")
         self.save_role_button.clicked.connect(self.save_as_role)
         role_save_layout.addWidget(self.save_role_button)
         
