@@ -40,8 +40,8 @@ class InferenceModel:
         
         self.inference_engine: Optional[GPTSoVITSInference] = None
         self.history: List[Dict] = []
-        self.current_gpt_model: str = ""
-        self.current_sovits_model: str = ""
+        self.current_gpt_path: str = ""
+        self.current_sovits_path: str = ""
         
         # 工作线程相关
         self.worker = None
@@ -55,8 +55,8 @@ class InferenceModel:
         if self.inference_engine is not None:
             del self.inference_engine
             self.inference_engine = None
-            self.current_gpt_model = ""
-            self.current_sovits_model = ""
+            self.current_gpt_path = ""
+            self.current_sovits_path = ""
             # 强制垃圾回收以释放GPU内存
             gc.collect()
             try:
@@ -67,8 +67,8 @@ class InferenceModel:
     
     def initialize_engine(
         self, 
-        gpt_model: str, 
-        sovits_model: str, 
+        gpt_path: str, 
+        sovits_path: str, 
         device: str = None, 
         half: bool = True
     ) -> bool:
@@ -76,8 +76,8 @@ class InferenceModel:
         初始化推理引擎
         
         参数:
-            gpt_model: GPT模型路径
-            sovits_model: SoVITS模型路径
+            gpt_path: GPT模型路径
+            sovits_path: SoVITS模型路径
             device: 计算设备，默认自动选择
             half: 是否使用半精度
             
@@ -86,20 +86,20 @@ class InferenceModel:
         """
         # 如果模型路径变化，需要重置引擎
         if (self.inference_engine is not None and 
-            (gpt_model != self.current_gpt_model or sovits_model != self.current_sovits_model)):
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
             self.reset_engine()
             
         try:
             if self.inference_engine is None:
                 self.inference_engine = GPTSoVITSInference(
-                    gpt_model=gpt_model,
-                    sovits_model=sovits_model,
+                    gpt_path=gpt_path,
+                    sovits_path=sovits_path,
                     device=device,
                     half=half
                 )
                 # 保存当前使用的模型路径
-                self.current_gpt_model = gpt_model
-                self.current_sovits_model = sovits_model
+                self.current_gpt_path = gpt_path
+                self.current_sovits_path = sovits_path
             return True
         except Exception as e:
             print(f"初始化推理引擎失败: {str(e)}")
@@ -117,19 +117,19 @@ class InferenceModel:
         返回:
             是否成功启动推理
         """
-        gpt_model = config.get("gpt_model")
-        sovits_model = config.get("sovits_model")
+        gpt_path = config.get("gpt_path")
+        sovits_path = config.get("sovits_path")
         
-        if not gpt_model or not sovits_model:
+        if not gpt_path or not sovits_path:
             return False
         
         # 检查模型路径是否变化
         if (self.inference_engine is not None and 
-            (gpt_model != self.current_gpt_model or sovits_model != self.current_sovits_model)):
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
             self.reset_engine()
                 
         # 初始化或重新初始化推理引擎
-        success = self.initialize_engine(gpt_model, sovits_model)
+        success = self.initialize_engine(gpt_path, sovits_path)
         if not success:
             return False
         
@@ -203,19 +203,19 @@ class InferenceModel:
         返回:
             (是否成功, 输出文件路径)
         """
-        gpt_model = config.get("gpt_model")
-        sovits_model = config.get("sovits_model")
+        gpt_path = config.get("gpt_path")
+        sovits_path = config.get("sovits_path")
         
-        if not gpt_model or not sovits_model:
+        if not gpt_path or not sovits_path:
             return False, "未指定模型路径"
         
         # 检查模型路径是否变化
         if (self.inference_engine is not None and 
-            (gpt_model != self.current_gpt_model or sovits_model != self.current_sovits_model)):
+            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
             self.reset_engine()
                 
         # 初始化或重新初始化推理引擎
-        success = self.initialize_engine(gpt_model, sovits_model)
+        success = self.initialize_engine(gpt_path, sovits_path)
         if not success:
             return False, "初始化推理引擎失败"
         
