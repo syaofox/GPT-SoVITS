@@ -108,7 +108,7 @@ class ExperimentTab(QWidget):
         
         synth_layout.addWidget(QLabel("文本语言:"), 2, 0)
         self.text_lang_combo = QComboBox()
-        self.text_lang_combo.addItems(["中文", "英文", "日文"])
+        self.text_lang_combo.addItems(["中文", "英文", "日文", "粤语", "韩文", "中英混合", "日英混合", "粤英混合", "韩英混合", "多语种混合", "多语种混合(粤语)"])
         synth_layout.addWidget(self.text_lang_combo, 2, 1, 1, 2)
         
         synth_layout.addWidget(QLabel("文本切分:"), 3, 0)
