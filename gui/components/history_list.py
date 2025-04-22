@@ -1,12 +1,14 @@
 """
 历史记录列表组件
 
-显示和管理音频合成历史记录
+显示和管理output目录中的音频文件
 """
 
 import os
 import subprocess
-from typing import Dict, List
+import glob
+from pathlib import Path
+from datetime import datetime
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QListView, QMessageBox
 from PySide6.QtGui import QStandardItemModel, QStandardItem
@@ -16,7 +18,6 @@ class HistoryList(QWidget):
     """历史记录列表组件"""
     
     audio_selected = Signal(str)
-    history_cleared = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,23 +40,59 @@ class HistoryList(QWidget):
         
         self.layout.addWidget(self.history_view)
         
-        # 清空按钮
-        self.clear_button = QPushButton("清空历史")
-        self.clear_button.clicked.connect(self.clear_history)
-        self.layout.addWidget(self.clear_button)
+        # 刷新按钮，替代清空按钮
+        self.refresh_button = QPushButton("刷新列表")
+        self.refresh_button.clicked.connect(self.load_output_files)
+        self.layout.addWidget(self.refresh_button)
+        
+        # 初始加载output目录下的wav文件
+        self.load_output_files()
     
-    def update_history(self, history: List[Dict]):
-        """更新历史记录"""
+    def get_project_root(self):
+        """获取项目根目录"""
+        # 获取当前文件所在目录，然后向上两级得到项目根目录
+        current_dir = Path(os.path.abspath(__file__))
+        # components目录的上级是gui，再上级是项目根目录
+        return current_dir.parent.parent.parent
+    
+    def load_output_files(self):
+        """加载output目录下的音频文件"""
         self.history_model.clear()
         
-        for entry in reversed(history):  # 最新的在最前面
-            timestamp = entry.get("timestamp", "")
-            text = entry.get("text", "")
-            display_text = f"{timestamp}: {text[:30]}..." if len(text) > 30 else f"{timestamp}: {text}"
+        # 获取项目根目录下的output文件夹
+        output_dir = self.get_project_root() / "output"
+        
+        if not output_dir.exists():
+            return
+        
+        # 查找所有wav文件
+        wav_files = glob.glob(str(output_dir / "*.wav"))
+        # 按文件修改时间排序（最新的在前面）
+        wav_files.sort(key=os.path.getmtime, reverse=True)
+        
+        for wav_file in wav_files:
+            file_path = Path(wav_file)
+            # 提取文件名作为显示文本
+            file_name = file_path.name
+            
+            # 尝试从文件名解析时间戳
+            try:
+                # 假设文件名格式为 YYYYMMDD_HHMMSS_*.wav
+                timestamp_part = file_name[:15]  # 取前15个字符 (YYYYMMDD_HHMMSS)
+                timestamp = datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
+                display_text = f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {file_name}"
+            except (ValueError, IndexError):
+                # 如果无法解析时间戳，直接使用文件名
+                display_text = file_name
             
             item = QStandardItem(display_text)
-            item.setData(entry.get("path", ""), Qt.UserRole)
+            item.setData(str(file_path), Qt.UserRole)
             self.history_model.appendRow(item)
+    
+    def update_history(self, history=None):
+        """更新历史记录（保留该方法以兼容现有代码）"""
+        # 直接调用加载文件方法
+        self.load_output_files()
     
     def on_item_clicked(self, index):
         """历史项点击回调"""
@@ -90,17 +127,4 @@ class HistoryList(QWidget):
                     self,
                     "打开失败",
                     f"无法使用系统播放器打开文件: {str(e)}"
-                )
-    
-    def clear_history(self):
-        """清空历史记录"""
-        reply = QMessageBox.question(
-            self,
-            "清空历史", 
-            "确定要清空所有历史记录吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            self.history_model.clear()
-            self.history_cleared.emit() 
+                ) 
