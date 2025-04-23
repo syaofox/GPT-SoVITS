@@ -58,6 +58,20 @@ class InferenceModel:
             except:
                 pass
     
+    def stop_inference(self) -> bool:
+        """
+        停止当前推理任务
+        
+        返回:
+            bool: 是否成功发送停止信号（True表示有正在运行的任务被请求停止）
+        """
+        if self.worker and self.thread and self.thread.isRunning():
+            # 告诉工作线程停止处理
+            self.worker.stop()
+            return True
+        else:
+            return False
+    
     def generate_speech_async(self, config: Dict, on_finished: Callable, on_progress=None) -> bool:
         """
         异步生成语音

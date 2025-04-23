@@ -35,6 +35,7 @@ class InferenceWorker(QObject):
         self.text_segments = []
         self.total_segments = 0
         self.current_segment = 0
+        self.should_stop = False  # 添加停止标志
     
     def set_config(self, config: Dict, engine, output_dir: str):
         """设置推理配置和引擎（如果已有）"""
@@ -45,6 +46,14 @@ class InferenceWorker(QObject):
         # 保存模型路径以便需要时初始化
         self.gpt_path = config.get("gpt_path", "")
         self.sovits_path = config.get("sovits_path", "")
+        
+        # 重置停止标志
+        self.should_stop = False
+    
+    def stop(self):
+        """设置停止标志，请求推理停止"""
+        self.should_stop = True
+        self.progress.emit("准备停止推理...")
     
     def initialize_engine(self):
         """初始化推理引擎"""
@@ -78,13 +87,18 @@ class InferenceWorker(QObject):
     
     def progress_callback(self, current_segment, total_segments=None):
         """进度回调函数，直接使用从推理引擎获取的进度信息"""
+        # 检查是否应该停止
+        if self.should_stop:
+            # 返回True告诉推理引擎停止处理
+            return True
+            
         # 更新总段数（如果提供）
         if total_segments is not None:
             self.total_segments = total_segments
             # 如果是初始通知（current_segment=0），显示分段信息
             if current_segment == 0:
                 self.progress.emit(f"文本已分割为 {self.total_segments} 个片段")
-                return
+                return False
         
         # 确保数值有效
         if current_segment <= 0:
@@ -102,6 +116,9 @@ class InferenceWorker(QObject):
         
         # 发送进度信息
         self.progress.emit(f"正在合成: {current_segment}/{self.total_segments}")
+        
+        # 返回False表示不停止处理
+        return False
     
     def run(self):
         """执行推理任务"""
@@ -128,6 +145,11 @@ class InferenceWorker(QObject):
             # 显示开始消息
             self.progress.emit("准备生成语音...")
             
+            # 检查是否在此时已请求停止
+            if self.should_stop:
+                self.finished.emit(False, "推理已取消")
+                return
+                
             # 生成语音（GPTSoVITSInference会计算文本分段并通过回调提供进度）
             sample_rate, audio_data = self.engine.generate_speech(
                 ref_wav_path=self.config.get("ref_audio", ""),
@@ -148,6 +170,11 @@ class InferenceWorker(QObject):
                 progress_callback=self.progress_callback
             )
             
+            # 检查是否在生成过程中被停止，如果停止则不保存
+            if self.should_stop:
+                self.finished.emit(False, "推理已停止")
+                return
+                
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
