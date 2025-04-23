@@ -210,19 +210,25 @@ class GPTSoVITSInference:
         
         # 根据模型版本加载相应的声码器
         if self.model_version == "v3":
-            self.bigvgan_model = init_bigvgan(self.device, self.is_half)
+            self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
+            self.hifigan_model = None
         elif self.model_version == "v4":
             self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
+            self.bigvgan_model = None
     
     def _get_vocoder(self):
         """获取当前模型版本对应的声码器"""
         if self.model_version == "v3":
             if self.bigvgan_model is None:
+                # 如果从v4切换到v3，确保清理旧的声码器并正确初始化新的声码器
                 self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
+                self.hifigan_model = None
             return self.bigvgan_model
         else:  # v4
             if self.hifigan_model is None:
+                # 如果从v3切换到v4，确保清理旧的声码器并正确初始化新的声码器
                 self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
+                self.bigvgan_model = None
             return self.hifigan_model
     
     def generate_speech(
@@ -561,10 +567,32 @@ class GPTSoVITSInference:
                         cfm_res = denorm_spec(cfm_res)
                         
                         # 获取对应的声码器并生成波形
-                        vocoder_model = self._get_vocoder()
-                        with torch.inference_mode():
-                            wav_gen = vocoder_model(cfm_res)
-                            audio = wav_gen[0][0]
+                        try:
+                            # 记录当前模型版本
+                            current_model = self.model_version
+                            # 获取声码器前确保self.model_version是正确的
+                            logger.info(f"开始获取声码器，模型版本: {self.model_version}")
+                            vocoder_model = self._get_vocoder()
+                            
+                            # 如果模型版本发生了变化（可能是在多线程环境下被修改），还原回来
+                            if self.model_version != current_model:
+                                logger.warning(f"模型版本在获取声码器过程中被修改，从 {current_model} 变为 {self.model_version}，正在恢复")
+                                self.model_version = current_model
+                                # 重新获取声码器
+                                vocoder_model = self._get_vocoder()
+                            
+                            # 检查声码器是否正确初始化
+                            if vocoder_model is None:
+                                raise ValueError(f"声码器初始化失败，当前模型版本: {self.model_version}")
+                                
+                            logger.info(f"声码器获取成功，开始生成波形")
+                            with torch.inference_mode():
+                                wav_gen = vocoder_model(cfm_res)
+                                audio = wav_gen[0][0]
+                        except Exception as e:
+                            logger.error(f"声码器处理失败: {str(e)}")
+                            # 创建一个短暂的静音音频作为替代
+                            audio = torch.zeros(8000, device=self.device)
                     else:
                         # 如果没有成功生成任何块，创建一个空音频
                         logger.warning(f"段落 {i_text+1} 处理失败，未生成音频")
