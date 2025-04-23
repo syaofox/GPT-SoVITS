@@ -14,9 +14,11 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox, QCheckBox, QSplitter, QInputDialog,
     QListWidget, QListWidgetItem
 )
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
+from gui.components.draggable_widgets import DraggableLineEdit, DraggableListWidget
 
 
 class ExperimentTab(QWidget):
@@ -53,7 +55,7 @@ class ExperimentTab(QWidget):
         ref_layout = QGridLayout(ref_group)
         
         ref_layout.addWidget(QLabel("参考音频:"), 0, 0)
-        self.ref_path_edit = QLineEdit()
+        self.ref_path_edit = DraggableLineEdit()
         self.ref_path_edit.setReadOnly(True)
         ref_layout.addWidget(self.ref_path_edit, 0, 1)
         
@@ -74,7 +76,8 @@ class ExperimentTab(QWidget):
         ref_layout.addWidget(QLabel("辅助参考音频:"), 3, 0)
         aux_refs_layout = QHBoxLayout()
         
-        self.aux_refs_list = QListWidget()
+        # 使用DraggableListWidget替换QListWidget
+        self.aux_refs_list = DraggableListWidget()
         self.aux_refs_list.setMaximumHeight(80)
         aux_refs_layout.addWidget(self.aux_refs_list, 3)
         
@@ -227,12 +230,44 @@ class ExperimentTab(QWidget):
         """连接信号槽"""
         self.inference_controller.inference_failed.connect(self.on_inference_failed)
         
+        # 为拖放功能添加信号连接
+        self.ref_path_edit.textChanged.connect(self.on_ref_path_changed)
+        
+        # 连接辅助参考音频列表的拖放信号
+        self.aux_refs_list.files_dropped.connect(self.on_aux_refs_dropped)
+        
         # 只有在非共享模式下才需要连接这些信号
         if not self.shared_controls:
             self.inference_controller.inference_completed.connect(self.on_inference_completed)
             self.inference_controller.history_updated.connect(self.update_history)
             self.history_list.audio_selected.connect(self.audio_player.load_audio)
             self.history_list.history_cleared.connect(self.inference_controller.clear_history)
+    
+    def on_aux_refs_dropped(self, file_paths):
+        """处理辅助参考音频的拖放事件"""
+        for file_path in file_paths:
+            # 检查是否已经存在于列表中
+            exists = False
+            for i in range(self.aux_refs_list.count()):
+                item = self.aux_refs_list.item(i)
+                if item.data(Qt.UserRole) == file_path:
+                    exists = True
+                    break
+            
+            if not exists:
+                # 添加到列表
+                item = self.create_aux_ref_item(file_path)
+                self.aux_refs_list.addItem(item)
+    
+    def on_ref_path_changed(self, path):
+        """参考音频路径改变时的处理"""
+        if path:
+            # 提取文件名（不含扩展名）作为参考文本
+            filename = os.path.basename(path)
+            filename_without_ext = os.path.splitext(filename)[0]
+            
+            # 将文件名设置到参考文本编辑框（直接覆盖）
+            self.prompt_text_edit.setText(filename_without_ext)
     
     def update_history(self):
         """更新历史记录"""
