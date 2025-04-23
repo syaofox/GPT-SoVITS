@@ -5,7 +5,8 @@
 """
 
 import os
-from typing import Dict
+import shutil
+from typing import Dict, List, Tuple
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
@@ -439,6 +440,36 @@ class ExperimentTab(QWidget):
             self.generate_button.setEnabled(True)
             self.progress_label.setText(f"生成失败: {error_msg}")
     
+    def _get_project_root(self):
+        """获取项目根目录"""
+        # 从当前文件位置向上查找，直到找到项目根目录
+        # 这里假设项目根目录是包含'gui'文件夹的目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        while True:
+            parent_dir = os.path.dirname(current_dir)
+            if os.path.basename(current_dir) == 'gui' and os.path.exists(os.path.join(parent_dir, 'config')):
+                return parent_dir
+            if current_dir == parent_dir:  # 已到达系统根目录
+                return os.getcwd()  # 返回当前工作目录作为备选
+            current_dir = parent_dir
+    
+    def _convert_to_relative_path(self, absolute_path):
+        """将绝对路径转换为相对项目根目录的路径"""
+        if not absolute_path:
+            return absolute_path
+            
+        # 获取项目根目录
+        project_root = self._get_project_root()
+        
+        try:
+            # 转换为相对路径
+            relative_path = os.path.relpath(absolute_path, project_root)
+            # 确保使用正斜杠（Windows兼容性）
+            relative_path = relative_path.replace('\\', '/')
+            return relative_path
+        except ValueError:  # 如果路径在不同驱动器上
+            return absolute_path  # 保留原始路径
+            
     def save_as_role(self):
         """保存为角色配置"""
         # 从输入框获取角色名称和情绪
@@ -461,11 +492,19 @@ class ExperimentTab(QWidget):
         if config is None:
             QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
             return
-            
-        # 保存角色
+        
         try:
+            # 将模型路径转换为相对路径
+            if "gpt_path" in config and config["gpt_path"]:
+                config["gpt_path"] = self._convert_to_relative_path(config["gpt_path"])
+                
+            if "sovits_path" in config and config["sovits_path"]:
+                config["sovits_path"] = self._convert_to_relative_path(config["sovits_path"])
+                
+            # 保存角色（音频文件的复制已经在role_model中处理了）
             self.role_controller.save_role(role_name, emotion_name, config)
             QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
+            
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}")
     
