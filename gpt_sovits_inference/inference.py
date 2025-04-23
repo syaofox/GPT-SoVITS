@@ -409,8 +409,10 @@ class GPTSoVITSInference:
         for i_text, text in enumerate(texts):
             # 调用进度回调函数（如果提供）
             if progress_callback and callable(progress_callback):
-                # 发送当前进度和总段数（索引从1开始）
-                progress_callback(i_text + 1, total_segments)
+                # 检查是否请求停止处理
+                if progress_callback(i_text + 1, total_segments):
+                    logger.info("收到停止请求，中止合成")
+                    break
                 
             # 跳过空行
             if len(text.strip()) == 0:
@@ -427,147 +429,170 @@ class GPTSoVITSInference:
                 text += "。" if text_language != "en" else "."
             print(f"实际输入的目标文本(每句): {text}")
             
-            # 处理当前文本
-            phones2, bert2, norm_text2 = get_phones_and_bert(
-                self.tokenizer, 
-                self.bert_model, 
-                self.device, 
-                text, 
-                text_language, 
-                self.version, 
-                self.dtype
-            )
-            print(f"前端处理后的文本(每句): {norm_text2}")
-            
-            # 根据是否为无参考文本模式组装输入
-            if not ref_free:
-                bert = torch.cat([bert1, bert2], 1)
-                all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(self.device).unsqueeze(0)
-            else:
-                bert = bert2
-                all_phoneme_ids = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+            try:
+                # 处理当前文本
+                phones2, bert2, norm_text2 = get_phones_and_bert(
+                    self.tokenizer, 
+                    self.bert_model, 
+                    self.device, 
+                    text, 
+                    text_language, 
+                    self.version, 
+                    self.dtype
+                )
+                print(f"前端处理后的文本(每句): {norm_text2}")
                 
-            bert = bert.to(self.device).unsqueeze(0)
-            all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
-            
-            # 使用缓存或重新生成
-            if i_text in self.cache and if_freeze:
-                pred_semantic = self.cache[i_text]
-            else:
-                with torch.no_grad():
-                    pred_semantic, idx = self.t2s_model.model.infer_panel(
-                        all_phoneme_ids,
-                        all_phoneme_len,
-                        None if ref_free else prompt,
-                        bert,
-                        top_k=top_k,
-                        top_p=top_p,
-                        temperature=temperature,
-                        early_stop_num=self.hz * self.max_sec,
-                    )
-                    pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
-                    self.cache[i_text] = pred_semantic
-            
-            # 根据模型版本选择不同的解码方式
-            if self.model_version not in self.v3v4set:
-                # v1和v2模型解码逻辑
-                refers = []
-                if inp_refs:
-                    for path in inp_refs:
-                        try:
-                            refer = get_spepc(path, self.hps, self.device).to(self.dtype)
-                            refers.append(refer)
-                        except Exception as e:
-                            print(f"处理参考音频失败: {e}")
-                
-                if len(refers) == 0:
-                    refers = [get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)]
-                
-                audio = self.vq_model.decode(
-                    pred_semantic, 
-                    torch.LongTensor(phones2).to(self.device).unsqueeze(0), 
-                    refers, 
-                    speed=speed
-                )[0][0]
-            else:
-                # v3和v4模型解码逻辑
-                refer = get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)
-                phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
-                phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
-                
-                fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
-                ref_audio, sr = torchaudio.load(ref_wav_path)
-                ref_audio = ref_audio.to(self.device).float()
-                if ref_audio.shape[0] == 2:
-                    ref_audio = ref_audio.mean(0).unsqueeze(0)
-                
-                tgt_sr = 24000 if self.model_version == "v3" else 32000
-                if sr != tgt_sr:
-                    ref_audio = resample(ref_audio, sr, tgt_sr, self.device)
-                
-                # 计算mel频谱
-                if self.model_version == "v3":
-                    mel2 = mel_spec_v3(ref_audio)
+                # 根据是否为无参考文本模式组装输入
+                if not ref_free:
+                    bert = torch.cat([bert1, bert2], 1)
+                    all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(self.device).unsqueeze(0)
                 else:
-                    mel2 = mel_spec_v4(ref_audio)
+                    bert = bert2
+                    all_phoneme_ids = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                    
+                bert = bert.to(self.device).unsqueeze(0)
+                all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
                 
-                mel2 = norm_spec(mel2)
-                T_min = min(mel2.shape[2], fea_ref.shape[2])
-                mel2 = mel2[:, :, :T_min]
-                fea_ref = fea_ref[:, :, :T_min]
+                # 使用缓存或重新生成
+                if i_text in self.cache and if_freeze:
+                    pred_semantic = self.cache[i_text]
+                else:
+                    with torch.no_grad():
+                        pred_semantic, idx = self.t2s_model.model.infer_panel(
+                            all_phoneme_ids,
+                            all_phoneme_len,
+                            None if ref_free else prompt,
+                            bert,
+                            top_k=top_k,
+                            top_p=top_p,
+                            temperature=temperature,
+                            early_stop_num=self.hz * self.max_sec,
+                        )
+                        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
+                        self.cache[i_text] = pred_semantic
                 
-                # 根据模型版本设置参数
-                Tref = 468 if self.model_version == "v3" else 500
-                Tchunk = 934 if self.model_version == "v3" else 1000
                 
-                if T_min > Tref:
-                    mel2 = mel2[:, :, -Tref:]
-                    fea_ref = fea_ref[:, :, -Tref:]
-                    T_min = Tref
+                # 根据模型版本选择不同的解码方式
+
+                logger.info(f"模型版本: {self.model_version},开始解码")
+                if self.model_version not in self.v3v4set:
+                    # v1和v2模型解码逻辑
+                    refers = []
+                    if inp_refs:
+                        for path in inp_refs:
+                            try:
+                                refer = get_spepc(path, self.hps, self.device).to(self.dtype)
+                                refers.append(refer)
+                            except Exception as e:
+                                print(f"处理参考音频失败: {e}")
+                    
+                    if len(refers) == 0:
+                        refers = [get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)]
+                    
+                    audio = self.vq_model.decode(
+                        pred_semantic, 
+                        torch.LongTensor(phones2).to(self.device).unsqueeze(0), 
+                        refers, 
+                        speed=speed
+                    )[0][0]
+                else:
+                    # v3和v4模型解码逻辑
+                    refer = get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)
+                    phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+                    phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                    
+                    fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
+                    ref_audio, sr = torchaudio.load(ref_wav_path)
+                    ref_audio = ref_audio.to(self.device).float()
+                    if ref_audio.shape[0] == 2:
+                        ref_audio = ref_audio.mean(0).unsqueeze(0)
+                    
+                    tgt_sr = 24000 if self.model_version == "v3" else 32000
+                    if sr != tgt_sr:
+                        ref_audio = resample(ref_audio, sr, tgt_sr, self.device)
+                    
+                    # 计算mel频谱
+                    if self.model_version == "v3":
+                        mel2 = mel_spec_v3(ref_audio)
+                    else:
+                        mel2 = mel_spec_v4(ref_audio)
+                    
+                    mel2 = norm_spec(mel2)
+                    T_min = min(mel2.shape[2], fea_ref.shape[2])
+                    mel2 = mel2[:, :, :T_min]
+                    fea_ref = fea_ref[:, :, :T_min]
+                    
+                    # 根据模型版本设置参数
+                    Tref = 468 if self.model_version == "v3" else 500
+                    Tchunk = 934 if self.model_version == "v3" else 1000
+                    
+                    if T_min > Tref:
+                        mel2 = mel2[:, :, -Tref:]
+                        fea_ref = fea_ref[:, :, -Tref:]
+                        T_min = Tref
+                    
+                    chunk_len = Tchunk - T_min
+                    mel2 = mel2.to(self.dtype)
+                    fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
+                    cfm_resss = []
+                    idx = 0
+                    
+                    # 恢复为无限循环
+                    while True:
+                        fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
+                        if fea_todo_chunk.shape[-1] == 0:
+                            break
+                        idx += chunk_len
+                        fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+                        cfm_res = self.vq_model.cfm.inference(
+                            fea, 
+                            torch.LongTensor([fea.size(1)]).to(fea.device), 
+                            mel2,
+                            sample_steps, 
+                            inference_cfg_rate=0
+                        )
+                        cfm_res = cfm_res[:, :, mel2.shape[2]:]
+                        mel2 = cfm_res[:, :, -T_min:]
+                        fea_ref = fea_todo_chunk[:, :, -T_min:]
+                        cfm_resss.append(cfm_res)
+                    
+                    # 合并结果
+                    if cfm_resss:
+                        cfm_res = torch.cat(cfm_resss, 2)
+                        cfm_res = denorm_spec(cfm_res)
+                        
+                        # 获取对应的声码器并生成波形
+                        vocoder_model = self._get_vocoder()
+                        with torch.inference_mode():
+                            wav_gen = vocoder_model(cfm_res)
+                            audio = wav_gen[0][0]
+                    else:
+                        # 如果没有成功生成任何块，创建一个空音频
+                        logger.warning(f"段落 {i_text+1} 处理失败，未生成音频")
+                        audio = torch.zeros(1000, device=self.device)  # 创建短暂的空白音频
                 
-                chunk_len = Tchunk - T_min
-                mel2 = mel2.to(self.dtype)
-                fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
-                cfm_resss = []
-                idx = 0
+                logger.info(f"模型版本: {self.model_version},解码完成")
+                # 防止爆音
+                max_audio = torch.abs(audio).max()
+                if max_audio > 1:
+                    audio = audio / max_audio
+                    
+                # 添加到输出列表
+                audio_opt.append(audio)
+                audio_opt.append(zero_wav_torch)  # 句间停顿
                 
-                # 分块处理
-                while True:
-                    fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
-                    if fea_todo_chunk.shape[-1] == 0:
-                        break
-                    idx += chunk_len
-                    fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
-                    cfm_res = self.vq_model.cfm.inference(
-                        fea, 
-                        torch.LongTensor([fea.size(1)]).to(fea.device), 
-                        mel2,
-                        sample_steps, 
-                        inference_cfg_rate=0
-                    )
-                    cfm_res = cfm_res[:, :, mel2.shape[2]:]
-                    mel2 = cfm_res[:, :, -T_min:]
-                    fea_ref = fea_todo_chunk[:, :, -T_min:]
-                    cfm_resss.append(cfm_res)
-                
-                # 合并结果
-                cfm_res = torch.cat(cfm_resss, 2)
-                cfm_res = denorm_spec(cfm_res)
-                
-                # 获取对应的声码器并生成波形
-                vocoder_model = self._get_vocoder()
-                with torch.inference_mode():
-                    wav_gen = vocoder_model(cfm_res)
-                    audio = wav_gen[0][0]
-            
-            # 防止爆音
-            max_audio = torch.abs(audio).max()
-            if max_audio > 1:
-                audio = audio / max_audio
-                
-            # 添加到输出列表
-            audio_opt.append(audio)
-            audio_opt.append(zero_wav_torch)  # 句间停顿
+            except Exception as e:
+                # 捕获处理单个文本段落时可能发生的异常
+                logger.error(f"处理段落 {i_text+1}/{total_segments} 时发生错误: {str(e)}")
+                # 添加一个空音频段，以便继续处理后续文本
+                audio_opt.append(torch.zeros(8000, device=self.device))  # 添加一个空白音频
+                audio_opt.append(zero_wav_torch)  # 句间停顿
+                continue  # 继续处理下一个文本段
+        
+        # 如果没有生成任何音频（可能是所有段落都处理失败），返回一个空音频
+        if len(audio_opt) == 0:
+            logger.error("所有文本段落处理失败，返回空音频")
+            audio_opt = [torch.zeros(8000, device=self.device)]
         
         # 合并所有音频片段
         audio_opt = torch.cat(audio_opt, 0)

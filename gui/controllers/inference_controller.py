@@ -72,9 +72,17 @@ class InferenceController(BaseController):
                 if result == "推理已停止":
                     # 如果是主动停止，触发停止信号
                     self.inference_stopped.emit()
+                elif "超时" in result:
+                    # 如果是超时导致的停止，触发特定的超时信号
+                    self.inference_failed.emit(f"合成过程超时: {result}")
+                    # 不强制释放GPU内存
                 else:
                     # 否则触发失败信号
                     self.inference_failed.emit(result)
+                    
+                    # 如果错误信息提示可能是卡死问题，但不主动清理资源
+                    if "卡死" in result or "卡住" in result or "无响应" in result:
+                        pass
         
         # 启动异步推理
         success = self.inference_model.generate_speech_async(
@@ -123,4 +131,10 @@ class InferenceController(BaseController):
     @Slot(result=list)
     def get_history(self) -> List[Dict]:
         """获取历史记录"""
-        return self.inference_model.get_history() 
+        return self.inference_model.get_history()
+    
+    def _force_cleanup(self):
+        """强制清理资源，特别是在推理卡死情况下"""
+        # 在实际情况下此函数不会被调用
+        # 但保留函数定义以避免代码错误
+        pass 

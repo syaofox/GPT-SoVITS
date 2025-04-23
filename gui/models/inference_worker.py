@@ -149,32 +149,96 @@ class InferenceWorker(QObject):
             if self.should_stop:
                 self.finished.emit(False, "推理已取消")
                 return
+            
+            # 设置超时监控
+            import threading
+            import time
+            
+            # 标志变量，指示是否已完成或发生错误
+            is_completed = False
+            error_message = None
+            
+            # 创建存储结果的容器
+            result = {"sample_rate": None, "audio_data": None}
+            
+            # 定义监控函数
+            def monitor_progress():
+                # 检查卡死情况的时间间隔（秒）
+                check_interval = 30
+                # 最大无响应时间（秒）
+                max_no_response_time = 180
+                
+                last_segment = self.current_segment
+                last_update_time = time.time()
+                
+                while not is_completed and not self.should_stop:
+                    time.sleep(check_interval)
+                    
+                    # 如果当前段落未变化，检查是否超时
+                    current_time = time.time()
+                    if self.current_segment == last_segment and self.current_segment > 0:
+                        if current_time - last_update_time > max_no_response_time:
+                            # 如果超过最大无响应时间，请求停止
+                            self.should_stop = True
+                            self.progress.emit(f"段落 {self.current_segment} 处理超时，已请求停止")
+                            # 不直接结束线程，让推理过程自行检测停止标志并处理
+                    else:
+                        # 更新进度
+                        last_segment = self.current_segment
+                        last_update_time = current_time
+            
+            # 启动监控线程
+            monitor_thread = threading.Thread(target=monitor_progress)
+            monitor_thread.daemon = True
+            monitor_thread.start()
                 
             # 生成语音（GPTSoVITSInference会计算文本分段并通过回调提供进度）
-            sample_rate, audio_data = self.engine.generate_speech(
-                ref_wav_path=self.config.get("ref_audio", ""),
-                prompt_text=self.config.get("prompt_text", ""),
-                prompt_language=self.config.get("prompt_lang", "中文"),
-                text=text,
-                text_language=self.config.get("text_lang", "中文"),
-                how_to_cut=how_to_cut,
-                top_k=self.config.get("top_k", 20),
-                top_p=self.config.get("top_p", 0.6),
-                temperature=self.config.get("temperature", 0.6),
-                ref_free=self.config.get("ref_free", False),
-                speed=self.config.get("speed", 1.0),
-                inp_refs=self.config.get("aux_refs", []),
-                sample_steps=self.config.get("sample_steps", 8),
-                if_sr=self.config.get("if_sr", False),
-                pause_second=self.config.get("pause_second", 0.3),
-                progress_callback=self.progress_callback
-            )
+            try:
+                sample_rate, audio_data = self.engine.generate_speech(
+                    ref_wav_path=self.config.get("ref_audio", ""),
+                    prompt_text=self.config.get("prompt_text", ""),
+                    prompt_language=self.config.get("prompt_lang", "中文"),
+                    text=text,
+                    text_language=self.config.get("text_lang", "中文"),
+                    how_to_cut=how_to_cut,
+                    top_k=self.config.get("top_k", 20),
+                    top_p=self.config.get("top_p", 0.6),
+                    temperature=self.config.get("temperature", 0.6),
+                    ref_free=self.config.get("ref_free", False),
+                    speed=self.config.get("speed", 1.0),
+                    inp_refs=self.config.get("aux_refs", []),
+                    sample_steps=self.config.get("sample_steps", 8),
+                    if_sr=self.config.get("if_sr", False),
+                    pause_second=self.config.get("pause_second", 0.3),
+                    progress_callback=self.progress_callback
+                )
+                
+                # 保存结果
+                result["sample_rate"] = sample_rate
+                result["audio_data"] = audio_data
+                is_completed = True
+            except Exception as e:
+                error_message = f"生成语音过程中发生错误: {str(e)}"
+                self.progress.emit(error_message)
+                is_completed = True  # 标记为已完成（虽然是错误完成）
             
-            # 检查是否在生成过程中被停止，如果停止则不保存
+            # 检查是否在生成过程中被停止或发生错误
             if self.should_stop:
                 self.finished.emit(False, "推理已停止")
                 return
                 
+            if error_message:
+                self.finished.emit(False, error_message)
+                return
+                
+            # 如果没有有效的音频数据，返回错误
+            if result["sample_rate"] is None or result["audio_data"] is None:
+                self.finished.emit(False, "未能生成有效的音频数据")
+                return
+                
+            sample_rate = result["sample_rate"]
+            audio_data = result["audio_data"]
+            
             # 生成文件名
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
