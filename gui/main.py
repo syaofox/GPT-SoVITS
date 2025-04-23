@@ -38,6 +38,8 @@ def main():
     
     # 创建应用
     app = QApplication(sys.argv)
+    # 设置应用样式    
+    app.setStyle("Windows") 
     app.setApplicationName("GPT-SoVITS GUI")
     
     # 设置翻译器
