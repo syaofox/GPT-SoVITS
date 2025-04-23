@@ -44,6 +44,8 @@ class MainWindow(QMainWindow):
             self.status_bar,
             self.generate_button
         )
+        # 设置主窗口引用，使进度管理器能够控制UI元素
+        self.progress_manager.set_main_window(self)
         
         # 初始化配置应用器
         self.config_applier = ConfigApplier(
@@ -160,6 +162,7 @@ class MainWindow(QMainWindow):
         self.inference_controller.inference_started.connect(self.progress_manager.on_inference_started)
         self.inference_controller.inference_completed.connect(self.progress_manager.on_inference_completed)
         self.inference_controller.inference_failed.connect(self.progress_manager.on_inference_failed)
+        self.inference_controller.inference_stopped.connect(self.progress_manager.on_inference_stopped)
         self.inference_controller.progress_updated.connect(self.progress_manager.update_progress)
         
         # 推理完成信号连接到音频生成处理
@@ -195,21 +198,27 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(f"已更新替换规则，共 {count} 条")
     
     def generate_speech(self):
-        """生成语音"""
-        # 根据当前选中的标签页决定使用哪种生成方法
-        current_index = self.tab_widget.currentIndex()
-        
-        if current_index == 1:  # 实验选项卡
-            config = self.experiment_tab.get_inference_config()
-            text = self.experiment_tab.text_edit.toPlainText()
-            self.inference_handler.handle_experiment_request(config, text)
-                
-        elif current_index == 0:  # 角色选项卡
-            role_name = self.role_tab.current_role
-            emotion_name = self.role_tab.current_emotion
-            text = self.role_tab.text_edit.toPlainText()
-            config = self.role_tab.get_inference_config()
-            self.inference_handler.handle_role_request(role_name, emotion_name, text, config)
+        """生成语音或停止生成"""
+        # 根据当前状态决定是生成语音还是停止生成
+        if self.progress_manager.is_running():
+            # 正在推理中，点击按钮应该停止推理
+            self.inference_controller.stop_inference()
+        else:
+            # 未在推理中，点击按钮应该开始推理
+            # 根据当前选中的标签页决定使用哪种生成方法
+            current_index = self.tab_widget.currentIndex()
+            
+            if current_index == 1:  # 实验选项卡
+                config = self.experiment_tab.get_inference_config()
+                text = self.experiment_tab.text_edit.toPlainText()
+                self.inference_handler.handle_experiment_request(config, text)
+                    
+            elif current_index == 0:  # 角色选项卡
+                role_name = self.role_tab.current_role
+                emotion_name = self.role_tab.current_emotion
+                text = self.role_tab.text_edit.toPlainText()
+                config = self.role_tab.get_inference_config()
+                self.inference_handler.handle_role_request(role_name, emotion_name, text, config)
     
     def on_tab_changed(self, index):
         """处理标签页切换"""

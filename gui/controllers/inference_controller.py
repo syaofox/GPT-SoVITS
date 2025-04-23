@@ -18,6 +18,7 @@ class InferenceController(BaseController):
     inference_started = Signal()
     inference_completed = Signal(str)
     inference_failed = Signal(str)
+    inference_stopped = Signal()  # 新增推理停止信号
     history_updated = Signal()
     progress_updated = Signal(str)
     
@@ -32,6 +33,16 @@ class InferenceController(BaseController):
         """析构函数"""
         # 不再需要取消注册退出保存函数
         pass
+    
+    @Slot()
+    def stop_inference(self):
+        """停止推理"""
+        if self.inference_model.stop_inference():
+            self.progress_updated.emit("正在停止推理...")
+            # 实际的停止完成信号会在工作线程结束时触发
+        else:
+            # 如果没有正在运行的推理任务，直接发送停止信号
+            self.inference_stopped.emit()
     
     @Slot("QVariantMap")
     def generate_speech_async(self, config: Dict):
@@ -58,7 +69,12 @@ class InferenceController(BaseController):
                 self.inference_completed.emit(result)
                 self.history_updated.emit()
             else:
-                self.inference_failed.emit(result)
+                if result == "推理已停止":
+                    # 如果是主动停止，触发停止信号
+                    self.inference_stopped.emit()
+                else:
+                    # 否则触发失败信号
+                    self.inference_failed.emit(result)
         
         # 启动异步推理
         success = self.inference_model.generate_speech_async(
@@ -96,7 +112,12 @@ class InferenceController(BaseController):
             self.history_updated.emit()
             return result
         else:
-            self.inference_failed.emit(result)
+            if result == "推理已停止":
+                # 如果是主动停止，触发停止信号
+                self.inference_stopped.emit()
+            else:
+                # 否则触发失败信号
+                self.inference_failed.emit(result)
             return ""
     
     @Slot(result=list)
