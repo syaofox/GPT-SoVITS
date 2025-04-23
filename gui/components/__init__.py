@@ -6,5 +6,6 @@
 
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
+from gui.components.draggable_widgets import DraggableLineEdit, DraggableListWidget
 
-__all__ = ['AudioPlayer', 'HistoryList'] 
+__all__ = ['AudioPlayer', 'HistoryList', 'DraggableLineEdit', 'DraggableListWidget'] 
