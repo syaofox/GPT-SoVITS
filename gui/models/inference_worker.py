@@ -174,16 +174,16 @@ class InferenceWorker(QObject):
                 while not is_completed and not self.should_stop:
                     time.sleep(check_interval)
                     
-                    # 如果当前段落未变化，检查是否超时
+                    # 如果合成已经开始，但长时间没有进度更新，可能是卡住了
                     current_time = time.time()
-                    if self.current_segment == last_segment and self.current_segment > 0:
-                        if current_time - last_update_time > max_no_response_time:
-                            # 如果超过最大无响应时间，请求停止
-                            self.should_stop = True
-                            self.progress.emit(f"段落 {self.current_segment} 处理超时，已请求停止")
-                            # 不直接结束线程，让推理过程自行检测停止标志并处理
-                    else:
-                        # 更新进度
+                    if self.current_segment > 0 and current_time - last_update_time > max_no_response_time:
+                        # 如果超过最大无响应时间，请求停止
+                        self.should_stop = True
+                        self.progress.emit(f"段落 {self.current_segment} 处理超时，已请求停止")
+                        # 不直接结束线程，让推理过程自行检测停止标志并处理
+                    
+                    # 如果段落号有变化，更新时间戳
+                    if self.current_segment != last_segment:
                         last_segment = self.current_segment
                         last_update_time = current_time
             

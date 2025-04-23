@@ -407,13 +407,6 @@ class GPTSoVITSInference:
         
         # 处理每句文本
         for i_text, text in enumerate(texts):
-            # 调用进度回调函数（如果提供）
-            if progress_callback and callable(progress_callback):
-                # 检查是否请求停止处理
-                if progress_callback(i_text + 1, total_segments):
-                    logger.info("收到停止请求，中止合成")
-                    break
-                
             # 跳过空行
             if len(text.strip()) == 0:
                 continue
@@ -421,6 +414,13 @@ class GPTSoVITSInference:
             if text == "<brbrbrbrbr>":
                 audio_opt.append(zero_wav_torch)
                 logger.info(f"插入空白音频")
+                
+                # 在空白音频处理完成后调用进度回调
+                if progress_callback and callable(progress_callback):
+                    # 检查是否请求停止处理
+                    if progress_callback(i_text + 1, total_segments):
+                        logger.info("收到停止请求，中止合成")
+                        break
                 continue
                 
             # 确保文本以标点结尾
@@ -473,7 +473,6 @@ class GPTSoVITSInference:
                 
                 
                 # 根据模型版本选择不同的解码方式
-
                 logger.info(f"模型版本: {self.model_version},开始解码")
                 if self.model_version not in self.v3v4set:
                     # v1和v2模型解码逻辑
@@ -581,12 +580,27 @@ class GPTSoVITSInference:
                 audio_opt.append(audio)
                 audio_opt.append(zero_wav_torch)  # 句间停顿
                 
+                # 在段落处理完成后调用进度回调
+                if progress_callback and callable(progress_callback):
+                    # 检查是否请求停止处理
+                    if progress_callback(i_text + 1, total_segments):
+                        logger.info("收到停止请求，中止合成")
+                        break
+                
             except Exception as e:
                 # 捕获处理单个文本段落时可能发生的异常
                 logger.error(f"处理段落 {i_text+1}/{total_segments} 时发生错误: {str(e)}")
                 # 添加一个空音频段，以便继续处理后续文本
                 audio_opt.append(torch.zeros(8000, device=self.device))  # 添加一个空白音频
                 audio_opt.append(zero_wav_torch)  # 句间停顿
+                
+                # 处理异常后也要调用进度回调
+                if progress_callback and callable(progress_callback):
+                    # 检查是否请求停止处理
+                    if progress_callback(i_text + 1, total_segments):
+                        logger.info("收到停止请求，中止合成")
+                        break
+                
                 continue  # 继续处理下一个文本段
         
         # 如果没有生成任何音频（可能是所有段落都处理失败），返回一个空音频
