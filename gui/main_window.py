@@ -5,15 +5,15 @@
 """
 
 import os
-import glob
 from pathlib import Path
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QListWidgetItem, QProgressBar
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QProgressBar
+from PySide6.QtCore import Qt
 
 from gui.controllers import RoleController, InferenceController
 from gui.tabs import ExperimentTab, RoleTab, ReplaceTab
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
+from gui.models import ModelManager, TextProcessor, ProgressManager, ConfigApplier, InferenceRequestHandler
 
 
 class MainWindow(QMainWindow):
@@ -22,84 +22,49 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
+        # 初始化模型管理器和文本处理器
+        self.model_manager = ModelManager()
+        self.text_processor = TextProcessor()
+        
         # 初始化控制器
         self.role_controller = RoleController()
         self.inference_controller = InferenceController()
         
         # 扫描模型文件
-        self.gpt_models = self.scan_models(["GPT_weights", "GPT_weights_v2", "GPT_weights_v3", "GPT_weights_v4"])
-        self.sovits_models = self.scan_models(["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3", "SoVITS_weights_v4"])
+        self.gpt_models = self.model_manager.scan_models(["GPT_weights", "GPT_weights_v2", "GPT_weights_v3", "GPT_weights_v4"])
+        self.sovits_models = self.model_manager.scan_models(["SoVITS_weights", "SoVITS_weights_v2", "SoVITS_weights_v3", "SoVITS_weights_v4"])
         
+        # 初始化UI
         self.init_ui()
         
-        # 加载文字替换规则
-        self.word_replace_rules = self.load_word_replace_rules()
+        # 初始化进度管理器
+        self.progress_manager = ProgressManager(
+            self.progress_bar, 
+            self.progress_label, 
+            self.status_bar,
+            self.generate_button
+        )
         
+        # 初始化配置应用器
+        self.config_applier = ConfigApplier(
+            self.experiment_tab,
+            self.gpt_models,
+            self.sovits_models
+        )
+        
+        # 初始化推理请求处理器
+        self.inference_handler = InferenceRequestHandler(
+            self.inference_controller,
+            self.text_processor,
+            self
+        )
+        
+        # 连接信号槽
         self.connect_signals()
         
         # 加载模型到下拉框
         self.experiment_tab.load_gpt_models(self.gpt_models)
         self.experiment_tab.load_sovits_models(self.sovits_models)
-    
-    def scan_models(self, model_dirs):
-        """扫描模型文件夹，返回模型名称和路径的字典"""
-        models_dict = {}
-        
-        # 获取项目根目录
-        root_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-        
-        # 扫描每个模型目录
-        for model_dir in model_dirs:
-            dir_path = root_dir / model_dir
-            if not dir_path.exists():
-                continue
-                
-            # 查找所有模型文件 (.pth, .ckpt)
-            for model_file in glob.glob(str(dir_path / "*.pth")) + glob.glob(str(dir_path / "*.ckpt")):
-                model_path = Path(model_file)
-                # 使用相对路径作为显示名称
-                display_name = f"{model_dir}/{model_path.name}"
-                # 使用绝对路径作为实际值
-                models_dict[display_name] = str(model_path.absolute())
-        
-        return models_dict
-    
-    def load_word_replace_rules(self):
-        """加载文字替换规则"""
-        replace_rules = {}
-        
-        # 获取项目根目录
-        root_dir = Path(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-        replace_file = root_dir / "gui" / "word_replace.txt"
-        
-        try:
-            if replace_file.exists():
-                with open(replace_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and ' ' in line:
-                            source, target = line.split(' ', 1)
-                            replace_rules[source] = target
-                
-                # 如果状态栏已初始化则显示加载信息
-                if hasattr(self, 'status_bar'):
-                    self.status_bar.showMessage(f"已加载 {len(replace_rules)} 条文字替换规则")
-                
-        except Exception as e:
-            print(f"加载替换规则失败: {e}")
-        
-        return replace_rules
-    
-    def apply_word_replace(self, text):
-        """应用文字替换规则"""
-        if not self.word_replace_rules:
-            return text
-            
-        result = text
-        for source, target in self.word_replace_rules.items():
-            result = result.replace(source, target)
-        
-        return result
     
     def init_ui(self):
         """初始化界面"""
@@ -191,244 +156,44 @@ class MainWindow(QMainWindow):
         self.role_controller.error_occurred.connect(self.show_error)
         self.inference_controller.error_occurred.connect(self.show_error)
         
-        self.inference_controller.inference_started.connect(self.on_inference_started)
-        self.inference_controller.inference_completed.connect(self.on_inference_completed)
-        self.inference_controller.inference_failed.connect(self.on_inference_failed)
-        self.inference_controller.progress_updated.connect(self.update_progress)
+        # 使用进度管理器处理推理信号
+        self.inference_controller.inference_started.connect(self.progress_manager.on_inference_started)
+        self.inference_controller.inference_completed.connect(self.progress_manager.on_inference_completed)
+        self.inference_controller.inference_failed.connect(self.progress_manager.on_inference_failed)
+        self.inference_controller.progress_updated.connect(self.progress_manager.update_progress)
         
-        # 共享组件信号
+        # 推理完成信号连接到音频生成处理
         self.inference_controller.inference_completed.connect(self.on_new_audio_generated)
+        
+        # 历史列表和音频播放器连接
         self.history_list.audio_selected.connect(self.audio_player.load_audio)
         
         # 标签页生成按钮信号
-        self.experiment_tab.generate_requested.connect(self.on_generate_requested)
-        self.role_tab.generate_requested.connect(self.on_generate_requested)
+        self.experiment_tab.generate_requested.connect(self.inference_handler.on_generate_requested)
+        self.role_tab.generate_requested.connect(self.inference_handler.on_generate_requested)
         
-        # 连接角色选择信号
-        self.role_tab.role_config_selected.connect(self.apply_role_config_to_experiment)
-        # 连接角色信息选择信号
-        self.role_tab.role_info_selected.connect(self.apply_role_info_to_experiment)
+        # 连接角色选择信号到配置应用器
+        self.role_tab.role_config_selected.connect(self.config_applier.apply_role_config)
+        self.role_tab.role_info_selected.connect(self.config_applier.apply_role_info)
         
         # 连接替换规则更新信号
         self.replace_tab.rules_updated.connect(self.update_replace_rules)
     
-    def apply_role_config_to_experiment(self, role_config):
-        """将角色配置应用到试听配置标签页"""
-        
-        # 设置参考音频和文本
-        ref_audio = role_config.get("ref_audio", "")
-        if ref_audio and os.path.exists(ref_audio):
-            self.experiment_tab.ref_path_edit.setText(ref_audio)
-        
-        # 设置参考文本和语言
-        self.experiment_tab.prompt_text_edit.setText(role_config.get("prompt_text", ""))
-        
-        prompt_lang = role_config.get("prompt_lang", "中文")
-        index = self.experiment_tab.prompt_lang_combo.findText(prompt_lang)
-        if index >= 0:
-            self.experiment_tab.prompt_lang_combo.setCurrentIndex(index)
-        
-        # 设置文本语言
-        text_lang = role_config.get("text_lang", "中文")
-        index = self.experiment_tab.text_lang_combo.findText(text_lang)
-        if index >= 0:
-            self.experiment_tab.text_lang_combo.setCurrentIndex(index)
-        
-        # 设置文本切分方式
-        how_to_cut = role_config.get("how_to_cut", "按句切")
-        index = self.experiment_tab.cut_method_combo.findText(how_to_cut)
-        if index >= 0:
-            self.experiment_tab.cut_method_combo.setCurrentIndex(index)
-        
-        # 设置模型
-        gpt_path = role_config.get("gpt_path")
-        if gpt_path:
-            # 尝试直接匹配完整路径
-            gpt_matched = False
-            for display_name, path in self.gpt_models.items():
-                if path == gpt_path:
-                    index = self.experiment_tab.gpt_model_combo.findText(display_name)
-                    if index >= 0:
-                        self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
-                        gpt_matched = True
-                        break
-            
-            # 如果直接匹配失败，尝试匹配文件名
-            if not gpt_matched:
-                gpt_filename = os.path.basename(gpt_path)
-                for display_name, path in self.gpt_models.items():
-                    if os.path.basename(path) == gpt_filename:
-                        index = self.experiment_tab.gpt_model_combo.findText(display_name)
-                        if index >= 0:
-                            self.experiment_tab.gpt_model_combo.setCurrentIndex(index)
-                            break
-        
-        sovits_path = role_config.get("sovits_path")
-        
-        if sovits_path:
-            # 尝试直接匹配完整路径
-            sovits_matched = False
-            for display_name, path in self.sovits_models.items():
-                if path == sovits_path:
-                    index = self.experiment_tab.sovits_model_combo.findText(display_name)
-                    if index >= 0:
-                        self.experiment_tab.sovits_model_combo.setCurrentIndex(index)
-                        sovits_matched = True
-                        break
-            
-            # 如果直接匹配失败，尝试匹配文件名
-            if not sovits_matched:
-                sovits_filename = os.path.basename(sovits_path)
-                for display_name, path in self.sovits_models.items():
-                    if os.path.basename(path) == sovits_filename:
-                        index = self.experiment_tab.sovits_model_combo.findText(display_name)
-                        if index >= 0:
-                            self.experiment_tab.sovits_model_combo.setCurrentIndex(index)
-                            break
-        
-        # 设置高级参数
-        self.experiment_tab.speed_spin.setValue(role_config.get("speed", 1.0))
-        self.experiment_tab.top_k_spin.setValue(role_config.get("top_k", 15))
-        self.experiment_tab.top_p_spin.setValue(role_config.get("top_p", 1.0))
-        self.experiment_tab.temperature_spin.setValue(role_config.get("temperature", 1.0))
-        self.experiment_tab.sample_steps_spin.setValue(role_config.get("sample_steps", 8))
-        self.experiment_tab.pause_spin.setValue(role_config.get("pause_second", 0.3))
-        
-        # 设置选项
-        self.experiment_tab.ref_free_check.setChecked(role_config.get("ref_free", False))
-        self.experiment_tab.sr_check.setChecked(role_config.get("if_sr", False))
-        
-        # 清空并添加辅助参考音频
-        self.experiment_tab.aux_refs_list.clear()
-        
-        aux_refs = role_config.get("aux_refs", [])
-        for aux_ref in aux_refs:
-            if aux_ref and os.path.exists(aux_ref):
-                # 添加到列表
-                basename = os.path.basename(aux_ref)
-                item = QListWidgetItem(basename)
-                item.setData(Qt.UserRole, aux_ref)
-                self.experiment_tab.aux_refs_list.addItem(item)
-    
-    def apply_role_info_to_experiment(self, role_name, emotion_name):
-        """将角色名和情绪信息应用到试听配置标签页"""
-        if not role_name or not emotion_name:
-            return
-        
-        # 填充角色名和情绪到实验页面的输入框
-        self.experiment_tab.role_name_edit.setText(role_name)
-        self.experiment_tab.emotion_name_edit.setText(emotion_name)
-    
     def on_new_audio_generated(self, file_path: str):
         """新音频生成后刷新历史列表"""
         self.history_list.load_output_files()
-    
-    def on_inference_started(self):
-        """推理开始回调"""
-        self.status_bar.showMessage("正在生成语音...")
-        self.generate_button.setEnabled(False)
-        self.progress_label.setText("正在处理...")
-        self.progress_bar.setValue(0)
-    
-    def on_inference_completed(self, file_path: str):
-        """推理完成回调"""
-        self.status_bar.showMessage("生成完成")
-        self.generate_button.setEnabled(True)
-        self.progress_label.setText("就绪")
-        self.progress_bar.setValue(0)
+        # 加载新生成的音频到播放器
         self.audio_player.load_audio(file_path)
-    
-    def on_inference_failed(self, error_msg: str):
-        """推理失败回调"""
-        self.status_bar.showMessage(f"生成失败: {error_msg}")
-        self.generate_button.setEnabled(True)
-        self.progress_label.setText(f"失败: {error_msg}")
-        self.progress_bar.setValue(0)
-    
-    def update_progress(self, message: str):
-        """更新进度信息"""
-        self.progress_label.setText(message)
-        
-        # 如果是合成进度信息，更新状态栏和进度条
-        if "正在合成:" in message:
-            self.status_bar.showMessage(message)
-            
-            # 从消息中提取进度信息
-            try:
-                # 解析"正在合成: X/Y"格式的消息
-                parts = message.split(":")
-                if len(parts) == 2:
-                    numbers = parts[1].strip().split("/")
-                    if len(numbers) == 2:
-                        current = int(numbers[0])
-                        total = int(numbers[1])
-                        if total > 0:  # 防止除零错误
-                            progress_value = int((current / total) * 100)
-                            # 确保进度值在有效范围内
-                            progress_value = max(0, min(100, progress_value))
-                            self.progress_bar.setValue(progress_value)
-            except Exception as e:
-                print(f"解析进度信息失败: {e}")
-        
-        # 文本预处理完成，重置进度条为起始状态
-        elif "文本已分割为" in message:
-            try:
-                # 从消息中提取片段数量，显示初始进度
-                parts = message.split("文本已分割为")
-                if len(parts) == 2:
-                    segments_str = parts[1].strip().split(" ")[0]
-                    if segments_str.isdigit() and int(segments_str) > 0:
-                        # 设置一个较小的初始进度值，表示准备开始
-                        self.progress_bar.setValue(1)
-                    else:
-                        self.progress_bar.setValue(0)
-                else:
-                    self.progress_bar.setValue(0)
-            except Exception as e:
-                print(f"解析文本分段信息失败: {e}")
-                self.progress_bar.setValue(0)
-        
-        # 生成开始，设置初始进度
-        elif "开始生成语音" in message:
-            self.progress_bar.setValue(1)  # 设置为1%表示开始
-        
-        # 保存音频，设置进度条为完成状态
-        elif "正在保存音频" in message:
-            self.progress_bar.setValue(100)
-    
-    def on_generate_requested(self, config=None, text="", is_role=False):
-        """处理来自标签页的生成请求"""
-        if config is None:
-            self.show_error("无效的配置")
-            return
-            
-        if is_role:
-            # 角色推理
-            if config and text:
-                # 应用文字替换规则
-                text = self.apply_word_replace(text)
-                config["text"] = text
-                self.inference_controller.generate_speech_async(config)
-        else:
-            # 实验模式推理
-            if config:
-                # 应用文字替换规则
-                text = config.get("text", "")
-                if text:
-                    text = self.apply_word_replace(text)
-                    config["text"] = text
-                self.inference_controller.generate_speech_async(config)
     
     def show_error(self, message: str):
         """显示错误信息"""
         QMessageBox.critical(self, "错误", message)
     
-    def closeEvent(self, event):
-        """窗口关闭事件处理"""
-        # InferenceController已经通过atexit注册了程序退出时的保存函数，不需要重复调用
-        # 直接继续正常关闭
-        event.accept()
-
+    def update_replace_rules(self, new_rules):
+        """更新替换规则"""
+        count = self.text_processor.update_rules(new_rules)
+        self.status_bar.showMessage(f"已更新替换规则，共 {count} 条")
+    
     def generate_speech(self):
         """生成语音"""
         # 根据当前选中的标签页决定使用哪种生成方法
@@ -437,104 +202,14 @@ class MainWindow(QMainWindow):
         if current_index == 1:  # 实验选项卡
             config = self.experiment_tab.get_inference_config()
             text = self.experiment_tab.text_edit.toPlainText()
-            
-            # 应用文字替换规则
-            text = self.apply_word_replace(text)
-            config["text"] = text
-            
-            # 验证必要参数
-            if not text:
-                self.show_error("请输入要合成的文本")
-                return
+            self.inference_handler.handle_experiment_request(config, text)
                 
-            if not config["gpt_path"]:
-                self.show_error("请选择GPT模型")
-                return
-                
-            if not config["sovits_path"]:
-                self.show_error("请选择SoVITS模型")
-                return
-                
-            if not config["ref_free"] and not config["ref_audio"]:
-                self.show_error("请选择参考音频文件或勾选无参考文本")
-                return
-                
-            if not config["ref_free"] and not os.path.exists(config["ref_audio"]):
-                self.show_error(f"参考音频文件不存在: {config['ref_audio']}")
-                return
-            
-            # 确保角色名和情绪名存在
-            if not config.get("role_name"):
-                config["role_name"] = self.experiment_tab.role_name_edit.text().strip() or "未知角色"
-            if not config.get("emotion_name"):
-                config["emotion_name"] = self.experiment_tab.emotion_name_edit.text().strip() or "未知情绪"
-                
-            # 验证辅助参考音频
-            aux_refs = config.get("aux_refs", [])
-            valid_aux_refs = []
-            for aux_ref in aux_refs:
-                if os.path.exists(aux_ref):
-                    valid_aux_refs.append(aux_ref)
-                else:
-                    self.show_error(f"辅助参考音频文件不存在，已忽略: {aux_ref}")
-            
-            # 更新有效的辅助参考音频
-            config["aux_refs"] = valid_aux_refs
-                
-            # 调用推理控制器
-            self.inference_controller.generate_speech_async(config)
-            
         elif current_index == 0:  # 角色选项卡
             role_name = self.role_tab.current_role
             emotion_name = self.role_tab.current_emotion
             text = self.role_tab.text_edit.toPlainText()
-            
-            # 应用文字替换规则
-            text = self.apply_word_replace(text)
-            
-            if not role_name or not emotion_name:
-                self.show_error("请先选择角色和情感")
-                return
-                
-            if not text:
-                self.show_error("请输入要合成的文本")
-                return
-                
-            # 获取推理配置
             config = self.role_tab.get_inference_config()
-            if not config:
-                self.show_error("无法获取角色配置")
-                return
-            
-            # 更新处理后的文本
-            config["text"] = text
-            
-            # 确保角色名和情绪名存在
-            if not config.get("role_name"):
-                config["role_name"] = role_name
-            if not config.get("emotion_name"):
-                config["emotion_name"] = emotion_name
-                
-            # 检查参考音频路径是否存在
-            ref_audio = config.get("ref_audio", "")
-            if not config.get("ref_free", False) and ref_audio and not os.path.exists(ref_audio):
-                self.show_error(f"参考音频文件不存在: {ref_audio}")
-                return
-                
-            # 检查辅助参考音频
-            aux_refs = config.get("aux_refs", [])
-            valid_aux_refs = []
-            for aux_ref in aux_refs:
-                if os.path.exists(aux_ref):
-                    valid_aux_refs.append(aux_ref)
-                else:
-                    self.show_error(f"辅助参考音频文件不存在，已忽略: {aux_ref}")
-            
-            # 更新有效的辅助参考音频
-            config["aux_refs"] = valid_aux_refs
-                
-            # 调用推理控制器
-            self.inference_controller.generate_speech_async(config)
+            self.inference_handler.handle_role_request(role_name, emotion_name, text, config)
     
     def on_tab_changed(self, index):
         """处理标签页切换"""
@@ -543,7 +218,8 @@ class MainWindow(QMainWindow):
             if self.role_tab.current_role and self.role_tab.current_emotion:
                 self.role_tab.get_current_emotion_config()
     
-    def update_replace_rules(self, new_rules):
-        """更新替换规则"""
-        self.word_replace_rules = new_rules
-        self.status_bar.showMessage(f"已更新替换规则，共 {len(new_rules)} 条") 
+    def closeEvent(self, event):
+        """窗口关闭事件处理"""
+        # InferenceController已经通过atexit注册了程序退出时的保存函数，不需要重复调用
+        # 直接继续正常关闭
+        event.accept() 
