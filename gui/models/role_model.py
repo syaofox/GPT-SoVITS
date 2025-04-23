@@ -8,7 +8,7 @@ import os
 import json
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List, Union, Tuple
 
 
 class RoleModel:
@@ -25,6 +25,69 @@ class RoleModel:
         self.roles_dir.mkdir(exist_ok=True)
         self.roles: Dict[str, Dict] = {}
         self.load_roles()
+    
+    def _process_audio_path_for_loading(self, audio_path: str, role_dir: Path) -> str:
+        """
+        处理音频路径为加载配置准备，将相对路径转换为绝对路径
+        
+        参数:
+            audio_path: 音频文件路径
+            role_dir: 角色目录
+            
+        返回:
+            处理后的音频路径
+        """
+        if not os.path.isabs(audio_path) and "/" not in audio_path and "\\" not in audio_path:
+            # 如果只是文件名而不是路径，则添加角色目录路径
+            return str(role_dir / audio_path)
+        elif not os.path.isabs(audio_path):
+            # 处理可能已包含部分路径的情况
+            return str(role_dir / os.path.basename(audio_path))
+        return audio_path
+    
+    def _process_audio_path_for_saving(self, audio_path: str, role_dir: Path) -> str:
+        """
+        处理音频路径为保存配置准备，将绝对路径转换为相对路径，并复制文件
+        
+        参数:
+            audio_path: 音频文件路径
+            role_dir: 角色目录
+            
+        返回:
+            处理后的音频文件名（相对路径）
+        """
+        if os.path.isabs(audio_path):
+            # 获取文件名
+            audio_name = os.path.basename(audio_path)
+            # 复制音频文件到角色目录
+            if os.path.exists(audio_path):
+                new_path = role_dir / audio_name
+                # 检查源文件和目标文件是否相同，或目标是否已存在
+                if os.path.abspath(audio_path) != os.path.abspath(new_path):
+                    # 源文件和目标文件不同，才进行复制
+                    try:
+                        shutil.copy2(audio_path, new_path)
+                    except Exception as e:
+                        print(f"复制音频文件失败，但继续处理: {str(e)}")
+            # 返回文件名（相对路径）
+            return audio_name
+        else:
+            # 对于已经是相对路径的文件，确保只保留文件名
+            return os.path.basename(audio_path)
+    
+    def _process_aux_refs_for_loading(self, aux_refs: List[str], role_dir: Path) -> List[str]:
+        """处理辅助参考音频列表为加载配置准备"""
+        processed_refs = []
+        for aux_ref in aux_refs:
+            processed_refs.append(self._process_audio_path_for_loading(aux_ref, role_dir))
+        return processed_refs
+    
+    def _process_aux_refs_for_saving(self, aux_refs: List[str], role_dir: Path) -> List[str]:
+        """处理辅助参考音频列表为保存配置准备"""
+        processed_refs = []
+        for aux_ref in aux_refs:
+            processed_refs.append(self._process_audio_path_for_saving(aux_ref, role_dir))
+        return processed_refs
     
     def load_roles(self) -> Dict[str, Dict]:
         """加载所有角色配置"""
@@ -45,27 +108,15 @@ class RoleModel:
                 # 将相对路径的音频文件转换为绝对路径
                 for emotion_name, emotion_config in config.get("emotions", {}).items():
                     if "ref_audio" in emotion_config:
-                        ref_audio = emotion_config["ref_audio"]
-                        # 如果只是文件名而不是路径，则添加角色目录路径
-                        if not os.path.isabs(ref_audio) and "/" not in ref_audio and "\\" not in ref_audio:
-                            emotion_config["ref_audio"] = str(role_dir / ref_audio)
-                        elif not os.path.isabs(ref_audio):
-                            # 处理可能已包含部分路径的情况
-                            emotion_config["ref_audio"] = str(role_dir / os.path.basename(ref_audio))
+                        emotion_config["ref_audio"] = self._process_audio_path_for_loading(
+                            emotion_config["ref_audio"], role_dir
+                        )
                     
                     # 处理辅助参考音频
                     if "aux_refs" in emotion_config:
-                        aux_refs = []
-                        for aux_ref in emotion_config["aux_refs"]:
-                            if not os.path.isabs(aux_ref) and "/" not in aux_ref and "\\" not in aux_ref:
-                                # 如果只是文件名，添加角色目录路径
-                                aux_refs.append(str(role_dir / aux_ref))
-                            elif not os.path.isabs(aux_ref):
-                                # 处理可能已包含部分路径的情况
-                                aux_refs.append(str(role_dir / os.path.basename(aux_ref)))
-                            else:
-                                aux_refs.append(aux_ref)
-                        emotion_config["aux_refs"] = aux_refs
+                        emotion_config["aux_refs"] = self._process_aux_refs_for_loading(
+                            emotion_config["aux_refs"], role_dir
+                        )
                     
                 self.roles[role_dir.name] = config
             except Exception as e:
@@ -121,47 +172,15 @@ class RoleModel:
             # 处理音频文件路径，将绝对路径转为相对路径保存
             for emotion_name, emotion_config in merged_config.get("emotions", {}).items():
                 if "ref_audio" in emotion_config:
-                    ref_audio = emotion_config["ref_audio"]
-                    if os.path.isabs(ref_audio):
-                        # 获取文件名
-                        ref_audio_name = os.path.basename(ref_audio)
-                        # 复制音频文件到角色目录
-                        if os.path.exists(ref_audio):
-                            new_path = role_dir / ref_audio_name
-                            # 检查源文件和目标文件是否相同，或目标是否已存在
-                            if os.path.abspath(ref_audio) != os.path.abspath(new_path):
-                                # 源文件和目标文件不同，才进行复制
-                                try:
-                                    shutil.copy2(ref_audio, new_path)
-                                except Exception as e:
-                                    print(f"复制音频文件失败，但继续处理: {str(e)}")
-                        # 保存为相对路径（只保存文件名，不包含目录）
-                        emotion_config["ref_audio"] = ref_audio_name
+                    emotion_config["ref_audio"] = self._process_audio_path_for_saving(
+                        emotion_config["ref_audio"], role_dir
+                    )
                 
                 # 处理辅助参考音频
                 if "aux_refs" in emotion_config:
-                    aux_refs = []
-                    for aux_ref in emotion_config["aux_refs"]:
-                        if os.path.isabs(aux_ref):
-                            # 获取文件名
-                            aux_ref_name = os.path.basename(aux_ref)
-                            # 复制音频文件到角色目录
-                            if os.path.exists(aux_ref):
-                                new_path = role_dir / aux_ref_name
-                                # 检查源文件和目标文件是否相同，或目标是否已存在
-                                if os.path.abspath(aux_ref) != os.path.abspath(new_path):
-                                    # 源文件和目标文件不同，才进行复制
-                                    try:
-                                        shutil.copy2(aux_ref, new_path)
-                                    except Exception as e:
-                                        print(f"复制辅助音频文件失败，但继续处理: {str(e)}")
-                            # 保存为相对路径（只保存文件名，不包含目录）
-                            aux_refs.append(aux_ref_name)
-                        else:
-                            # 对于已经是相对路径的文件，确保只保留文件名
-                            aux_ref_name = os.path.basename(aux_ref)
-                            aux_refs.append(aux_ref_name)
-                    emotion_config["aux_refs"] = aux_refs
+                    emotion_config["aux_refs"] = self._process_aux_refs_for_saving(
+                        emotion_config["aux_refs"], role_dir
+                    )
             
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(merged_config, f, ensure_ascii=False, indent=4)
