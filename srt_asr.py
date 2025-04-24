@@ -261,9 +261,11 @@ def rename_wav_from_list(list_file_path):
                 updated_lines.append(line)
                 continue
                 
-            # 处理文本作为文件名（保留中文标点）
-            safe_text = "".join(c for c in text if c.isalnum() or c in (' ', '_', '-') or '\u4e00' <= c <= '\u9fff' or c in '，。！？、；：""（）《》【】')
-            safe_text = safe_text.strip()[:50]  # 限制文件名长度
+            # # 处理文本作为文件名（保留中文标点）
+            # safe_text = "".join(c for c in text if c.isalnum() or c in (' ', '_', '-') or '\u4e00' <= c <= '\u9fff' or c in '…，。！？、；：""（）《》【】')
+            # safe_text = safe_text.strip()[:50]  # 限制文件名长度
+
+            safe_text = text.strip()
             
             # 生成新路径
             new_path = original_path.parent / f"{safe_text}.wav"
