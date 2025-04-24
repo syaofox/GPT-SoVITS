@@ -12,9 +12,11 @@ from PySide6.QtWidgets import (
     QGroupBox, QLabel, QTextEdit, QComboBox, QPushButton, 
     QMessageBox, QSplitter
 )
+from PySide6.QtGui import QTextCursor
 
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
+from gui.components.optimized_widgets import OptimizedTextEdit
 
 
 class RoleTab(QWidget):
@@ -74,10 +76,10 @@ class RoleTab(QWidget):
         text_group = QGroupBox("文本输入")
         text_layout = QVBoxLayout(text_group)
         
-        self.text_edit = QTextEdit()
+        # 使用优化后的文本编辑框
+        self.text_edit = OptimizedTextEdit()
         self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.text_edit.setAcceptRichText(False)
         
         text_layout.addWidget(self.text_edit)
         

@@ -9,17 +9,17 @@ import shutil
 from typing import Dict, List, Tuple
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, 
-    QGroupBox, QLabel, QLineEdit, QTextEdit, QComboBox, 
-    QPushButton, QFileDialog, QMessageBox, QSpinBox,
-    QDoubleSpinBox, QCheckBox, QSplitter, QInputDialog,
-    QListWidget, QListWidgetItem
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, QSplitter,
+    QGroupBox, QLabel, QLineEdit, QTextEdit, QComboBox,
+    QPushButton, QFileDialog, QMessageBox, QSpinBox, QDoubleSpinBox, QCheckBox,
+    QInputDialog, QListWidget, QListWidgetItem
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
 from gui.components.draggable_widgets import DraggableLineEdit, DraggableListWidget
+from gui.components.optimized_widgets import OptimizedTextEdit
 
 
 class ExperimentTab(QWidget):
@@ -176,10 +176,9 @@ class ExperimentTab(QWidget):
         text_group = QGroupBox("合成文本")
         text_layout = QVBoxLayout(text_group)
         
-        self.text_edit = QTextEdit()
+        self.text_edit = OptimizedTextEdit()
         self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
-        self.text_edit.setAcceptRichText(False)
         text_layout.addWidget(self.text_edit)
         
         left_layout.addWidget(text_group)
