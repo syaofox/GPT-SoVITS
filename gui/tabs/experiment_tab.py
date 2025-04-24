@@ -311,16 +311,17 @@ class ExperimentTab(QWidget):
         self.sovits_model_combo.clear()
         self.sovits_model_combo.addItems(list(model_dict.keys()))
     
-    def get_inference_config(self):
+    def get_inference_config(self,is_save_role=False):
         """获取当前推理配置"""
         config = {}
         
         # 获取基本配置
-        text = self.text_edit.toPlainText().strip()
-        if not text:
-            return None
+        if not is_save_role:
+            text = self.text_edit.toPlainText().strip()
+            if not text:
+                return None
         
-        config["text"] = text
+            config["text"] = text
         config["text_lang"] = self.text_lang_combo.currentText()
         config["how_to_cut"] = self.cut_method_combo.currentText()
         
@@ -488,7 +489,7 @@ class ExperimentTab(QWidget):
             return
             
         # 获取当前配置
-        config = self.get_inference_config()
+        config = self.get_inference_config(is_save_role=True)
         
         # 检查配置是否有效
         if config is None:
