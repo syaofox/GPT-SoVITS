@@ -185,8 +185,9 @@ class MainWindow(QMainWindow):
     def on_new_audio_generated(self, file_path: str):
         """新音频生成后刷新历史列表"""
         self.history_list.load_output_files()
-        # 加载新生成的音频到播放器
-        self.audio_player.load_audio(file_path)
+        # 不再自动加载到播放器，避免占用文件
+        # self.audio_player.load_audio(file_path)
+        self.status_bar.showMessage(f"语音已生成: {os.path.basename(file_path)}")
     
     def show_error(self, message: str):
         """显示错误信息"""
