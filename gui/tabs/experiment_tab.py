@@ -27,6 +27,8 @@ class ExperimentTab(QWidget):
     
     # 添加生成请求信号
     generate_requested = Signal(dict, str, bool)
+    # 添加角色更新信号，传递角色名称和情绪名称
+    role_updated = Signal(str, str)
     
     def __init__(self, role_controller, inference_controller, shared_controls=True, parent=None):
         super().__init__(parent)
@@ -504,6 +506,9 @@ class ExperimentTab(QWidget):
             # 保存角色（音频文件的复制已经在role_model中处理了）
             self.role_controller.save_role(role_name, emotion_name, config)
             QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
+            
+            # 发送角色更新信号，通知角色选项卡更新
+            self.role_updated.emit(role_name, emotion_name)
             
         except Exception as e:
             QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}")
