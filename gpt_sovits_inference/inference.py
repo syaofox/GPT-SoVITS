@@ -139,6 +139,101 @@ class GPTSoVITSInference:
         # 文本切分器
         self.text_cutter = TextCutter()
         
+    def _ensure_model_precision(self, model, target_half):
+        """
+        确保模型精度与目标精度一致，返回调整后的模型
+        
+        参数:
+            model: 需要调整精度的模型
+            target_half: 是否需要半精度
+            
+        返回:
+            调整后的模型
+        """
+        if model is None:
+            return None
+            
+        try:
+            # 获取模型当前精度
+            model_param = next(model.parameters())
+            current_half = model_param.dtype == torch.float16
+            
+            # 如果当前精度与目标精度不匹配，进行转换
+            if target_half and not current_half:
+                logger.info(f"转换模型为半精度")
+                return model.half()
+            elif not target_half and current_half:
+                logger.info(f"转换模型为全精度")
+                return model.float()
+        except (StopIteration, AttributeError):
+            # 处理模型没有参数的情况
+            logger.warning(f"无法检查或调整模型精度")
+            
+        return model
+    
+    def _get_cached_model(self, model_type, cache_key, model_name):
+        """
+        从缓存获取模型，并确保精度一致
+        
+        参数:
+            model_type: 模型类型对应的字典键
+            cache_key: 缓存键名
+            model_name: 模型名称(用于日志)
+            
+        返回:
+            缓存的模型或None
+        """
+        cache_dict = self._loaded_models[model_type]
+        if cache_key in cache_dict:
+            logger.info(f"使用已加载的{model_name} (设备: {self.device})")
+            return cache_dict[cache_key]
+        return None
+        
+    def _cache_model(self, model_type, cache_key, model, model_name):
+        """
+        将模型保存到缓存
+        
+        参数:
+            model_type: 模型类型对应的字典键
+            cache_key: 缓存键名
+            model: 要缓存的模型
+            model_name: 模型名称(用于日志)
+        """
+        logger.info(f"缓存{model_name} (设备: {self.device})")
+        self._loaded_models[model_type][cache_key] = model
+        
+    def _get_or_load_vocoder(self, model_version, is_bigvgan):
+        """
+        获取或加载声码器模型
+        
+        参数:
+            model_version: 模型版本
+            is_bigvgan: 是否为BigVGAN声码器
+            
+        返回:
+            声码器模型
+        """
+        vocoder_type = "bigvgan" if is_bigvgan else "hifigan"
+        vocoder_cache_key = f"{vocoder_type}_{model_version}_{self.device}"
+        
+        # 尝试从缓存获取
+        vocoder = self._get_cached_model("vocoder_models", vocoder_cache_key, f"{vocoder_type.upper()}声码器")
+        
+        if vocoder is not None:
+            # 确保精度一致
+            vocoder = self._ensure_model_precision(vocoder, self.is_half)
+        else:
+            # 初始化新声码器
+            logger.info(f"加载新的{vocoder_type.upper()}声码器 (设备: {self.device})")
+            if is_bigvgan:
+                vocoder = init_bigvgan(self.device, self.is_half, None)
+            else:
+                vocoder = init_hifigan(self.device, self.is_half, None)
+            # 缓存新初始化的声码器
+            self._cache_model("vocoder_models", vocoder_cache_key, vocoder, f"{vocoder_type.upper()}声码器")
+        
+        return vocoder
+        
     def _load_weight_config(self):
         """加载权重配置信息"""
         # 定义预训练模型路径
@@ -219,22 +314,17 @@ class GPTSoVITSInference:
         # 设置CNHubert路径
         cnhubert.cnhubert_base_path = self.cnhubert_base_path
         
-        # 检查当前设备，用于缓存模型的键名格式化
+        # 设备键名，用于缓存
         device_key = f"{self.device}"
         
-        # 加载BERT模型（如果已加载过该路径的模型则直接使用）
+        # 1. 加载BERT模型
         bert_cache_key = f"{self.bert_path}_{device_key}"
-        if bert_cache_key in self._loaded_models["bert_models"]:
-            logger.info(f"使用已加载的BERT模型: {self.bert_path} (设备: {self.device})")
-            self.tokenizer, self.bert_model = self._loaded_models["bert_models"][bert_cache_key]
+        cached_bert = self._get_cached_model("bert_models", bert_cache_key, "BERT模型")
+        
+        if cached_bert:
+            self.tokenizer, self.bert_model = cached_bert
             # 确保精度一致
-            model_param = next(self.bert_model.parameters())
-            if self.is_half and model_param.dtype != torch.float16:
-                logger.info(f"转换BERT模型为半精度")
-                self.bert_model = self.bert_model.half()
-            elif not self.is_half and model_param.dtype == torch.float16:
-                logger.info(f"转换BERT模型为全精度")
-                self.bert_model = self.bert_model.float()
+            self.bert_model = self._ensure_model_precision(self.bert_model, self.is_half)
         else:
             logger.info(f"加载新的BERT模型: {self.bert_path} (设备: {self.device})")
             self.tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
@@ -244,21 +334,27 @@ class GPTSoVITSInference:
             else:
                 self.bert_model = self.bert_model.to(self.device)
             # 缓存已加载的模型
-            self._loaded_models["bert_models"][bert_cache_key] = (self.tokenizer, self.bert_model)
+            self._cache_model(
+                "bert_models", 
+                bert_cache_key, 
+                (self.tokenizer, self.bert_model),
+                "BERT模型"
+            )
         
-        # 加载CNHubert模型（如果已加载则直接使用）
+        # 2. 加载CNHubert模型
         ssl_cache_key = f"ssl_model_{device_key}"
-        if ssl_cache_key in self._loaded_models and self._loaded_models[ssl_cache_key] is not None:
+        cached_ssl = None
+        if ssl_cache_key in self._loaded_models:
+            cached_ssl = self._loaded_models[ssl_cache_key]
+        elif "ssl_model" in self._loaded_models and self._loaded_models["ssl_model"] is not None:
+            # 兼容旧版缓存结构
+            cached_ssl = self._loaded_models["ssl_model"]
+            
+        if cached_ssl:
             logger.info(f"使用已加载的CNHubert模型 (设备: {self.device})")
-            self.ssl_model = self._loaded_models[ssl_cache_key]
+            self.ssl_model = cached_ssl
             # 确保精度一致
-            model_param = next(self.ssl_model.parameters())
-            if self.is_half and model_param.dtype != torch.float16:
-                logger.info(f"转换CNHubert模型为半精度")
-                self.ssl_model = self.ssl_model.half()
-            elif not self.is_half and model_param.dtype == torch.float16:
-                logger.info(f"转换CNHubert模型为全精度")
-                self.ssl_model = self.ssl_model.float()
+            self.ssl_model = self._ensure_model_precision(self.ssl_model, self.is_half)
         else:
             logger.info(f"加载新的CNHubert模型 (设备: {self.device})")
             self.ssl_model = cnhubert.get_model()
@@ -271,25 +367,20 @@ class GPTSoVITSInference:
             # 兼容旧版缓存结构
             self._loaded_models["ssl_model"] = self.ssl_model
         
-        # 加载SoVITS模型（如果已加载则直接使用）
+        # 3. 加载SoVITS模型
         sovits_cache_key = f"{self.sovits_path}_{device_key}"
-        if sovits_cache_key in self._loaded_models["sovits_models"]:
-            logger.info(f"使用已加载的SoVITS模型: {self.sovits_path} (设备: {self.device})")
+        cached_sovits = self._get_cached_model("sovits_models", sovits_cache_key, "SoVITS模型")
+        
+        if cached_sovits:
             (
                 self.vq_model, 
                 self.hps, 
                 self.version, 
                 self.model_version, 
                 self.if_lora_v3
-            ) = self._loaded_models["sovits_models"][sovits_cache_key]
+            ) = cached_sovits
             # 确保精度一致
-            model_param = next(self.vq_model.parameters())
-            if self.is_half and model_param.dtype != torch.float16:
-                logger.info(f"转换SoVITS模型为半精度")
-                self.vq_model = self.vq_model.half()
-            elif not self.is_half and model_param.dtype == torch.float16:
-                logger.info(f"转换SoVITS模型为全精度")
-                self.vq_model = self.vq_model.float()
+            self.vq_model = self._ensure_model_precision(self.vq_model, self.is_half)
         else:
             logger.info(f"加载新的SoVITS模型: {self.sovits_path} (设备: {self.device})")
             (
@@ -300,32 +391,26 @@ class GPTSoVITSInference:
                 self.if_lora_v3
             ) = load_sovits_model(self.sovits_path, self.device, self.is_half)
             # 缓存已加载的模型
-            self._loaded_models["sovits_models"][sovits_cache_key] = (
-                self.vq_model, 
-                self.hps, 
-                self.version, 
-                self.model_version, 
-                self.if_lora_v3
+            self._cache_model(
+                "sovits_models",
+                sovits_cache_key,
+                (self.vq_model, self.hps, self.version, self.model_version, self.if_lora_v3),
+                "SoVITS模型"
             )
         
-        # 加载GPT模型（如果已加载则直接使用）
+        # 4. 加载GPT模型
         gpt_cache_key = f"{self.gpt_path}_{device_key}"
-        if gpt_cache_key in self._loaded_models["gpt_models"]:
-            logger.info(f"使用已加载的GPT模型: {self.gpt_path} (设备: {self.device})")
+        cached_gpt = self._get_cached_model("gpt_models", gpt_cache_key, "GPT模型")
+        
+        if cached_gpt:
             (
                 self.t2s_model, 
                 self.config, 
                 self.hz, 
                 self.max_sec
-            ) = self._loaded_models["gpt_models"][gpt_cache_key]
+            ) = cached_gpt
             # 确保精度一致
-            model_param = next(self.t2s_model.parameters())
-            if self.is_half and model_param.dtype != torch.float16:
-                logger.info(f"转换GPT模型为半精度")
-                self.t2s_model = self.t2s_model.half()
-            elif not self.is_half and model_param.dtype == torch.float16:
-                logger.info(f"转换GPT模型为全精度")
-                self.t2s_model = self.t2s_model.float()
+            self.t2s_model = self._ensure_model_precision(self.t2s_model, self.is_half)
         else:
             logger.info(f"加载新的GPT模型: {self.gpt_path} (设备: {self.device})")
             (
@@ -335,110 +420,321 @@ class GPTSoVITSInference:
                 self.max_sec
             ) = load_gpt_model(self.gpt_path, self.device, self.is_half, self.version)
             # 缓存已加载的模型
-            self._loaded_models["gpt_models"][gpt_cache_key] = (
-                self.t2s_model, 
-                self.config, 
-                self.hz, 
-                self.max_sec
+            self._cache_model(
+                "gpt_models",
+                gpt_cache_key,
+                (self.t2s_model, self.config, self.hz, self.max_sec),
+                "GPT模型"
             )
         
         # 定义模型版本集合
         self.v3v4set = {"v3", "v4"}
         
-        # 根据模型版本加载相应的声码器
+        # 5. 根据模型版本加载相应的声码器
         if self.model_version == "v3":
-            # 检查缓存中是否有对应的BigVGAN声码器
-            bigvgan_cache_key = f"bigvgan_{self.model_version}_{self.device}"
-            if bigvgan_cache_key in self._loaded_models["vocoder_models"]:
-                logger.info(f"使用已加载的BigVGAN声码器 (设备: {self.device})")
-                self.bigvgan_model = self._loaded_models["vocoder_models"][bigvgan_cache_key]
-                # 确保精度一致
-                model_param = next(self.bigvgan_model.parameters())
-                if self.is_half and model_param.dtype != torch.float16:
-                    logger.info(f"转换BigVGAN声码器为半精度")
-                    self.bigvgan_model = self.bigvgan_model.half()
-                elif not self.is_half and model_param.dtype == torch.float16:
-                    logger.info(f"转换BigVGAN声码器为全精度")
-                    self.bigvgan_model = self.bigvgan_model.float()
-            else:
-                logger.info(f"加载新的BigVGAN声码器 (设备: {self.device})")
-                self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
-                # 缓存已加载的声码器
-                self._loaded_models["vocoder_models"][bigvgan_cache_key] = self.bigvgan_model
+            self.bigvgan_model = self._get_or_load_vocoder(self.model_version, True)
         elif self.model_version == "v4":
-            # 检查缓存中是否有对应的HiFiGAN声码器
-            hifigan_cache_key = f"hifigan_{self.model_version}_{self.device}"
-            if hifigan_cache_key in self._loaded_models["vocoder_models"]:
-                logger.info(f"使用已加载的HiFiGAN声码器 (设备: {self.device})")
-                self.hifigan_model = self._loaded_models["vocoder_models"][hifigan_cache_key]
-                # 确保精度一致
-                model_param = next(self.hifigan_model.parameters())
-                if self.is_half and model_param.dtype != torch.float16:
-                    logger.info(f"转换HiFiGAN声码器为半精度")
-                    self.hifigan_model = self.hifigan_model.half()
-                elif not self.is_half and model_param.dtype == torch.float16:
-                    logger.info(f"转换HiFiGAN声码器为全精度")
-                    self.hifigan_model = self.hifigan_model.float()
-            else:
-                logger.info(f"加载新的HiFiGAN声码器 (设备: {self.device})")
-                self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
-                # 缓存已加载的声码器
-                self._loaded_models["vocoder_models"][hifigan_cache_key] = self.hifigan_model
+            self.hifigan_model = self._get_or_load_vocoder(self.model_version, False)
     
-    def _get_vocoder(self):
-        """获取当前模型版本对应的声码器"""
-        if self.model_version == "v3":
-            # 检查BigVGAN声码器
-            bigvgan_cache_key = f"bigvgan_{self.model_version}_{self.device}"
+    def _ensure_text_ends_with_punctuation(self, text, language):
+        """确保文本以标点符号结尾"""
+        splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
+        if text and text[-1] not in splits:
+            return text + ("。" if language != "en" else ".")
+        return text
+    
+    def _process_reference_audio(self, ref_wav_path, zero_wav_torch, ref_free=False):
+        """处理参考音频，提取特征"""
+        if ref_free:
+            return None
             
-            # 如果当前实例没有bigvgan声码器
-            if self.bigvgan_model is None:
-                # 尝试从缓存获取
-                if bigvgan_cache_key in self._loaded_models["vocoder_models"]:
-                    logger.info(f"从缓存获取BigVGAN声码器 (设备: {self.device})")
-                    self.bigvgan_model = self._loaded_models["vocoder_models"][bigvgan_cache_key]
-                    # 确保精度一致
-                    model_param = next(self.bigvgan_model.parameters())
-                    if self.is_half and model_param.dtype != torch.float16:
-                        logger.info(f"转换BigVGAN声码器为半精度")
-                        self.bigvgan_model = self.bigvgan_model.half()
-                    elif not self.is_half and model_param.dtype == torch.float16:
-                        logger.info(f"转换BigVGAN声码器为全精度")
-                        self.bigvgan_model = self.bigvgan_model.float()
-                else:
-                    # 初始化新声码器
-                    logger.info(f"初始化新的BigVGAN声码器 (设备: {self.device})")
-                    self.bigvgan_model = init_bigvgan(self.device, self.is_half, None)
-                    # 缓存新初始化的声码器
-                    self._loaded_models["vocoder_models"][bigvgan_cache_key] = self.bigvgan_model
+        try:
+            prompt, _ = extract_ref_features(
+                ref_wav_path, 
+                self.ssl_model, 
+                self.vq_model, 
+                self.device, 
+                self.is_half, 
+                zero_wav_torch
+            )
+            return prompt
+        except ValueError as e:
+            raise ValueError(f"处理参考音频失败: {str(e)}")
             
-            return self.bigvgan_model
-        else:  # v4
-            # 检查HiFiGAN声码器
-            hifigan_cache_key = f"hifigan_{self.model_version}_{self.device}"
+    def _decode_with_v1v2_model(self, pred_semantic, phones2, ref_wav_path, inp_refs, speed):
+        """使用v1和v2模型进行解码"""
+        # 处理参考音频
+        refers = []
+        if inp_refs:
+            for path in inp_refs:
+                try:
+                    refer = get_spepc(path, self.hps, self.device).to(self.dtype)
+                    refers.append(refer)
+                except Exception as e:
+                    print(f"处理参考音频失败: {e}")
+        
+        if len(refers) == 0:
+            refers = [get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)]
+        
+        # 解码
+        audio = self.vq_model.decode(
+            pred_semantic, 
+            torch.LongTensor(phones2).to(self.device).unsqueeze(0), 
+            refers, 
+            speed=speed
+        )[0][0]
+        
+        return audio
+        
+    def _decode_with_v3v4_model(self, pred_semantic, phones1, phones2, 
+                               prompt, ref_wav_path, model_version, speed, sample_steps):
+        """使用v3和v4模型进行解码"""
+        # 转换phoneme为tensor
+        phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
+        phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+        
+        # 处理参考音频编码
+        fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, 
+                                               get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype))
+        
+        # 加载参考音频
+        ref_audio, sr = torchaudio.load(ref_wav_path)
+        ref_audio = ref_audio.to(self.device).float()
+        if ref_audio.shape[0] == 2:
+            ref_audio = ref_audio.mean(0).unsqueeze(0)
+        
+        # 重采样
+        tgt_sr = 24000 if model_version == "v3" else 32000
+        if sr != tgt_sr:
+            ref_audio = resample(ref_audio, sr, tgt_sr, self.device)
+        
+        # 计算mel频谱
+        mel2 = mel_spec_v3(ref_audio) if model_version == "v3" else mel_spec_v4(ref_audio)
+        mel2 = norm_spec(mel2)
+        
+        # 对齐长度
+        T_min = min(mel2.shape[2], fea_ref.shape[2])
+        mel2 = mel2[:, :, :T_min]
+        fea_ref = fea_ref[:, :, :T_min]
+        
+        # 根据模型版本设置参数
+        Tref = 468 if model_version == "v3" else 500
+        Tchunk = 934 if model_version == "v3" else 1000
+        
+        if T_min > Tref:
+            mel2 = mel2[:, :, -Tref:]
+            fea_ref = fea_ref[:, :, -Tref:]
+            T_min = Tref
+        
+        # 解码生成
+        chunk_len = Tchunk - T_min
+        mel2 = mel2.to(self.dtype)
+        fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, 
+                                               get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype), 
+                                               ge, speed)
+        
+        # 分块处理
+        cfm_resss = []
+        idx = 0
+        
+        # 处理每个区块
+        while True:
+            fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
+            if fea_todo_chunk.shape[-1] == 0:
+                break
+                
+            idx += chunk_len
+            fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
+            cfm_res = self.vq_model.cfm.inference(
+                fea, 
+                torch.LongTensor([fea.size(1)]).to(fea.device), 
+                mel2,
+                sample_steps, 
+                inference_cfg_rate=0
+            )
             
-            # 如果当前实例没有hifigan声码器
-            if self.hifigan_model is None:
-                # 尝试从缓存获取
-                if hifigan_cache_key in self._loaded_models["vocoder_models"]:
-                    logger.info(f"从缓存获取HiFiGAN声码器 (设备: {self.device})")
-                    self.hifigan_model = self._loaded_models["vocoder_models"][hifigan_cache_key]
-                    # 确保精度一致
-                    model_param = next(self.hifigan_model.parameters())
-                    if self.is_half and model_param.dtype != torch.float16:
-                        logger.info(f"转换HiFiGAN声码器为半精度")
-                        self.hifigan_model = self.hifigan_model.half()
-                    elif not self.is_half and model_param.dtype == torch.float16:
-                        logger.info(f"转换HiFiGAN声码器为全精度")
-                        self.hifigan_model = self.hifigan_model.float()
-                else:
-                    # 初始化新声码器
-                    logger.info(f"初始化新的HiFiGAN声码器 (设备: {self.device})")
-                    self.hifigan_model = init_hifigan(self.device, self.is_half, None)
-                    # 缓存新初始化的声码器
-                    self._loaded_models["vocoder_models"][hifigan_cache_key] = self.hifigan_model
+            cfm_res = cfm_res[:, :, mel2.shape[2]:]
+            mel2 = cfm_res[:, :, -T_min:]
+            fea_ref = fea_todo_chunk[:, :, -T_min:]
+            cfm_resss.append(cfm_res)
+        
+        # 如果没有生成任何内容，返回空音频
+        if not cfm_resss:
+            logger.warning(f"处理失败，未生成音频")
+            return torch.zeros(1000, device=self.device)
+        
+        # 合并结果
+        cfm_res = torch.cat(cfm_resss, 2)
+        cfm_res = denorm_spec(cfm_res)
+        
+        # 使用声码器生成波形
+        try:
+            # 记录当前模型版本
+            current_model = model_version
+            # 获取声码器
+            is_bigvgan = (model_version == "v3")
+            vocoder_model = self._get_or_load_vocoder(model_version, is_bigvgan)
             
-            return self.hifigan_model
+            # 恢复模型版本（如果被修改）
+            if self.model_version != current_model:
+                logger.warning(f"模型版本在获取声码器过程中被修改，从 {current_model} 变为 {self.model_version}，正在恢复")
+                self.model_version = current_model
+                vocoder_model = self._get_or_load_vocoder(model_version, is_bigvgan)
+            
+            # 检查声码器是否正确初始化
+            if vocoder_model is None:
+                raise ValueError(f"声码器初始化失败，当前模型版本: {model_version}")
+                
+            # 生成波形
+            with torch.inference_mode():
+                wav_gen = vocoder_model(cfm_res)
+                audio = wav_gen[0][0]
+                
+            return audio
+            
+        except Exception as e:
+            logger.error(f"声码器处理失败: {str(e)}")
+            # 创建一个短暂的静音音频作为替代
+            return torch.zeros(8000, device=self.device)
+    
+    def _handle_progress_callback(self, callback, current_index, total_segments, message=None):
+        """处理进度回调函数，返回是否应该中止处理"""
+        if not callback or not callable(callback):
+            return False
+            
+        # 检查是否请求停止处理
+        if callback(current_index, total_segments):
+            logger.info(message or "收到停止请求，中止合成")
+            return True
+        return False
+        
+    def _handle_empty_audio_segment(self, device):
+        """创建一个空音频段以应对错误情况"""
+        return torch.zeros(8000, device=device)
+        
+    def _normalize_audio(self, audio):
+        """标准化音频，防止爆音"""
+        max_audio = torch.abs(audio).max()
+        if max_audio > 1:
+            return audio / max_audio
+        return audio
+        
+    def _process_text_segment(
+        self, 
+        text, 
+        i_text, 
+        total_segments, 
+        text_language, 
+        progress_callback,
+        phones1=None, 
+        bert1=None, 
+        prompt=None, 
+        ref_free=False,
+        ref_wav_path=None,
+        zero_wav_torch=None,
+        if_freeze=False,
+        top_k=20,
+        top_p=0.6,
+        temperature=0.6,
+        speed=1.0,
+        inp_refs=None,
+        sample_steps=8
+    ):
+        """处理单个文本段落，生成对应音频"""
+        # 跳过空行
+        if len(text.strip()) == 0:
+            return None
+            
+        # 处理空白段落
+        if text == "<brbrbrbrbr>":
+            logger.info(f"插入空白音频")
+            # 在空白音频处理完成后调用进度回调
+            if self._handle_progress_callback(progress_callback, i_text + 1, total_segments):
+                return None
+            return zero_wav_torch
+                
+        # 确保文本以标点结尾
+        text = self._ensure_text_ends_with_punctuation(text, text_language)
+        print(f"实际输入的目标文本(每句): {text}")
+        
+        try:
+            # 处理当前文本
+            phones2, bert2, norm_text2 = get_phones_and_bert(
+                self.tokenizer, 
+                self.bert_model, 
+                self.device, 
+                text, 
+                text_language, 
+                self.version, 
+                self.dtype
+            )
+            print(f"前端处理后的文本(每句): {norm_text2}")
+            
+            # 根据是否为无参考文本模式组装输入
+            if not ref_free:
+                bert = torch.cat([bert1, bert2], 1)
+                all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(self.device).unsqueeze(0)
+            else:
+                bert = bert2
+                all_phoneme_ids = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
+                
+            bert = bert.to(self.device).unsqueeze(0)
+            all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
+            
+            # 使用缓存或重新生成
+            if i_text in self.cache and if_freeze:
+                pred_semantic = self.cache[i_text]
+            else:
+                with torch.no_grad():
+                    pred_semantic, idx = self.t2s_model.model.infer_panel(
+                        all_phoneme_ids,
+                        all_phoneme_len,
+                        None if ref_free else prompt,
+                        bert,
+                        top_k=top_k,
+                        top_p=top_p,
+                        temperature=temperature,
+                        early_stop_num=self.hz * self.max_sec,
+                    )
+                    pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
+                    self.cache[i_text] = pred_semantic
+            
+            
+            # 根据模型版本选择不同的解码方式
+            logger.info(f"模型版本: {self.model_version},开始解码")
+            if self.model_version not in self.v3v4set:
+                # v1和v2模型解码逻辑
+                audio = self._decode_with_v1v2_model(
+                    pred_semantic, phones2, ref_wav_path, inp_refs, speed
+                )
+            else:
+                # v3和v4模型解码逻辑
+                audio = self._decode_with_v3v4_model(
+                    pred_semantic, phones1, phones2, prompt, 
+                    ref_wav_path, self.model_version, speed, sample_steps
+                )
+            
+            logger.info(f"模型版本: {self.model_version},解码完成")
+            
+            # 标准化音频避免爆音
+            audio = self._normalize_audio(audio)
+            
+            # 在段落处理完成后调用进度回调
+            if self._handle_progress_callback(progress_callback, i_text + 1, total_segments):
+                return None
+            
+            return audio
+            
+        except Exception as e:
+            # 捕获处理单个文本段落时可能发生的异常
+            logger.error(f"处理段落 {i_text+1}/{total_segments} 时发生错误: {str(e)}")
+            
+            # 处理异常后也要调用进度回调
+            if self._handle_progress_callback(progress_callback, i_text + 1, total_segments):
+                return None
+            
+            # 返回一个空音频段，以便继续处理后续文本
+            return self._handle_empty_audio_segment(self.device)
     
     def generate_speech(
         self,
@@ -541,10 +837,7 @@ class GPTSoVITSInference:
         # 处理参考文本
         if not ref_free:
             prompt_text = prompt_text.strip("\n")
-            # 确保文本以标点结尾
-            splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
-            if prompt_text[-1] not in splits:
-                prompt_text += "。" if prompt_language != "en" else "."
+            prompt_text = self._ensure_text_ends_with_punctuation(prompt_text, prompt_language)
             print(f"实际输入的参考文本: {prompt_text}")
             
         # 处理目标文本  
@@ -572,18 +865,7 @@ class GPTSoVITSInference:
             zero_wav_torch = zero_wav_torch.to(self.device)
             
         # 处理参考音频
-        if not ref_free:
-            try:
-                prompt, _ = extract_ref_features(
-                    ref_wav_path, 
-                    self.ssl_model, 
-                    self.vq_model, 
-                    self.device, 
-                    self.is_half, 
-                    zero_wav_torch
-                )
-            except ValueError as e:
-                raise ValueError(f"处理参考音频失败: {str(e)}")
+        prompt = self._process_reference_audio(ref_wav_path, zero_wav_torch, ref_free)
         
         # 文本切分
         text = cut_text(text, how_to_cut)
@@ -594,21 +876,19 @@ class GPTSoVITSInference:
         # 分割文本行
         texts = text.split("\n")
         texts = self.text_cutter.process_text(texts)
-        # texts = self.text_cutter.merge_short_text(texts, 5)
         
         # 获取总文本段数
         total_segments = len(texts)
         logger.info(f"文本总段数: {total_segments}")
         
         # 如果有回调函数，通知总段数
-        if progress_callback and callable(progress_callback):
-            # 发送段数信息（使用0作为当前段表示准备开始）
-            progress_callback(0, total_segments)
+        self._handle_progress_callback(progress_callback, 0, total_segments, "开始合成")
         
         # 音频输出列表
         audio_opt = []
         
         # 如果不是无参考文本模式，处理参考文本
+        phones1, bert1 = None, None
         if not ref_free:
             phones1, bert1, norm_text1 = get_phones_and_bert(
                 self.tokenizer, 
@@ -622,223 +902,38 @@ class GPTSoVITSInference:
         
         # 处理每句文本
         for i_text, text in enumerate(texts):
-            # 跳过空行
-            if len(text.strip()) == 0:
-                continue
-
-            if text == "<brbrbrbrbr>":
-                audio_opt.append(zero_wav_torch)
-                logger.info(f"插入空白音频")
-                
-                # 在空白音频处理完成后调用进度回调
-                if progress_callback and callable(progress_callback):
-                    # 检查是否请求停止处理
-                    if progress_callback(i_text + 1, total_segments):
-                        logger.info("收到停止请求，中止合成")
-                        break
-                continue
-                
-            # 确保文本以标点结尾
-            splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
-            if text[-1] not in splits:
-                text += "。" if text_language != "en" else "."
-            print(f"实际输入的目标文本(每句): {text}")
+            # 处理当前段落
+            audio = self._process_text_segment(
+                text=text,
+                i_text=i_text,
+                total_segments=total_segments,
+                text_language=text_language,
+                progress_callback=progress_callback,
+                phones1=phones1,
+                bert1=bert1,
+                prompt=prompt,
+                ref_free=ref_free,
+                ref_wav_path=ref_wav_path,
+                zero_wav_torch=zero_wav_torch,
+                if_freeze=if_freeze,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+                speed=speed,
+                inp_refs=inp_refs,
+                sample_steps=sample_steps
+            )
             
-            try:
-                # 处理当前文本
-                phones2, bert2, norm_text2 = get_phones_and_bert(
-                    self.tokenizer, 
-                    self.bert_model, 
-                    self.device, 
-                    text, 
-                    text_language, 
-                    self.version, 
-                    self.dtype
-                )
-                print(f"前端处理后的文本(每句): {norm_text2}")
+            # 如果返回None，表示用户请求停止处理
+            if audio is None:
+                break
                 
-                # 根据是否为无参考文本模式组装输入
-                if not ref_free:
-                    bert = torch.cat([bert1, bert2], 1)
-                    all_phoneme_ids = torch.LongTensor(phones1 + phones2).to(self.device).unsqueeze(0)
-                else:
-                    bert = bert2
-                    all_phoneme_ids = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
-                    
-                bert = bert.to(self.device).unsqueeze(0)
-                all_phoneme_len = torch.tensor([all_phoneme_ids.shape[-1]]).to(self.device)
-                
-                # 使用缓存或重新生成
-                if i_text in self.cache and if_freeze:
-                    pred_semantic = self.cache[i_text]
-                else:
-                    with torch.no_grad():
-                        pred_semantic, idx = self.t2s_model.model.infer_panel(
-                            all_phoneme_ids,
-                            all_phoneme_len,
-                            None if ref_free else prompt,
-                            bert,
-                            top_k=top_k,
-                            top_p=top_p,
-                            temperature=temperature,
-                            early_stop_num=self.hz * self.max_sec,
-                        )
-                        pred_semantic = pred_semantic[:, -idx:].unsqueeze(0)
-                        self.cache[i_text] = pred_semantic
-                
-                
-                # 根据模型版本选择不同的解码方式
-                logger.info(f"模型版本: {self.model_version},开始解码")
-                if self.model_version not in self.v3v4set:
-                    # v1和v2模型解码逻辑
-                    refers = []
-                    if inp_refs:
-                        for path in inp_refs:
-                            try:
-                                refer = get_spepc(path, self.hps, self.device).to(self.dtype)
-                                refers.append(refer)
-                            except Exception as e:
-                                print(f"处理参考音频失败: {e}")
-                    
-                    if len(refers) == 0:
-                        refers = [get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)]
-                    
-                    audio = self.vq_model.decode(
-                        pred_semantic, 
-                        torch.LongTensor(phones2).to(self.device).unsqueeze(0), 
-                        refers, 
-                        speed=speed
-                    )[0][0]
-                else:
-                    # v3和v4模型解码逻辑
-                    refer = get_spepc(ref_wav_path, self.hps, self.device).to(self.dtype)
-                    phoneme_ids0 = torch.LongTensor(phones1).to(self.device).unsqueeze(0)
-                    phoneme_ids1 = torch.LongTensor(phones2).to(self.device).unsqueeze(0)
-                    
-                    fea_ref, ge = self.vq_model.decode_encp(prompt.unsqueeze(0), phoneme_ids0, refer)
-                    ref_audio, sr = torchaudio.load(ref_wav_path)
-                    ref_audio = ref_audio.to(self.device).float()
-                    if ref_audio.shape[0] == 2:
-                        ref_audio = ref_audio.mean(0).unsqueeze(0)
-                    
-                    tgt_sr = 24000 if self.model_version == "v3" else 32000
-                    if sr != tgt_sr:
-                        ref_audio = resample(ref_audio, sr, tgt_sr, self.device)
-                    
-                    # 计算mel频谱
-                    if self.model_version == "v3":
-                        mel2 = mel_spec_v3(ref_audio)
-                    else:
-                        mel2 = mel_spec_v4(ref_audio)
-                    
-                    mel2 = norm_spec(mel2)
-                    T_min = min(mel2.shape[2], fea_ref.shape[2])
-                    mel2 = mel2[:, :, :T_min]
-                    fea_ref = fea_ref[:, :, :T_min]
-                    
-                    # 根据模型版本设置参数
-                    Tref = 468 if self.model_version == "v3" else 500
-                    Tchunk = 934 if self.model_version == "v3" else 1000
-                    
-                    if T_min > Tref:
-                        mel2 = mel2[:, :, -Tref:]
-                        fea_ref = fea_ref[:, :, -Tref:]
-                        T_min = Tref
-                    
-                    chunk_len = Tchunk - T_min
-                    mel2 = mel2.to(self.dtype)
-                    fea_todo, ge = self.vq_model.decode_encp(pred_semantic, phoneme_ids1, refer, ge, speed)
-                    cfm_resss = []
-                    idx = 0
-                    
-                    # 恢复为无限循环
-                    while True:
-                        fea_todo_chunk = fea_todo[:, :, idx:idx + chunk_len]
-                        if fea_todo_chunk.shape[-1] == 0:
-                            break
-                        idx += chunk_len
-                        fea = torch.cat([fea_ref, fea_todo_chunk], 2).transpose(2, 1)
-                        cfm_res = self.vq_model.cfm.inference(
-                            fea, 
-                            torch.LongTensor([fea.size(1)]).to(fea.device), 
-                            mel2,
-                            sample_steps, 
-                            inference_cfg_rate=0
-                        )
-                        cfm_res = cfm_res[:, :, mel2.shape[2]:]
-                        mel2 = cfm_res[:, :, -T_min:]
-                        fea_ref = fea_todo_chunk[:, :, -T_min:]
-                        cfm_resss.append(cfm_res)
-                    
-                    # 合并结果
-                    if cfm_resss:
-                        cfm_res = torch.cat(cfm_resss, 2)
-                        cfm_res = denorm_spec(cfm_res)
-                        
-                        # 获取对应的声码器并生成波形
-                        try:
-                            # 记录当前模型版本
-                            current_model = self.model_version
-                            # 获取声码器前确保self.model_version是正确的
-                            logger.info(f"开始获取声码器，模型版本: {self.model_version}")
-                            vocoder_model = self._get_vocoder()
-                            
-                            # 如果模型版本发生了变化（可能是在多线程环境下被修改），还原回来
-                            if self.model_version != current_model:
-                                logger.warning(f"模型版本在获取声码器过程中被修改，从 {current_model} 变为 {self.model_version}，正在恢复")
-                                self.model_version = current_model
-                                # 重新获取声码器
-                                vocoder_model = self._get_vocoder()
-                            
-                            # 检查声码器是否正确初始化
-                            if vocoder_model is None:
-                                raise ValueError(f"声码器初始化失败，当前模型版本: {self.model_version}")
-                                
-                            logger.info(f"声码器获取成功，开始生成波形")
-                            with torch.inference_mode():
-                                wav_gen = vocoder_model(cfm_res)
-                                audio = wav_gen[0][0]
-                        except Exception as e:
-                            logger.error(f"声码器处理失败: {str(e)}")
-                            # 创建一个短暂的静音音频作为替代
-                            audio = torch.zeros(8000, device=self.device)
-                    else:
-                        # 如果没有成功生成任何块，创建一个空音频
-                        logger.warning(f"段落 {i_text+1} 处理失败，未生成音频")
-                        audio = torch.zeros(1000, device=self.device)  # 创建短暂的空白音频
-                
-                logger.info(f"模型版本: {self.model_version},解码完成")
-                # 防止爆音
-                max_audio = torch.abs(audio).max()
-                if max_audio > 1:
-                    audio = audio / max_audio
-                    
-                # 添加到输出列表
-                audio_opt.append(audio)
-                audio_opt.append(zero_wav_torch)  # 句间停顿
-                
-                # 在段落处理完成后调用进度回调
-                if progress_callback and callable(progress_callback):
-                    # 检查是否请求停止处理
-                    if progress_callback(i_text + 1, total_segments):
-                        logger.info("收到停止请求，中止合成")
-                        break
-                
-            except Exception as e:
-                # 捕获处理单个文本段落时可能发生的异常
-                logger.error(f"处理段落 {i_text+1}/{total_segments} 时发生错误: {str(e)}")
-                # 添加一个空音频段，以便继续处理后续文本
-                audio_opt.append(torch.zeros(8000, device=self.device))  # 添加一个空白音频
-                audio_opt.append(zero_wav_torch)  # 句间停顿
-                
-                # 处理异常后也要调用进度回调
-                if progress_callback and callable(progress_callback):
-                    # 检查是否请求停止处理
-                    if progress_callback(i_text + 1, total_segments):
-                        logger.info("收到停止请求，中止合成")
-                        break
-                
-                continue  # 继续处理下一个文本段
+            # 添加到输出列表
+            audio_opt.append(audio)
+            
+            # 添加句间停顿
+            if text != "<brbrbrbrbr>":  # 空白段落已有停顿，不需要额外添加
+                audio_opt.append(zero_wav_torch)
         
         # 如果没有生成任何音频（可能是所有段落都处理失败），返回一个空音频
         if len(audio_opt) == 0:
@@ -867,7 +962,28 @@ class GPTSoVITSInference:
             audio_opt = audio_opt.cpu().detach().numpy()
             
         # 返回采样率和音频数据（转换为16位整数）
-        return opt_sr, (audio_opt * 32767).astype(np.int16) 
+        return opt_sr, (audio_opt * 32767).astype(np.int16)
+
+    @staticmethod
+    def _filter_model_cache_keys(model_dict, device_filter=""):
+        """筛选符合条件的模型缓存键"""
+        return [k for k in model_dict.keys() if k.endswith(device_filter)]
+        
+    @staticmethod
+    def _clean_cuda_cache(device=None):
+        """清理CUDA缓存"""
+        if device and device.startswith("cuda"):
+            try:
+                torch.cuda.empty_cache()
+                logger.info(f"已清理 {device} 设备上的CUDA缓存")
+            except:
+                logger.warning(f"清理 {device} 设备上的CUDA缓存失败")
+        elif not device and torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                logger.info("已清理所有CUDA设备缓存")
+            except:
+                logger.warning("清理CUDA缓存失败")
 
     @staticmethod
     def clear_model_cache(model_type=None, device=None):
@@ -885,8 +1001,8 @@ class GPTSoVITSInference:
         # 根据设备参数准备过滤条件
         device_filter = f"_{device}" if device else ""
         
+        # 清理SSL模型
         if model_type is None or model_type == 'ssl':
-            # 清理所有设备上的ssl模型或者指定设备上的ssl模型
             if device:
                 ssl_key = f"ssl_model_{device}"
                 if ssl_key in GPTSoVITSInference._loaded_models:
@@ -894,65 +1010,39 @@ class GPTSoVITSInference:
                     logger.info(f"已清理 {device} 设备上的CNHubert模型缓存")
             else:
                 # 清理所有和ssl相关的键
-                keys_to_clear = [k for k in GPTSoVITSInference._loaded_models.keys() if k.startswith("ssl_model_")]
+                keys_to_clear = GPTSoVITSInference._filter_model_cache_keys(
+                    GPTSoVITSInference._loaded_models, "_model_"
+                )
                 for key in keys_to_clear:
                     GPTSoVITSInference._loaded_models[key] = None
                 # 兼容旧版结构
                 GPTSoVITSInference._loaded_models["ssl_model"] = None
                 logger.info("已清理所有设备上的CNHubert模型缓存")
             
-        if model_type is None or model_type == 'bert':
-            # 清理指定设备或所有设备上的bert模型
-            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["bert_models"].keys() 
-                            if not device or k.endswith(device_filter)]
-            for key in keys_to_clear:
-                del GPTSoVITSInference._loaded_models["bert_models"][key]
-            logger.info(f"已清理{'所有' if not device else device}设备上的BERT模型缓存")
-            
-        if model_type is None or model_type == 'gpt':
-            # 清理指定设备或所有设备上的gpt模型
-            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["gpt_models"].keys() 
-                            if not device or k.endswith(device_filter)]
-            for key in keys_to_clear:
-                del GPTSoVITSInference._loaded_models["gpt_models"][key]
-            logger.info(f"已清理{'所有' if not device else device}设备上的GPT模型缓存")
-            
-        if model_type is None or model_type == 'sovits':
-            # 清理指定设备或所有设备上的sovits模型
-            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["sovits_models"].keys() 
-                            if not device or k.endswith(device_filter)]
-            for key in keys_to_clear:
-                del GPTSoVITSInference._loaded_models["sovits_models"][key]
-            logger.info(f"已清理{'所有' if not device else device}设备上的SoVITS模型缓存")
+        # 清理其他类型模型
+        model_types = {
+            'bert': "bert_models",
+            'gpt': "gpt_models",
+            'sovits': "sovits_models",
+            'vocoder': "vocoder_models"
+        }
         
-        if model_type is None or model_type == 'vocoder':
-            # 清理指定设备或所有设备上的声码器模型
-            if device:
-                # 清理指定设备上的声码器
-                keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["vocoder_models"].keys() 
-                                if k.endswith(device)]
+        for mtype, dict_key in model_types.items():
+            if model_type is None or model_type == mtype:
+                model_dict = GPTSoVITSInference._loaded_models[dict_key]
+                keys_to_clear = GPTSoVITSInference._filter_model_cache_keys(model_dict, device_filter)
+                
                 for key in keys_to_clear:
-                    del GPTSoVITSInference._loaded_models["vocoder_models"][key]
-                logger.info(f"已清理 {device} 设备上的声码器模型缓存")
-            else:
-                # 清理所有声码器
-                GPTSoVITSInference._loaded_models["vocoder_models"].clear()
-                logger.info("已清理所有设备上的声码器模型缓存")
-            
+                    del model_dict[key]
+                    
+                if keys_to_clear:
+                    logger.info(f"已清理{'所有' if not device else device}设备上的{mtype.upper()}模型缓存，共{len(keys_to_clear)}个")
+        
         # 强制进行垃圾回收
         gc.collect()
-        if device and device.startswith("cuda"):
-            try:
-                torch.cuda.empty_cache()
-                logger.info(f"已清理 {device} 设备上的CUDA缓存")
-            except:
-                logger.warning(f"清理 {device} 设备上的CUDA缓存失败")
-        elif not device:
-            try:
-                torch.cuda.empty_cache()
-                logger.info("已清理所有CUDA设备缓存")
-            except:
-                logger.warning("清理CUDA缓存失败")
+        
+        # 清理CUDA缓存
+        GPTSoVITSInference._clean_cuda_cache(device)
         
         logger.info("已完成垃圾回收")
     
@@ -964,31 +1054,22 @@ class GPTSoVITSInference:
         # 记录原始设备
         device = self.device
         
-        # 释放模型引用，但不清除静态缓存
-        self.ssl_model = None
-        self.vq_model = None
-        self.t2s_model = None
-        self.bert_model = None
-        self.tokenizer = None
+        # 释放所有模型引用，但不清除静态缓存
+        model_attributes = [
+            'ssl_model', 'vq_model', 't2s_model', 
+            'bert_model', 'tokenizer', 'bigvgan_model', 'hifigan_model'
+        ]
         
-        # 释放声码器引用，但不清除静态缓存
-        if hasattr(self, 'bigvgan_model') and self.bigvgan_model is not None:
-            self.bigvgan_model = None
-            logger.info(f"已释放bigvgan声码器实例引用")
-            
-        if hasattr(self, 'hifigan_model') and self.hifigan_model is not None:
-            self.hifigan_model = None
-            logger.info(f"已释放hifigan声码器实例引用")
+        for attr in model_attributes:
+            if hasattr(self, attr) and getattr(self, attr) is not None:
+                model_name = attr.replace('_model', '').upper()
+                logger.info(f"释放{model_name}模型实例引用")
+                setattr(self, attr, None)
         
         # 强制进行垃圾回收
         gc.collect()
         
-        # 如果是CUDA设备，清空CUDA缓存
-        if device.startswith("cuda"):
-            try:
-                torch.cuda.empty_cache()
-                logger.info(f"已清理 {device} 设备上的CUDA缓存")
-            except:
-                logger.warning(f"清理 {device} 设备上的CUDA缓存失败")
+        # 清理CUDA缓存
+        self._clean_cuda_cache(device)
                 
         logger.info("已释放当前实例的模型资源") 
