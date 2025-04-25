@@ -181,9 +181,6 @@ class MainWindow(QMainWindow):
         self.role_tab.role_config_selected.connect(self.config_applier.apply_role_config)
         self.role_tab.role_info_selected.connect(self.config_applier.apply_role_info)
         
-        # 连接角色更新信号到角色选项卡刷新方法
-        self.experiment_tab.role_updated.connect(self.role_tab.refresh_roles)
-        
         # 连接替换规则更新信号
         self.replace_tab.rules_updated.connect(self.update_replace_rules)
     
