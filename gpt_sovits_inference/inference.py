@@ -31,7 +31,52 @@ class GPTSoVITSInference:
     """
     GPT-SoVITS语音合成推理模块
     提供与原Web UI相同的语音合成功能，但更容易集成到其他应用中
+    
+    特性:
+    1. 模型缓存功能: 同一路径的模型只会加载一次，多次调用时复用已加载的模型，节省GPU内存
+    2. 支持手动释放资源: 可以通过clear_model_cache静态方法释放模型缓存
+    3. 实例释放: 可以通过release_models方法释放当前实例的模型资源
+    4. 多设备支持: 同一模型可以在不同设备上缓存，比如同时在cuda:0和cuda:1上使用
+    
+    使用示例:
+    ```python
+    # 创建第一个实例，将加载并缓存模型
+    inference1 = GPTSoVITSInference(gpt_path="path/to/gpt", sovits_path="path/to/sovits")
+    # 生成语音
+    inference1.generate_speech(...)
+    
+    # 创建第二个使用相同模型的实例，将复用已加载的模型
+    inference2 = GPTSoVITSInference(gpt_path="path/to/gpt", sovits_path="path/to/sovits")
+    # 生成语音
+    inference2.generate_speech(...)
+    
+    # 创建使用不同模型的实例，将加载新模型并缓存
+    inference3 = GPTSoVITSInference(gpt_path="path/to/another/gpt", sovits_path="path/to/sovits")
+    
+    # 释放所有模型缓存
+    GPTSoVITSInference.clear_model_cache()
+    
+    # 或仅释放特定类型的模型缓存
+    GPTSoVITSInference.clear_model_cache(model_type='gpt')
+    
+    # 或仅释放特定设备上的模型缓存
+    GPTSoVITSInference.clear_model_cache(device='cuda:0')
+    
+    # 或仅释放特定设备上的特定类型模型缓存
+    GPTSoVITSInference.clear_model_cache(model_type='gpt', device='cuda:0')
+    
+    # 释放当前实例使用的模型资源，但不影响全局缓存
+    inference1.release_models()
+    ```
     """
+    
+    # 静态变量存储已加载的模型，避免重复加载
+    _loaded_models = {
+        "ssl_model": None,  # CNHubert模型
+        "bert_models": {},  # BERT模型 {path: (tokenizer, model)}
+        "gpt_models": {},   # GPT模型 {path: (model, config, hz, max_sec)}
+        "sovits_models": {} # SoVITS模型 {path: (model, hps, version, model_version, if_lora_v3)}
+    }
     
     def __init__(
         self,
@@ -166,49 +211,141 @@ class GPTSoVITSInference:
         self.dict_language = self.dict_language_v1 if self.version == "v1" else self.dict_language_v2
     
     def _load_models(self):
-        """加载所有必要的模型"""
+        """加载所有必要的模型，复用已加载的模型以节省显存"""
         # 导入必要的模块
         from feature_extractor import cnhubert
         
         # 设置CNHubert路径
         cnhubert.cnhubert_base_path = self.cnhubert_base_path
         
-        # 加载BERT模型
-        self.tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
-        self.bert_model = AutoModelForMaskedLM.from_pretrained(self.bert_path)
-        if self.is_half:
-            self.bert_model = self.bert_model.half().to(self.device)
+        # 检查当前设备，用于缓存模型的键名格式化
+        device_key = f"{self.device}"
+        
+        # 加载BERT模型（如果已加载过该路径的模型则直接使用）
+        bert_cache_key = f"{self.bert_path}_{device_key}"
+        if bert_cache_key in self._loaded_models["bert_models"]:
+            logger.info(f"使用已加载的BERT模型: {self.bert_path} (设备: {self.device})")
+            self.tokenizer, self.bert_model = self._loaded_models["bert_models"][bert_cache_key]
+            # 确保精度一致
+            model_param = next(self.bert_model.parameters())
+            if self.is_half and model_param.dtype != torch.float16:
+                logger.info(f"转换BERT模型为半精度")
+                self.bert_model = self.bert_model.half()
+            elif not self.is_half and model_param.dtype == torch.float16:
+                logger.info(f"转换BERT模型为全精度")
+                self.bert_model = self.bert_model.float()
         else:
-            self.bert_model = self.bert_model.to(self.device)
+            logger.info(f"加载新的BERT模型: {self.bert_path} (设备: {self.device})")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.bert_path)
+            self.bert_model = AutoModelForMaskedLM.from_pretrained(self.bert_path)
+            if self.is_half:
+                self.bert_model = self.bert_model.half().to(self.device)
+            else:
+                self.bert_model = self.bert_model.to(self.device)
+            # 缓存已加载的模型
+            self._loaded_models["bert_models"][bert_cache_key] = (self.tokenizer, self.bert_model)
         
-        # 加载CNHubert模型
-        self.ssl_model = cnhubert.get_model()
-        if self.is_half:
-            self.ssl_model = self.ssl_model.half().to(self.device)
+        # 加载CNHubert模型（如果已加载则直接使用）
+        ssl_cache_key = f"ssl_model_{device_key}"
+        if ssl_cache_key in self._loaded_models and self._loaded_models[ssl_cache_key] is not None:
+            logger.info(f"使用已加载的CNHubert模型 (设备: {self.device})")
+            self.ssl_model = self._loaded_models[ssl_cache_key]
+            # 确保精度一致
+            model_param = next(self.ssl_model.parameters())
+            if self.is_half and model_param.dtype != torch.float16:
+                logger.info(f"转换CNHubert模型为半精度")
+                self.ssl_model = self.ssl_model.half()
+            elif not self.is_half and model_param.dtype == torch.float16:
+                logger.info(f"转换CNHubert模型为全精度")
+                self.ssl_model = self.ssl_model.float()
         else:
-            self.ssl_model = self.ssl_model.to(self.device)
+            logger.info(f"加载新的CNHubert模型 (设备: {self.device})")
+            self.ssl_model = cnhubert.get_model()
+            if self.is_half:
+                self.ssl_model = self.ssl_model.half().to(self.device)
+            else:
+                self.ssl_model = self.ssl_model.to(self.device)
+            # 缓存已加载的模型
+            self._loaded_models[ssl_cache_key] = self.ssl_model
+            # 兼容旧版缓存结构
+            self._loaded_models["ssl_model"] = self.ssl_model
         
-        # 加载SoVITS模型
-        (
-            self.vq_model, 
-            self.hps, 
-            self.version, 
-            self.model_version, 
-            self.if_lora_v3
-        ) = load_sovits_model(self.sovits_path, self.device, self.is_half)
+        # 加载SoVITS模型（如果已加载则直接使用）
+        sovits_cache_key = f"{self.sovits_path}_{device_key}"
+        if sovits_cache_key in self._loaded_models["sovits_models"]:
+            logger.info(f"使用已加载的SoVITS模型: {self.sovits_path} (设备: {self.device})")
+            (
+                self.vq_model, 
+                self.hps, 
+                self.version, 
+                self.model_version, 
+                self.if_lora_v3
+            ) = self._loaded_models["sovits_models"][sovits_cache_key]
+            # 确保精度一致
+            model_param = next(self.vq_model.parameters())
+            if self.is_half and model_param.dtype != torch.float16:
+                logger.info(f"转换SoVITS模型为半精度")
+                self.vq_model = self.vq_model.half()
+            elif not self.is_half and model_param.dtype == torch.float16:
+                logger.info(f"转换SoVITS模型为全精度")
+                self.vq_model = self.vq_model.float()
+        else:
+            logger.info(f"加载新的SoVITS模型: {self.sovits_path} (设备: {self.device})")
+            (
+                self.vq_model, 
+                self.hps, 
+                self.version, 
+                self.model_version, 
+                self.if_lora_v3
+            ) = load_sovits_model(self.sovits_path, self.device, self.is_half)
+            # 缓存已加载的模型
+            self._loaded_models["sovits_models"][sovits_cache_key] = (
+                self.vq_model, 
+                self.hps, 
+                self.version, 
+                self.model_version, 
+                self.if_lora_v3
+            )
         
-        # 加载GPT模型
-        (
-            self.t2s_model, 
-            self.config, 
-            self.hz, 
-            self.max_sec
-        ) = load_gpt_model(self.gpt_path, self.device, self.is_half, self.version)
+        # 加载GPT模型（如果已加载则直接使用）
+        gpt_cache_key = f"{self.gpt_path}_{device_key}"
+        if gpt_cache_key in self._loaded_models["gpt_models"]:
+            logger.info(f"使用已加载的GPT模型: {self.gpt_path} (设备: {self.device})")
+            (
+                self.t2s_model, 
+                self.config, 
+                self.hz, 
+                self.max_sec
+            ) = self._loaded_models["gpt_models"][gpt_cache_key]
+            # 确保精度一致
+            model_param = next(self.t2s_model.parameters())
+            if self.is_half and model_param.dtype != torch.float16:
+                logger.info(f"转换GPT模型为半精度")
+                self.t2s_model = self.t2s_model.half()
+            elif not self.is_half and model_param.dtype == torch.float16:
+                logger.info(f"转换GPT模型为全精度")
+                self.t2s_model = self.t2s_model.float()
+        else:
+            logger.info(f"加载新的GPT模型: {self.gpt_path} (设备: {self.device})")
+            (
+                self.t2s_model, 
+                self.config, 
+                self.hz, 
+                self.max_sec
+            ) = load_gpt_model(self.gpt_path, self.device, self.is_half, self.version)
+            # 缓存已加载的模型
+            self._loaded_models["gpt_models"][gpt_cache_key] = (
+                self.t2s_model, 
+                self.config, 
+                self.hz, 
+                self.max_sec
+            )
         
         # 定义模型版本集合
         self.v3v4set = {"v3", "v4"}
         
         # 根据模型版本加载相应的声码器
+        # 声码器较小，不进行缓存处理，每次按需加载
         if self.model_version == "v3":
             self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
             self.hifigan_model = None
@@ -659,3 +796,113 @@ class GPTSoVITSInference:
             
         # 返回采样率和音频数据（转换为16位整数）
         return opt_sr, (audio_opt * 32767).astype(np.int16) 
+
+    @staticmethod
+    def clear_model_cache(model_type=None, device=None):
+        """
+        清理模型缓存，释放GPU内存
+        
+        参数:
+            model_type: 要清理的模型类型，可以是'bert'、'gpt'、'sovits'、'ssl'或None
+                        如果为None则清理所有模型缓存
+            device: 要清理的设备上的模型，如果为None则清理所有设备上的模型
+        """
+        # 导入必要的垃圾回收模块
+        import gc
+        
+        # 根据设备参数准备过滤条件
+        device_filter = f"_{device}" if device else ""
+        
+        if model_type is None or model_type == 'ssl':
+            # 清理所有设备上的ssl模型或者指定设备上的ssl模型
+            if device:
+                ssl_key = f"ssl_model_{device}"
+                if ssl_key in GPTSoVITSInference._loaded_models:
+                    GPTSoVITSInference._loaded_models[ssl_key] = None
+                    logger.info(f"已清理 {device} 设备上的CNHubert模型缓存")
+            else:
+                # 清理所有和ssl相关的键
+                keys_to_clear = [k for k in GPTSoVITSInference._loaded_models.keys() if k.startswith("ssl_model_")]
+                for key in keys_to_clear:
+                    GPTSoVITSInference._loaded_models[key] = None
+                # 兼容旧版结构
+                GPTSoVITSInference._loaded_models["ssl_model"] = None
+                logger.info("已清理所有设备上的CNHubert模型缓存")
+            
+        if model_type is None or model_type == 'bert':
+            # 清理指定设备或所有设备上的bert模型
+            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["bert_models"].keys() 
+                            if not device or k.endswith(device_filter)]
+            for key in keys_to_clear:
+                del GPTSoVITSInference._loaded_models["bert_models"][key]
+            logger.info(f"已清理{'所有' if not device else device}设备上的BERT模型缓存")
+            
+        if model_type is None or model_type == 'gpt':
+            # 清理指定设备或所有设备上的gpt模型
+            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["gpt_models"].keys() 
+                            if not device or k.endswith(device_filter)]
+            for key in keys_to_clear:
+                del GPTSoVITSInference._loaded_models["gpt_models"][key]
+            logger.info(f"已清理{'所有' if not device else device}设备上的GPT模型缓存")
+            
+        if model_type is None or model_type == 'sovits':
+            # 清理指定设备或所有设备上的sovits模型
+            keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["sovits_models"].keys() 
+                            if not device or k.endswith(device_filter)]
+            for key in keys_to_clear:
+                del GPTSoVITSInference._loaded_models["sovits_models"][key]
+            logger.info(f"已清理{'所有' if not device else device}设备上的SoVITS模型缓存")
+            
+        # 强制进行垃圾回收
+        gc.collect()
+        if device and device.startswith("cuda"):
+            try:
+                torch.cuda.empty_cache()
+                logger.info(f"已清理 {device} 设备上的CUDA缓存")
+            except:
+                logger.warning(f"清理 {device} 设备上的CUDA缓存失败")
+        elif not device:
+            try:
+                torch.cuda.empty_cache()
+                logger.info("已清理所有CUDA设备缓存")
+            except:
+                logger.warning("清理CUDA缓存失败")
+        
+        logger.info("已完成垃圾回收")
+    
+    def release_models(self):
+        """释放当前实例使用的模型资源，但不影响缓存"""
+        # 导入必要的垃圾回收模块
+        import gc
+        
+        # 记录原始设备
+        device = self.device
+        
+        # 释放模型引用，但不清除静态缓存
+        self.ssl_model = None
+        self.vq_model = None
+        self.t2s_model = None
+        self.bert_model = None
+        self.tokenizer = None
+        
+        # 根据模型版本释放声码器
+        if hasattr(self, 'bigvgan_model') and self.bigvgan_model is not None:
+            self.bigvgan_model = None
+            logger.info(f"已释放bigvgan声码器")
+            
+        if hasattr(self, 'hifigan_model') and self.hifigan_model is not None:
+            self.hifigan_model = None
+            logger.info(f"已释放hifigan声码器")
+        
+        # 强制进行垃圾回收
+        gc.collect()
+        
+        # 如果是CUDA设备，清空CUDA缓存
+        if device.startswith("cuda"):
+            try:
+                torch.cuda.empty_cache()
+                logger.info(f"已清理 {device} 设备上的CUDA缓存")
+            except:
+                logger.warning(f"清理 {device} 设备上的CUDA缓存失败")
+                
+        logger.info("已释放当前实例的模型资源") 
