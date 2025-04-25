@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QT
 from PySide6.QtCore import Qt
 
 from gui.controllers import RoleController, InferenceController
-from gui.tabs import ExperimentTab, RoleTab, ReplaceTab
+from gui.views import ExperimentTab, RoleTab, ReplaceTab
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
 from gui.models import ModelManager, TextProcessor, ProgressManager, ConfigApplier, InferenceRequestHandler

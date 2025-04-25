@@ -18,7 +18,7 @@
 - `history_list.py` - 历史记录列表组件，用于管理和显示历史操作
 - `__init__.py` - 组件包初始化文件
 
-#### `tabs/` - 不同的标签页
+#### `views/` - 不同的标签页
 - `experiment_tab.py` - 试听配置标签页，用于实时调整参数并试听效果
 - `role_tab.py` - 角色推理标签页，管理和使用已训练的角色模型
 - `__init__.py` - 标签页包初始化文件
@@ -42,7 +42,7 @@
 
 本GUI采用MVC(Model-View-Controller)架构设计:
 - Model层(models/): 负责数据处理和业务逻辑
-- View层(components/, tabs/): 负责用户界面展示
+- View层(components/, views/): 负责用户界面展示
 - Controller层(controllers/): 连接Model和View，处理用户输入并更新界面
 
 ## 使用方法
