@@ -75,7 +75,8 @@ class GPTSoVITSInference:
         "ssl_model": None,  # CNHubert模型
         "bert_models": {},  # BERT模型 {path: (tokenizer, model)}
         "gpt_models": {},   # GPT模型 {path: (model, config, hz, max_sec)}
-        "sovits_models": {} # SoVITS模型 {path: (model, hps, version, model_version, if_lora_v3)}
+        "sovits_models": {}, # SoVITS模型 {path: (model, hps, version, model_version, if_lora_v3)}
+        "vocoder_models": {}  # 声码器模型 {"bigvgan_模型版本_设备": model, "hifigan_模型版本_设备": model}
     }
     
     def __init__(
@@ -345,27 +346,98 @@ class GPTSoVITSInference:
         self.v3v4set = {"v3", "v4"}
         
         # 根据模型版本加载相应的声码器
-        # 声码器较小，不进行缓存处理，每次按需加载
         if self.model_version == "v3":
-            self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
-            self.hifigan_model = None
+            # 检查缓存中是否有对应的BigVGAN声码器
+            bigvgan_cache_key = f"bigvgan_{self.model_version}_{self.device}"
+            if bigvgan_cache_key in self._loaded_models["vocoder_models"]:
+                logger.info(f"使用已加载的BigVGAN声码器 (设备: {self.device})")
+                self.bigvgan_model = self._loaded_models["vocoder_models"][bigvgan_cache_key]
+                # 确保精度一致
+                model_param = next(self.bigvgan_model.parameters())
+                if self.is_half and model_param.dtype != torch.float16:
+                    logger.info(f"转换BigVGAN声码器为半精度")
+                    self.bigvgan_model = self.bigvgan_model.half()
+                elif not self.is_half and model_param.dtype == torch.float16:
+                    logger.info(f"转换BigVGAN声码器为全精度")
+                    self.bigvgan_model = self.bigvgan_model.float()
+            else:
+                logger.info(f"加载新的BigVGAN声码器 (设备: {self.device})")
+                self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
+                # 缓存已加载的声码器
+                self._loaded_models["vocoder_models"][bigvgan_cache_key] = self.bigvgan_model
         elif self.model_version == "v4":
-            self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
-            self.bigvgan_model = None
+            # 检查缓存中是否有对应的HiFiGAN声码器
+            hifigan_cache_key = f"hifigan_{self.model_version}_{self.device}"
+            if hifigan_cache_key in self._loaded_models["vocoder_models"]:
+                logger.info(f"使用已加载的HiFiGAN声码器 (设备: {self.device})")
+                self.hifigan_model = self._loaded_models["vocoder_models"][hifigan_cache_key]
+                # 确保精度一致
+                model_param = next(self.hifigan_model.parameters())
+                if self.is_half and model_param.dtype != torch.float16:
+                    logger.info(f"转换HiFiGAN声码器为半精度")
+                    self.hifigan_model = self.hifigan_model.half()
+                elif not self.is_half and model_param.dtype == torch.float16:
+                    logger.info(f"转换HiFiGAN声码器为全精度")
+                    self.hifigan_model = self.hifigan_model.float()
+            else:
+                logger.info(f"加载新的HiFiGAN声码器 (设备: {self.device})")
+                self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
+                # 缓存已加载的声码器
+                self._loaded_models["vocoder_models"][hifigan_cache_key] = self.hifigan_model
     
     def _get_vocoder(self):
         """获取当前模型版本对应的声码器"""
         if self.model_version == "v3":
+            # 检查BigVGAN声码器
+            bigvgan_cache_key = f"bigvgan_{self.model_version}_{self.device}"
+            
+            # 如果当前实例没有bigvgan声码器
             if self.bigvgan_model is None:
-                # 如果从v4切换到v3，确保清理旧的声码器并正确初始化新的声码器
-                self.bigvgan_model = init_bigvgan(self.device, self.is_half, self.hifigan_model)
-                self.hifigan_model = None
+                # 尝试从缓存获取
+                if bigvgan_cache_key in self._loaded_models["vocoder_models"]:
+                    logger.info(f"从缓存获取BigVGAN声码器 (设备: {self.device})")
+                    self.bigvgan_model = self._loaded_models["vocoder_models"][bigvgan_cache_key]
+                    # 确保精度一致
+                    model_param = next(self.bigvgan_model.parameters())
+                    if self.is_half and model_param.dtype != torch.float16:
+                        logger.info(f"转换BigVGAN声码器为半精度")
+                        self.bigvgan_model = self.bigvgan_model.half()
+                    elif not self.is_half and model_param.dtype == torch.float16:
+                        logger.info(f"转换BigVGAN声码器为全精度")
+                        self.bigvgan_model = self.bigvgan_model.float()
+                else:
+                    # 初始化新声码器
+                    logger.info(f"初始化新的BigVGAN声码器 (设备: {self.device})")
+                    self.bigvgan_model = init_bigvgan(self.device, self.is_half, None)
+                    # 缓存新初始化的声码器
+                    self._loaded_models["vocoder_models"][bigvgan_cache_key] = self.bigvgan_model
+            
             return self.bigvgan_model
         else:  # v4
+            # 检查HiFiGAN声码器
+            hifigan_cache_key = f"hifigan_{self.model_version}_{self.device}"
+            
+            # 如果当前实例没有hifigan声码器
             if self.hifigan_model is None:
-                # 如果从v3切换到v4，确保清理旧的声码器并正确初始化新的声码器
-                self.hifigan_model = init_hifigan(self.device, self.is_half, self.bigvgan_model)
-                self.bigvgan_model = None
+                # 尝试从缓存获取
+                if hifigan_cache_key in self._loaded_models["vocoder_models"]:
+                    logger.info(f"从缓存获取HiFiGAN声码器 (设备: {self.device})")
+                    self.hifigan_model = self._loaded_models["vocoder_models"][hifigan_cache_key]
+                    # 确保精度一致
+                    model_param = next(self.hifigan_model.parameters())
+                    if self.is_half and model_param.dtype != torch.float16:
+                        logger.info(f"转换HiFiGAN声码器为半精度")
+                        self.hifigan_model = self.hifigan_model.half()
+                    elif not self.is_half and model_param.dtype == torch.float16:
+                        logger.info(f"转换HiFiGAN声码器为全精度")
+                        self.hifigan_model = self.hifigan_model.float()
+                else:
+                    # 初始化新声码器
+                    logger.info(f"初始化新的HiFiGAN声码器 (设备: {self.device})")
+                    self.hifigan_model = init_hifigan(self.device, self.is_half, None)
+                    # 缓存新初始化的声码器
+                    self._loaded_models["vocoder_models"][hifigan_cache_key] = self.hifigan_model
+            
             return self.hifigan_model
     
     def generate_speech(
@@ -803,7 +875,7 @@ class GPTSoVITSInference:
         清理模型缓存，释放GPU内存
         
         参数:
-            model_type: 要清理的模型类型，可以是'bert'、'gpt'、'sovits'、'ssl'或None
+            model_type: 要清理的模型类型，可以是'bert'、'gpt'、'sovits'、'ssl'、'vocoder'或None
                         如果为None则清理所有模型缓存
             device: 要清理的设备上的模型，如果为None则清理所有设备上的模型
         """
@@ -852,6 +924,20 @@ class GPTSoVITSInference:
             for key in keys_to_clear:
                 del GPTSoVITSInference._loaded_models["sovits_models"][key]
             logger.info(f"已清理{'所有' if not device else device}设备上的SoVITS模型缓存")
+        
+        if model_type is None or model_type == 'vocoder':
+            # 清理指定设备或所有设备上的声码器模型
+            if device:
+                # 清理指定设备上的声码器
+                keys_to_clear = [k for k in GPTSoVITSInference._loaded_models["vocoder_models"].keys() 
+                                if k.endswith(device)]
+                for key in keys_to_clear:
+                    del GPTSoVITSInference._loaded_models["vocoder_models"][key]
+                logger.info(f"已清理 {device} 设备上的声码器模型缓存")
+            else:
+                # 清理所有声码器
+                GPTSoVITSInference._loaded_models["vocoder_models"].clear()
+                logger.info("已清理所有设备上的声码器模型缓存")
             
         # 强制进行垃圾回收
         gc.collect()
@@ -885,14 +971,14 @@ class GPTSoVITSInference:
         self.bert_model = None
         self.tokenizer = None
         
-        # 根据模型版本释放声码器
+        # 释放声码器引用，但不清除静态缓存
         if hasattr(self, 'bigvgan_model') and self.bigvgan_model is not None:
             self.bigvgan_model = None
-            logger.info(f"已释放bigvgan声码器")
+            logger.info(f"已释放bigvgan声码器实例引用")
             
         if hasattr(self, 'hifigan_model') and self.hifigan_model is not None:
             self.hifigan_model = None
-            logger.info(f"已释放hifigan声码器")
+            logger.info(f"已释放hifigan声码器实例引用")
         
         # 强制进行垃圾回收
         gc.collect()
