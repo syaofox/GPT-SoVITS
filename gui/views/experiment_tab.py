@@ -5,7 +5,6 @@
 """
 
 import os
-import shutil
 from typing import Dict, List, Tuple
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -20,6 +19,7 @@ from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
 from gui.components.draggable_widgets import DraggableLineEdit, DraggableListWidget
 from gui.components.optimized_widgets import OptimizedTextEdit
+from gui.controllers.experiment_controller import ExperimentController
 
 
 class ExperimentTab(QWidget):
@@ -35,9 +35,8 @@ class ExperimentTab(QWidget):
         self.inference_controller = inference_controller
         self.shared_controls = shared_controls
         
-        # 模型路径字典
-        self.gpt_model_paths = {}
-        self.sovits_model_paths = {}
+        # 创建实验控制器
+        self.experiment_controller = ExperimentController(inference_controller, role_controller)
         
         # 初始化
         self.init_ui()
@@ -228,10 +227,17 @@ class ExperimentTab(QWidget):
     
     def connect_signals(self):
         """连接信号槽"""
+        # 连接控制器的信号
         self.inference_controller.inference_failed.connect(self.on_inference_failed)
         
+        # 连接实验控制器的信号
+        self.experiment_controller.error_occurred.connect(self.on_error)
+        self.experiment_controller.ref_path_changed.connect(self.set_prompt_text_from_filename)
+        self.experiment_controller.aux_refs_added.connect(self.on_aux_refs_added)
+        self.experiment_controller.aux_refs_removed.connect(self.on_aux_refs_removed)
+        
         # 为拖放功能添加信号连接
-        self.ref_path_edit.textChanged.connect(self.on_ref_path_changed)
+        self.ref_path_edit.textChanged.connect(self.experiment_controller.on_ref_audio_changed)
         
         # 连接辅助参考音频列表的拖放信号
         self.aux_refs_list.files_dropped.connect(self.on_aux_refs_dropped)
@@ -243,8 +249,16 @@ class ExperimentTab(QWidget):
             self.history_list.audio_selected.connect(self.audio_player.load_audio)
             self.history_list.history_cleared.connect(self.inference_controller.clear_history)
     
-    def on_aux_refs_dropped(self, file_paths):
+    def on_error(self, error_msg: str):
+        """错误处理"""
+        QMessageBox.warning(self, "警告", error_msg)
+    
+    def on_aux_refs_dropped(self, file_paths: List[str]):
         """处理辅助参考音频的拖放事件"""
+        self.experiment_controller.add_aux_refs(file_paths)
+    
+    def on_aux_refs_added(self, file_paths: List[str]):
+        """当辅助参考音频被添加时的处理"""
         for file_path in file_paths:
             # 检查是否已经存在于列表中
             exists = False
@@ -259,8 +273,17 @@ class ExperimentTab(QWidget):
                 item = self.create_aux_ref_item(file_path)
                 self.aux_refs_list.addItem(item)
     
-    def on_ref_path_changed(self, path):
-        """参考音频路径改变时的处理"""
+    def on_aux_refs_removed(self, file_paths: List[str]):
+        """当辅助参考音频被移除时的处理"""
+        for file_path in file_paths:
+            for i in range(self.aux_refs_list.count()):
+                item = self.aux_refs_list.item(i)
+                if item.data(Qt.UserRole) == file_path:
+                    self.aux_refs_list.takeItem(i)
+                    break
+    
+    def set_prompt_text_from_filename(self, path: str):
+        """从文件名设置参考文本"""
         if path:
             # 提取文件名（不含扩展名）作为参考文本
             filename = os.path.basename(path)
@@ -288,82 +311,58 @@ class ExperimentTab(QWidget):
         if file_path:
             # 设置文件路径到参考音频文本框
             self.ref_path_edit.setText(file_path)
-            
-            # 提取文件名（不含扩展名）作为参考文本
-            filename = os.path.basename(file_path)
-            filename_without_ext = os.path.splitext(filename)[0]
-            
-            # 将文件名设置到参考文本编辑框（直接覆盖）
-            self.prompt_text_edit.setText(filename_without_ext)
     
-    def load_gpt_models(self, model_dict):
+    def load_gpt_models(self, model_dict: Dict[str, str]):
         """加载GPT模型列表"""
-        self.gpt_model_paths = model_dict
+        # 使用控制器加载模型
+        self.experiment_controller.load_models({"gpt": model_dict})
+        
+        # 更新UI
         self.gpt_model_combo.clear()
         self.gpt_model_combo.addItems(list(model_dict.keys()))
     
-    def load_sovits_models(self, model_dict):
+    def load_sovits_models(self, model_dict: Dict[str, str]):
         """加载SoVITS模型列表"""
-        self.sovits_model_paths = model_dict
+        # 使用控制器加载模型
+        self.experiment_controller.load_models({"sovits": model_dict})
+        
+        # 更新UI
         self.sovits_model_combo.clear()
         self.sovits_model_combo.addItems(list(model_dict.keys()))
     
-    def get_inference_config(self,is_save_role=False):
-        """获取当前推理配置"""
-        config = {}
+    def collect_view_data(self) -> Dict:
+        """收集视图数据"""
+        view_data = {}
         
-        # 获取基本配置
-        if not is_save_role:
-            text = self.text_edit.toPlainText().strip()
-            if not text:
-                return None
+        # 基本配置
+        view_data["text"] = self.text_edit.toPlainText().strip()
+        view_data["text_lang"] = self.text_lang_combo.currentText()
+        view_data["how_to_cut"] = self.cut_method_combo.currentText()
         
-            config["text"] = text
-        config["text_lang"] = self.text_lang_combo.currentText()
-        config["how_to_cut"] = self.cut_method_combo.currentText()
+        # 角色名和情绪名
+        view_data["role_name"] = self.role_name_edit.text().strip()
+        view_data["emotion_name"] = self.emotion_name_edit.text().strip()
         
-        # 获取角色名和情绪名
-        config["role_name"] = self.role_name_edit.text().strip()
-        config["emotion_name"] = self.emotion_name_edit.text().strip()
+        # 模型选择
+        view_data["gpt_model_name"] = self.gpt_model_combo.currentText()
+        view_data["sovits_model_name"] = self.sovits_model_combo.currentText()
         
-        # 获取模型选择
-        gpt_model_name = self.gpt_model_combo.currentText()
-        sovits_model_name = self.sovits_model_combo.currentText()
-        
-        if not gpt_model_name or not sovits_model_name:
-            return None
-            
-        # 转换为实际路径
-        if hasattr(self, "gpt_model_paths") and gpt_model_name in self.gpt_model_paths:
-            config["gpt_path"] = self.gpt_model_paths[gpt_model_name]
-        else:
-            return None
-            
-        if hasattr(self, "sovits_model_paths") and sovits_model_name in self.sovits_model_paths:
-            config["sovits_path"] = self.sovits_model_paths[sovits_model_name]
-        else:
-            return None
-        
-        # 获取参考音频
-        ref_audio_path = self.ref_path_edit.text()
-        if not ref_audio_path and not self.ref_free_check.isChecked():
-            return None
-            
-        config["ref_audio"] = ref_audio_path
-        config["prompt_text"] = self.prompt_text_edit.text().strip()
-        config["prompt_lang"] = self.prompt_lang_combo.currentText()
+        # 参考音频
+        view_data["ref_audio"] = self.ref_path_edit.text()
+        view_data["prompt_text"] = self.prompt_text_edit.text().strip()
+        view_data["prompt_lang"] = self.prompt_lang_combo.currentText()
         
         # 高级设置
-        config["speed"] = self.speed_spin.value()
-        config["top_k"] = self.top_k_spin.value()
-        config["top_p"] = self.top_p_spin.value()
-        config["temperature"] = self.temperature_spin.value()
-        config["sample_steps"] = self.sample_steps_spin.value()
-        config["pause_second"] = self.pause_spin.value()
+        view_data["speed"] = self.speed_spin.value()
+        view_data["top_k"] = self.top_k_spin.value()
+        view_data["top_p"] = self.top_p_spin.value()
+        view_data["temperature"] = self.temperature_spin.value()
+        view_data["sample_steps"] = self.sample_steps_spin.value()
+        view_data["pause_second"] = self.pause_spin.value()
         
         # 选项
-        config["ref_free"] = self.ref_free_check.isChecked()
-        config["if_sr"] = self.sr_check.isChecked()
+        view_data["ref_free"] = self.ref_free_check.isChecked()
+        view_data["if_sr"] = self.sr_check.isChecked()
         
         # 辅助参考音频
         aux_refs = []
@@ -371,52 +370,21 @@ class ExperimentTab(QWidget):
             aux_refs.append(self.aux_refs_list.item(i).data(Qt.UserRole))
         
         if aux_refs:
-            config["aux_refs"] = aux_refs
-            
-        return config
+            view_data["aux_refs"] = aux_refs
+        
+        return view_data
     
     def generate_with_config(self):
         """使用当前配置生成语音"""
-        # 获取合成文本
-        text = self.text_edit.toPlainText()
-        if not text:
-            QMessageBox.warning(self, "警告", "请输入要合成的文本")
-            return False
-            
-        # 获取当前配置
-        config = self.get_inference_config()
-        
-        # 检查配置是否有效
-        if config is None:
-            QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
-            return False
-            
-        # 检查必要参数
-        if not config["gpt_path"]:
-            QMessageBox.warning(self, "警告", "请选择GPT模型")
-            return False
-            
-        if not config["sovits_path"]:
-            QMessageBox.warning(self, "警告", "请选择SoVITS模型")
-            return False
-            
-        if not config["ref_free"] and not config["ref_audio"]:
-            QMessageBox.warning(self, "警告", "请选择参考音频文件或勾选无参考文本")
-            return False
-            
-        if not config["ref_free"] and not os.path.exists(config["ref_audio"]):
-            QMessageBox.warning(self, "警告", f"参考音频文件不存在: {config['ref_audio']}")
-            return False
-            
-        # 调用推理控制器
-        self.inference_controller.generate_speech_async(config)
-        return True
+        view_data = self.collect_view_data()
+        return self.experiment_controller.generate_speech(view_data)
     
     def generate_speech(self):
         """生成语音"""
         if self.shared_controls:
             # 在共享模式下，发送信号给主窗口处理
-            config = self.get_inference_config()
+            view_data = self.collect_view_data()
+            config = self.experiment_controller.get_inference_config(view_data)
             if config is None:
                 QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
                 return
@@ -440,74 +408,6 @@ class ExperimentTab(QWidget):
             self.generate_button.setEnabled(True)
             self.progress_label.setText(f"生成失败: {error_msg}")
     
-    def _get_project_root(self):
-        """获取项目根目录"""
-        # 从当前文件位置向上查找，直到找到项目根目录
-        # 这里假设项目根目录是包含'gui'文件夹的目录
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        while True:
-            parent_dir = os.path.dirname(current_dir)
-            if os.path.basename(current_dir) == 'gui' and os.path.exists(os.path.join(parent_dir, 'config')):
-                return parent_dir
-            if current_dir == parent_dir:  # 已到达系统根目录
-                return os.getcwd()  # 返回当前工作目录作为备选
-            current_dir = parent_dir
-    
-    def _convert_to_relative_path(self, absolute_path):
-        """将绝对路径转换为相对项目根目录的路径"""
-        if not absolute_path:
-            return absolute_path
-            
-        # 获取项目根目录
-        project_root = self._get_project_root()
-        
-        try:
-            # 转换为相对路径
-            relative_path = os.path.relpath(absolute_path, project_root)
-            # 确保使用正斜杠（Windows兼容性）
-            relative_path = relative_path.replace('\\', '/')
-            return relative_path
-        except ValueError:  # 如果路径在不同驱动器上
-            return absolute_path  # 保留原始路径
-            
-    def save_as_role(self):
-        """保存为角色配置"""
-        # 从输入框获取角色名称和情绪
-        role_name = self.role_name_edit.text().strip()
-        emotion_name = self.emotion_name_edit.text().strip()
-        
-        # 验证输入
-        if not role_name:
-            QMessageBox.warning(self, "警告", "请输入角色名称")
-            return
-            
-        if not emotion_name:
-            QMessageBox.warning(self, "警告", "请输入情绪名称")
-            return
-            
-        # 获取当前配置
-        config = self.get_inference_config(is_save_role=True)
-        
-        # 检查配置是否有效
-        if config is None:
-            QMessageBox.warning(self, "警告", "当前配置无效，请检查必填参数")
-            return
-        
-        try:
-            # 将模型路径转换为相对路径
-            if "gpt_path" in config and config["gpt_path"]:
-                config["gpt_path"] = self._convert_to_relative_path(config["gpt_path"])
-                
-            if "sovits_path" in config and config["sovits_path"]:
-                config["sovits_path"] = self._convert_to_relative_path(config["sovits_path"])
-                
-            # 保存角色（音频文件的复制已经在role_model中处理了）
-            self.role_controller.save_role(role_name, emotion_name, config)
-            QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
-            
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"保存角色失败: {str(e)}")
-    
     def add_aux_ref_audio(self):
         """添加辅助参考音频"""
         # 打开文件对话框
@@ -518,22 +418,10 @@ class ExperimentTab(QWidget):
             "音频文件 (*.wav *.mp3 *.flac *.ogg);;所有文件 (*)"
         )
         
-        for file_path in file_paths:
-            if file_path:
-                # 检查是否已经存在
-                exists = False
-                for i in range(self.aux_refs_list.count()):
-                    item = self.aux_refs_list.item(i)
-                    if item.data(Qt.UserRole) == file_path:
-                        exists = True
-                        break
-                
-                if not exists:
-                    # 添加到列表
-                    item = self.create_aux_ref_item(file_path)
-                    self.aux_refs_list.addItem(item)
+        if file_paths:
+            self.experiment_controller.add_aux_refs(file_paths)
     
-    def create_aux_ref_item(self, file_path):
+    def create_aux_ref_item(self, file_path: str) -> QListWidgetItem:
         """创建辅助参考音频列表项"""
         item = QListWidgetItem(os.path.basename(file_path))
         item.setData(Qt.UserRole, file_path)
@@ -542,5 +430,29 @@ class ExperimentTab(QWidget):
     def remove_aux_ref_audio(self):
         """删除选中的辅助参考音频"""
         selected_items = self.aux_refs_list.selectedItems()
-        for item in selected_items:
-            self.aux_refs_list.takeItem(self.aux_refs_list.row(item)) 
+        file_paths = [item.data(Qt.UserRole) for item in selected_items]
+        if file_paths:
+            self.experiment_controller.remove_aux_refs(file_paths)
+    
+    def save_as_role(self):
+        """保存为角色配置"""
+        # 从输入框获取角色名称和情绪
+        role_name = self.role_name_edit.text().strip()
+        emotion_name = self.emotion_name_edit.text().strip()
+        
+        # 收集视图数据
+        view_data = self.collect_view_data()
+        
+        # 使用控制器保存角色
+        success = self.experiment_controller.save_as_role(role_name, emotion_name, view_data)
+        if success:
+            QMessageBox.information(self, "成功", f"角色 [{role_name}] 的情感 [{emotion_name}] 已保存")
+    
+    def get_inference_config(self, is_save_role=False):
+        """
+        兼容方法：获取当前推理配置
+        
+        由于重构，此方法现在是一个包装器，调用控制器的方法
+        """
+        view_data = self.collect_view_data()
+        return self.experiment_controller.get_inference_config(view_data, is_save_role) 

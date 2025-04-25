@@ -9,11 +9,13 @@ from gui.models.text_processor import TextProcessor
 from gui.models.progress_manager import ProgressManager
 from gui.models.config_applier import ConfigApplier
 from gui.models.inference_request_handler import InferenceRequestHandler
+from gui.models.experiment_model import ExperimentModel
 
 __all__ = [
     'ModelManager',
     'TextProcessor',
     'ProgressManager',
     'ConfigApplier',
-    'InferenceRequestHandler'
+    'InferenceRequestHandler',
+    'ExperimentModel'
 ] 
