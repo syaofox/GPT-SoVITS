@@ -5,6 +5,8 @@
 """
 
 import os
+import shutil
+import tempfile
 from pathlib import Path
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox, QSplitter, QLabel, QPushButton, QProgressBar
 from PySide6.QtCore import Qt
@@ -188,9 +190,24 @@ class MainWindow(QMainWindow):
     def on_new_audio_generated(self, file_path: str):
         """新音频生成后刷新历史列表"""
         self.history_list.load_output_files()
-        # 不再自动加载到播放器，避免占用文件
-        # self.audio_player.load_audio(file_path)
-        self.status_bar.showMessage(f"语音已生成: {os.path.basename(file_path)}")
+        
+        # 将音频文件复制到临时目录，然后加载播放
+        try:
+            # 创建临时文件，保留原始文件扩展名
+            file_ext = os.path.splitext(file_path)[1]
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, f"gpt_sovits_temp_{os.path.basename(file_path)}")
+            
+            # 复制文件到临时目录
+            shutil.copy2(file_path, temp_file)
+            
+            # 加载临时文件到播放器
+            self.audio_player.load_audio(temp_file)
+            
+            # 更新状态信息
+            self.status_bar.showMessage(f"语音已生成: {os.path.basename(file_path)}")
+        except Exception as e:
+            self.status_bar.showMessage(f"播放音频时出错: {str(e)}")
     
     def show_error(self, message: str):
         """显示错误信息"""
