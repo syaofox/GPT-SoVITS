@@ -54,7 +54,7 @@ class TextCutter:
         else:
             opts = [inp]
             
-        opts = [item for item in opts if not set(item).issubset(self.punctuation)]
+        opts = [item.strip() for item in opts if not set(item).issubset(self.punctuation)]
         return "\n".join(opts)
     
     def cut2(self, inp: str) -> str:
@@ -85,21 +85,21 @@ class TextCutter:
             opts[-2] = opts[-2] + opts[-1]
             opts = opts[:-1]
             
-        opts = [item for item in opts if not set(item).issubset(self.punctuation)]
+        opts = [item.strip() for item in opts if not set(item).issubset(self.punctuation)]
         return "\n".join(opts)
     
     def cut3(self, inp: str) -> str:
         """按中文句号。切"""
         inp = inp.strip("\n")
         opts = ["%s" % item for item in inp.strip("。").split("。")]
-        opts = [item for item in opts if not set(item).issubset(self.punctuation)]
+        opts = [item.strip() for item in opts if not set(item).issubset(self.punctuation)]
         return "\n".join(opts)
     
     def cut4(self, inp: str) -> str:
         """按英文句号.切"""
         inp = inp.strip("\n")
         opts = re.split(r"(?<!\d)\.(?!\d)", inp.strip("."))
-        opts = [item for item in opts if not set(item).issubset(self.punctuation)]
+        opts = [item.strip() for item in opts if not set(item).issubset(self.punctuation)]
         return "\n".join(opts)
     
     def cut5(self, inp: str) -> str:
@@ -123,7 +123,7 @@ class TextCutter:
         if items:
             mergeitems.append("".join(items))
 
-        opt = [item for item in mergeitems if not set(item).issubset(self.punctuation)]
+        opt = [item.strip() for item in mergeitems if not set(item).issubset(self.punctuation)]
         return "\n".join(opt)
     
     def process_text(self, texts: List[str]) -> List[str]:
