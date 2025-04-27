@@ -651,6 +651,7 @@ class GPTSoVITSInference:
             # 在空白音频处理完成后调用进度回调
             if self._handle_progress_callback(progress_callback, i_text + 1, total_segments):
                 return None
+            logger.info(f"添加段落间停顿")
             return zero_wav_torch
                 
         # 确保文本以标点结尾
@@ -931,9 +932,10 @@ class GPTSoVITSInference:
             # 添加到输出列表
             audio_opt.append(audio)
             
-            # 添加句间停顿
-            if text != "<brbrbrbrbr>":  # 空白段落已有停顿，不需要额外添加
-                audio_opt.append(zero_wav_torch)
+            # 添加自然段落间停顿
+            if text != "<brbrbrbrbr>":  
+                audio_opt.append(zero_wav_torch)     
+                logger.info(f"添加自然段落间停顿{pause_second}秒")
         
         # 如果没有生成任何音频（可能是所有段落都处理失败），返回一个空音频
         if len(audio_opt) == 0:
