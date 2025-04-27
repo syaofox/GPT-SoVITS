@@ -94,28 +94,9 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 公共角色选择部分（放在最上方）
-        role_group = QGroupBox("角色选择")
-        role_layout = QGridLayout(role_group)
-        
-        role_layout.addWidget(QLabel("角色:"), 0, 0)
-        self.role_combo = QComboBox()
-        self.role_combo.currentIndexChanged.connect(self.on_role_changed)
-        role_layout.addWidget(self.role_combo, 0, 1)
-        
-        role_layout.addWidget(QLabel("情感:"), 1, 0)
-        self.emotion_combo = QComboBox()
-        self.emotion_combo.currentIndexChanged.connect(self.on_emotion_changed)
-        role_layout.addWidget(self.emotion_combo, 1, 1)
-        
-        self.refresh_button = QPushButton("刷新列表")
-        self.refresh_button.clicked.connect(self.refresh_roles)
-        role_layout.addWidget(self.refresh_button, 2, 0, 1, 2)
-        
-        left_layout.addWidget(role_group)
-        
         # 选项卡
         self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
         
         # 角色选项卡 - 创建为共享控件版本，不包含角色选择
         self.role_tab = RoleTab(self.role_controller, self.inference_controller, shared_controls=True)
@@ -134,6 +115,26 @@ class MainWindow(QMainWindow):
         # 右侧部分 - 共享控件
         right_widget = QWidget()
         right_layout = QVBoxLayout(right_widget)
+        
+        # 公共角色选择部分（放在右侧最上方）
+        role_group = QGroupBox("角色选择")
+        role_layout = QGridLayout(role_group)
+        
+        role_layout.addWidget(QLabel("角色:"), 0, 0)
+        self.role_combo = QComboBox()
+        self.role_combo.currentIndexChanged.connect(self.on_role_changed)
+        role_layout.addWidget(self.role_combo, 0, 1)
+        
+        role_layout.addWidget(QLabel("情感:"), 1, 0)
+        self.emotion_combo = QComboBox()
+        self.emotion_combo.currentIndexChanged.connect(self.on_emotion_changed)
+        role_layout.addWidget(self.emotion_combo, 1, 1)
+        
+        self.refresh_button = QPushButton("刷新列表")
+        self.refresh_button.clicked.connect(self.refresh_roles)
+        role_layout.addWidget(self.refresh_button, 2, 0, 1, 2)
+        
+        right_layout.addWidget(role_group)
         
         # 进度显示区域
         progress_layout = QVBoxLayout()
@@ -358,6 +359,11 @@ class MainWindow(QMainWindow):
                     
                     self.inference_handler.handle_role_request(role_name, emotion_name, text, config)
     
+    def on_tab_changed(self, index):
+        """处理标签页切换"""
+        # 切换到任何标签页时，都确保角色配置已加载
+        if self.current_role and self.current_emotion:
+            self.get_current_emotion_config()
     
     def closeEvent(self, event):
         """窗口关闭事件处理"""
