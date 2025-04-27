@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QInputDialog, QListWidget, QListWidgetItem
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
+import subprocess
 
 from gui.components.audio_player import AudioPlayer
 from gui.components.history_list import HistoryList
@@ -59,9 +60,17 @@ class ExperimentTab(QWidget):
         self.ref_path_edit.setReadOnly(True)
         ref_layout.addWidget(self.ref_path_edit, 0, 1)
         
+        buttons_layout = QHBoxLayout()
+        
         self.ref_browse_button = QPushButton("浏览...")
         self.ref_browse_button.clicked.connect(self.browse_ref_audio)
-        ref_layout.addWidget(self.ref_browse_button, 0, 2)
+        buttons_layout.addWidget(self.ref_browse_button)
+        
+        self.ref_play_button = QPushButton("播放")
+        self.ref_play_button.clicked.connect(self.play_ref_audio)
+        buttons_layout.addWidget(self.ref_play_button)
+        
+        ref_layout.addLayout(buttons_layout, 0, 2)
         
         ref_layout.addWidget(QLabel("参考文本:"), 1, 0)
         self.prompt_text_edit = QLineEdit()
@@ -91,6 +100,12 @@ class ExperimentTab(QWidget):
         self.remove_aux_ref_button.setMaximumWidth(40)
         self.remove_aux_ref_button.clicked.connect(self.remove_aux_ref_audio)
         aux_buttons_layout.addWidget(self.remove_aux_ref_button)
+        
+        self.play_aux_ref_button = QPushButton("▶")
+        self.play_aux_ref_button.setMaximumWidth(40)
+        self.play_aux_ref_button.setToolTip("播放选中的辅助参考音频")
+        self.play_aux_ref_button.clicked.connect(self.play_aux_ref_audio)
+        aux_buttons_layout.addWidget(self.play_aux_ref_button)
         
         aux_refs_layout.addLayout(aux_buttons_layout)
         ref_layout.addLayout(aux_refs_layout, 3, 1, 1, 2)
@@ -455,4 +470,42 @@ class ExperimentTab(QWidget):
         由于重构，此方法现在是一个包装器，调用控制器的方法
         """
         view_data = self.collect_view_data()
-        return self.experiment_controller.get_inference_config(view_data, is_save_role) 
+        return self.experiment_controller.get_inference_config(view_data, is_save_role)
+    
+    def play_ref_audio(self):
+        """使用系统默认播放器播放参考音频"""
+        audio_path = self.ref_path_edit.text()
+        if not audio_path:
+            QMessageBox.warning(self, "警告", "请先选择参考音频文件")
+            return
+            
+        self._play_audio_file(audio_path)
+    
+    def play_aux_ref_audio(self):
+        """播放选中的辅助参考音频"""
+        selected_items = self.aux_refs_list.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "警告", "请先选择要播放的辅助参考音频")
+            return
+            
+        # 获取选中项的文件路径
+        audio_path = selected_items[0].data(Qt.UserRole)
+        self._play_audio_file(audio_path)
+    
+    def _play_audio_file(self, audio_path: str):
+        """使用系统默认播放器播放音频文件"""
+        if not os.path.exists(audio_path):
+            QMessageBox.warning(self, "警告", f"文件不存在: {audio_path}")
+            return
+            
+        try:
+            # 使用系统默认应用打开音频文件
+            if os.name == 'nt':  # Windows
+                os.startfile(audio_path)
+            elif os.name == 'posix':  # macOS 和 Linux
+                if 'darwin' in os.sys.platform:  # macOS
+                    subprocess.call(('open', audio_path))
+                else:  # Linux
+                    subprocess.call(('xdg-open', audio_path))
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"无法播放音频文件: {str(e)}") 
