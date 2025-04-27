@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         
         # 选项卡
         self.tab_widget = QTabWidget()
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+        # self.tab_widget.currentChanged.connect(self.on_tab_changed)
         
         # 角色选项卡 - 创建为共享控件版本，不包含角色选择
         self.role_tab = RoleTab(self.role_controller, self.inference_controller, shared_controls=True)
@@ -359,11 +359,11 @@ class MainWindow(QMainWindow):
                     
                     self.inference_handler.handle_role_request(role_name, emotion_name, text, config)
     
-    def on_tab_changed(self, index):
-        """处理标签页切换"""
-        # 切换到任何标签页时，都确保角色配置已加载
-        if self.current_role and self.current_emotion:
-            self.get_current_emotion_config()
+    # def on_tab_changed(self, index):
+    #     """处理标签页切换"""
+    #     # 切换到任何标签页时，都确保角色配置已加载
+    #     if self.current_role and self.current_emotion:
+    #         self.get_current_emotion_config()
     
     def closeEvent(self, event):
         """窗口关闭事件处理"""
