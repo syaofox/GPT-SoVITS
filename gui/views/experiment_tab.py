@@ -109,7 +109,7 @@ class ExperimentTab(QWidget):
         
         adv_layout.addWidget(QLabel("文本切分:"), 1, 0)
         self.cut_method_combo = QComboBox()
-        self.cut_method_combo.addItems(["按句切", "凑四句一切", "按标点切", "按段切"])        
+        self.cut_method_combo.addItems(["按中文句号。切", "凑四句一切", "按标点切", "按段切"])        
         adv_layout.addWidget(self.cut_method_combo, 1, 1)
         
         adv_layout.addWidget(QLabel("GPT模型:"), 2, 0)

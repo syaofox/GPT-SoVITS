@@ -42,7 +42,7 @@ class ConfigApplier:
             self.experiment_tab.text_lang_combo.setCurrentIndex(index)
         
         # 设置文本切分方式
-        how_to_cut = role_config.get("how_to_cut", "按句切")
+        how_to_cut = role_config.get("how_to_cut", "按中文句号。切")
         index = self.experiment_tab.cut_method_combo.findText(how_to_cut)
         if index >= 0:
             self.experiment_tab.cut_method_combo.setCurrentIndex(index)
