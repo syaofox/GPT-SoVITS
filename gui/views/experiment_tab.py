@@ -182,6 +182,10 @@ class ExperimentTab(QWidget):
         self.sr_check = QCheckBox("超采样(V3)")
         adv_layout.addWidget(self.sr_check, 5, 2, 1, 2)
         
+        self.if_freeze_check = QCheckBox("冻结上次结果(防止随机性)")
+        self.if_freeze_check.setToolTip("启用后会使用上次合成结果，仅调整语速和音色，保持内容一致")
+        adv_layout.addWidget(self.if_freeze_check, 6, 0, 1, 4)
+        
         left_layout.addWidget(adv_group)
         
         # 合成文本（单独一个组）
@@ -378,6 +382,7 @@ class ExperimentTab(QWidget):
         # 选项
         view_data["ref_free"] = self.ref_free_check.isChecked()
         view_data["if_sr"] = self.sr_check.isChecked()
+        view_data["if_freeze"] = self.if_freeze_check.isChecked()
         
         # 辅助参考音频
         aux_refs = []

@@ -206,6 +206,7 @@ class InferenceWorker(QObject):
                     temperature=self.config.get("temperature", 0.6),
                     ref_free=self.config.get("ref_free", False),
                     speed=self.config.get("speed", 1.0),
+                    if_freeze=self.config.get("if_freeze", False),
                     inp_refs=self.config.get("aux_refs", []),
                     sample_steps=self.config.get("sample_steps", 8),
                     if_sr=self.config.get("if_sr", False),
