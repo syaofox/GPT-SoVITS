@@ -77,40 +77,6 @@ def correct_initial_final(tone):
 
         return new_init, new_final
 
-def find_custom_tone(text: str):
-    """识别、提取文本中的多音字"""
-    tone_list = []
-    txts = []
-    # 识别 tone 标记，形如<tone as=shu4>数</tone>或<tone as=\"shu3\">数</tone>或<tone as=\"shù\">数</tone>
-    ptn1 = re.compile(r"<tone.*?>(.*?)</tone>")
-    # 清除 tone 标记中不需要的部分
-    ptn2 = re.compile(r"(</?tone)|(as)|([>\"'\s=])")
-    matches = list(re.finditer(ptn1, text))
-    offset = 0
-    for match in matches:
-        # tone 标记之前的文本
-        pre = text[offset : match.start()]
-        txts.append(pre)
-        # tone 标签中的单个多音字
-        tone_text = match.group(1)
-        txts.append(tone_text)
-        # 提取读音，支持识别 Style.TONE 和  Style.TONE3
-        tone = match.group(0)
-        tone = re.sub(ptn2, "", tone)
-        tone = tone.replace(tone_text, "")
-        # 多音字在当前文本中的索引位置
-        pos = sum([len(s) for s in txts])
-        offset = match.end()
-        init, final = correct_initial_final(tone)
-        data = [tone, init, final, pos]
-        tone_list.append(data)
-    # 不能忘了最后一个 tone 标签后面可能还有剩余的内容
-    if offset < len(text):
-        txts.append(text[offset:])
-
-    text = "".join(str(i) for i in txts)
-    text = text.replace(" ", "")  # 去除空格
-    return text, tone_list
 
 def revise_custom_tone(phones, word2ph, tone_data_list):
     """修正自定义多音字"""
@@ -123,14 +89,18 @@ def revise_custom_tone(phones, word2ph, tone_data_list):
             # 如果匹配拼音的时候失败，这里保持模型中默认提供的读音
             continue
 
+        # 计算音素位置 - 现在pos直接是"福"字的位置
         wd_pos = 0
         for i in range(0, pos):
             wd_pos += word2ph[i]
-        org_init = phones[wd_pos - 2]
-        org_final = phones[wd_pos - 1]
+            
+        # "福"字占位符本身的音素位置，需要加上"福"字对应的音素数
+        wd_pos += word2ph[pos]
+        
+        # 修改"福"字的音素为指定拼音的音素
         phones[wd_pos - 2] = init
         phones[wd_pos - 1] = final
-        logger.info(f"[+]成功修改读音: {org_init}{org_final} => {tone}")
+        logger.info(f"[+]成功修改读音: 福 => {tone}")
 
 
 def clean_text_inf(text: str, language: str, version: str) -> Tuple[List[int], List[int], str]:
@@ -150,41 +120,6 @@ def clean_text_inf(text: str, language: str, version: str) -> Tuple[List[int], L
     
     language = language.replace("all_", "")
     phones, word2ph, norm_text = clean_text(text, language, version)
-    phones = cleaned_text_to_sequence(phones, version)
-
-    return phones, word2ph, norm_text
-
-
-def clean_text_inf_tone(text: str, language: str, version: str) -> Tuple[List[int], List[int], str]:
-    """
-    清理文本并转换为音素序列
-    
-    参数:
-        text: 输入文本
-        language: 语言代码
-        version: 模型版本
-        
-    返回:
-        (phones, word2ph, norm_text): 音素序列、字到音素的映射、标准化文本
-    """
-    from text.cleaner import clean_text
-    from text import cleaned_text_to_sequence
-    
-    language = language.replace("all_", "")
-    
-    # 正则表达式替换
-    text = re.sub(r"“|”|\"|\'|‘|’|《|》|【|】", "", text)
-    text = re.sub(r"…+", "…", text)
-
-    text, tone_data_list = find_custom_tone(text)
-    if tone_data_list:
-        logger.info(f"tone_data_list: {tone_data_list}")
-
-
-    phones, word2ph, norm_text = clean_text(text, language, version)
-
-    revise_custom_tone(phones, word2ph, tone_data_list)
-
     phones = cleaned_text_to_sequence(phones, version)
 
     return phones, word2ph, norm_text
@@ -241,7 +176,7 @@ def get_bert_inf(tokenizer, bert_model, device, phones: List[int], word2ph: List
         BERT特征张量
     """
     language = language.replace("all_", "")
-    if language == "zh" or "<tone" in norm_text:
+    if language == "zh" in norm_text:
         bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
     else:
         bert = torch.zeros(
@@ -250,6 +185,92 @@ def get_bert_inf(tokenizer, bert_model, device, phones: List[int], word2ph: List
         ).to(device)
     return bert
 
+
+def find_pinyin_tone(text: str) -> Tuple[str, List]:
+    """
+    识别文本中的直接拼音输入（如liu4），并替换为占位符"福"
+    
+    参数:
+        text: 输入文本
+        
+    返回:
+        (processed_text, pinyin_list): 处理后的文本和拼音列表
+    """
+    # 匹配汉语拼音模式：字母+数字(1-5)
+    # 如: liu4, ma3, hao3, a1, e2等
+    pattern = re.compile(r'([a-zA-Z]+)([1-5])')
+    
+    matches = list(re.finditer(pattern, text))
+    if not matches:
+        return text, []
+    
+    pinyin_list = []
+    processed_text = ""
+    last_end = 0
+    
+    for i, match in enumerate(matches):
+        # 提取拼音和声调
+        pinyin_text = match.group(1)
+        tone_num = match.group(2)
+        full_pinyin = pinyin_text + tone_num
+        
+        # 文本的前半部分
+        processed_text += text[last_end:match.start()]
+        
+        # 替换为固定占位符"福"
+        placeholder = "福"  # 统一使用"福"字作为占位符
+        processed_text += placeholder
+        
+        # 保存拼音信息和位置
+        position = len(processed_text) - len(placeholder)
+        init, final = correct_initial_final(full_pinyin)
+        pinyin_list.append([full_pinyin, init, final, position])
+        
+        last_end = match.end()
+    
+    # 添加最后一部分文本
+    if last_end < len(text):
+        processed_text += text[last_end:]
+    
+    if pinyin_list:
+        logger.info(f"检测到直接拼音输入: {pinyin_list}")
+    
+    return processed_text, pinyin_list
+
+def process_text_with_pinyin(text: str, language: str, version: str) -> Tuple[List[int], List[int], str]:
+    """
+    处理带有直接拼音输入的文本并转换为音素序列
+    
+    参数:
+        text: 输入文本
+        language: 语言代码
+        version: 模型版本
+        
+    返回:
+        (phones, word2ph, norm_text): 音素序列、字到音素的映射、标准化文本
+    """
+    from text.cleaner import clean_text
+    from text import cleaned_text_to_sequence
+    
+    language = language.replace("all_", "")
+    
+    # 修复正则表达式的语法错误
+    text = re.sub(r'[""\'\'《》【】]', "", text)
+    text = re.sub(r"…+", "…", text)
+    
+    # 处理直接拼音输入
+    processed_text, pinyin_list = find_pinyin_tone(text)
+    
+    # 清理文本并转换为音素
+    phones, word2ph, norm_text = clean_text(processed_text, language, version)
+    
+    # 如果有拼音数据，则修正音素
+    if pinyin_list:
+        revise_custom_tone(phones, word2ph, pinyin_list)
+    
+    phones = cleaned_text_to_sequence(phones, version)
+    
+    return phones, word2ph, norm_text
 
 def get_phones_and_bert(
     tokenizer, bert_model, device, text: str, language: str, version: str, dtype: torch.dtype = torch.float32, final: bool = False
@@ -273,22 +294,20 @@ def get_phones_and_bert(
     from text import chinese
     from text.LangSegmenter import LangSegmenter
     
-    # 定义分隔符
-    splits = {"，", "。", "？", "！", ",", ".", "?", "!", "~", ":", "：", "—", "…"}
+    # 定义分隔符    
     
     if language in {"en", "all_zh", "all_ja", "all_ko", "all_yue"}:
         # 处理单一语言文本
         formattext = text
         while "  " in formattext:
             formattext = formattext.replace("  ", " ")
-        if "<tone" in formattext:
+        if re.search(r'[a-zA-Z]+[1-5]', formattext):
             print("--------------------------------")
-            print("有<tone>标记")
+            print("检测到直接拼音输入")
             print(formattext)
             print("--------------------------------")
-            phones, word2ph, norm_text = clean_text_inf_tone(formattext, language, version)
+            phones, word2ph, norm_text = process_text_with_pinyin(formattext, language, version)
             bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
-
         elif language == "all_zh":
             if re.search(r"[A-Za-z]", formattext):
                 formattext = re.sub(r"[a-z]", lambda x: x.group(0).upper(), formattext)
