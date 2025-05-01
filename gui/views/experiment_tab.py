@@ -193,8 +193,6 @@ class ExperimentTab(QWidget):
         text_layout = QVBoxLayout(text_group)
         
         self.text_edit = OptimizedTextEdit()
-        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
         text_layout.addWidget(self.text_edit)
         
         left_layout.addWidget(text_group)

@@ -50,8 +50,7 @@ class RoleTab(QWidget):
         
         # 使用优化后的文本编辑框
         self.text_edit = OptimizedTextEdit()
-        self.text_edit.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
+        
         
         text_layout.addWidget(self.text_edit)
         
