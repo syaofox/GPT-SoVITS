@@ -18,7 +18,7 @@ class ReplaceTab(QWidget):
     """替换规则编辑标签页，用于编辑word_replace.txt文件内容"""
     
     # 添加规则更新信号
-    rules_updated = Signal(dict)
+    rules_updated = Signal(list)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,13 +47,13 @@ class ReplaceTab(QWidget):
         main_layout = QVBoxLayout(self)
         
         # 说明标签
-        info_label = QLabel("编辑替换规则 (每行一条规则，格式为'源文本 目标文本')")
+        info_label = QLabel("编辑替换规则 (每行一条规则，格式为'查找字符串|需修改字符串|替换后的字符串')")
         main_layout.addWidget(info_label)
         
         # 编辑区
         self.edit_area = QPlainTextEdit()
         self.edit_area.setLineWrapMode(QPlainTextEdit.NoWrap)
-        self.edit_area.setPlaceholderText("例如：\n背锅 杯锅\n肚子 杜子")
+        self.edit_area.setPlaceholderText("例如：\n操死|操|cao4\n干死|干|gan4\n远比|远|yuan2")
         main_layout.addWidget(self.edit_area)
         
         # 状态栏
@@ -91,8 +91,12 @@ class ReplaceTab(QWidget):
                 lines = content.splitlines()
                 valid_rules = 0
                 for line in lines:
-                    if line.strip() and ' ' in line.strip():
-                        valid_rules += 1
+                    line = line.strip()
+                    # 跳过空行和注释行
+                    if line and not line.startswith('#') and '|' in line:
+                        parts = line.split('|')
+                        if len(parts) == 3:
+                            valid_rules += 1
                         
                 self.status_bar.showMessage(f"已加载 {valid_rules} 条有效规则，共 {len(lines)} 行")
         except Exception as e:
@@ -107,17 +111,21 @@ class ReplaceTab(QWidget):
         
         for i, line in enumerate(lines):
             line = line.strip()
-            if not line:  # 空行跳过
+            if not line or line.startswith('#'):  # 跳过空行和注释行
                 continue
                 
-            if ' ' not in line:
-                invalid_lines.append((i+1, line, "缺少空格分隔符"))
+            if '|' not in line:
+                invalid_lines.append((i+1, line, "缺少'|'分隔符"))
             else:
-                parts = line.split(' ', 1)
-                if not parts[0] or not parts[1]:
-                    invalid_lines.append((i+1, line, "源文本或目标文本为空"))
+                parts = line.split('|')
+                if len(parts) != 3:
+                    invalid_lines.append((i+1, line, "格式错误，应为'查找字符串|需修改字符串|替换后的字符串'"))
+                elif not parts[0] or not parts[1] or not parts[2]:
+                    invalid_lines.append((i+1, line, "三个部分都不能为空"))
+                elif parts[1] not in parts[0]:
+                    invalid_lines.append((i+1, line, "需修改字符串必须是查找字符串的一部分"))
                 else:
-                    valid_rules.append((parts[0], parts[1]))
+                    valid_rules.append((parts[0], parts[1], parts[2]))
         
         return valid_rules, invalid_lines
     
@@ -155,10 +163,10 @@ class ReplaceTab(QWidget):
             with open(self.replace_file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
             
-            # 解析规则
-            rules = {}
-            for source, target in valid_rules:
-                rules[source] = target
+            # 生成规则列表
+            rules = []
+            for search_string, target_part, replace_with in valid_rules:
+                rules.append((search_string, target_part, replace_with))
             
             # 发送更新信号，通知主窗口更新规则
             self.rules_updated.emit(rules)
