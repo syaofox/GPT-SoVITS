@@ -349,6 +349,36 @@ def get_phones_and_bert(
                     # 因无法区别中日韩文汉字,以用户输入为准
                     langlist.append(language)
                 textlist.append(tmp["text"])
+        
+        # 修正拼音被错误识别为英文的问题
+        # 检查每个被标记为英文的片段，如果符合拼音格式则修改其语言标记
+        pinyin_pattern = re.compile(r'^([a-zA-Z]+[1-5])([,\.。，、；;:：!！?？\s]*)$')
+        for i in range(len(textlist)):
+            if langlist[i] == "en":
+                match = pinyin_pattern.match(textlist[i])
+                if match:
+                    # 确定应该使用的语言 - 优先使用相邻的中文或粤语语言标签
+                    target_lang = None
+                    # 检查前面的语言
+                    if i > 0 and langlist[i-1] in {"zh", "yue"}:
+                        target_lang = langlist[i-1]
+                    # 检查后面的语言
+                    elif i < len(langlist)-1 and langlist[i+1] in {"zh", "yue"}:
+                        target_lang = langlist[i+1]
+                    # 如果没有相邻的中文或粤语，则使用当前设置的语言
+                    else:
+                        if language == "auto":
+                            target_lang = "zh"  # 默认中文
+                        elif language == "auto_yue":
+                            target_lang = "yue"  # 默认粤语
+                        else:
+                            target_lang = language
+                    
+                    # 只修改标记为中文或粤语的目标语言
+                    if target_lang in {"zh", "yue"}:
+                        pinyin = match.group(1)  # 提取拼音部分
+                        print(f"检测到拼音被错误识别为英文: {pinyin}, 将语言从'en'修改为'{target_lang}'")
+                        langlist[i] = target_lang
                 
         print(textlist)
         print(langlist)
@@ -359,8 +389,38 @@ def get_phones_and_bert(
         
         for i in range(len(textlist)):
             lang = langlist[i]
-            phones, word2ph, norm_text = clean_text_inf(textlist[i], lang, version)
-            bert = get_bert_inf(tokenizer, bert_model, device, phones, word2ph, norm_text, lang, dtype)
+            # 检查当前语言片段是否包含拼音输入
+            current_text = textlist[i]
+            while "  " in current_text:
+                current_text = current_text.replace("  ", " ")
+                
+            # 如果是中文相关语言，检查是否包含拼音输入
+            if lang in {"zh", "yue"}:
+                # 检查是否包含完整的拼音格式（如hao3）
+                if re.search(r'[a-zA-Z]+[1-5]', current_text):
+                    print("--------------------------------")
+                    print(f"混合语言文本中检测到直接拼音输入 (语言: {lang})")
+                    print(current_text)
+                    print("--------------------------------")
+                    phones, word2ph, norm_text = process_text_with_pinyin(current_text, lang, version)
+                    bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
+                # 如果整个片段就是一个拼音（来自前面的语言修正）
+                elif re.match(r'^[a-zA-Z]+[1-5]$', current_text.strip()):
+                    print("--------------------------------")
+                    print(f"处理被识别为拼音的单独片段 (语言: {lang})")
+                    print(current_text)
+                    print("--------------------------------")
+                    phones, word2ph, norm_text = process_text_with_pinyin(current_text, lang, version)
+                    bert = get_bert_feature(tokenizer, bert_model, device, norm_text, word2ph, dtype).to(device)
+                else:
+                    # 使用原有处理逻辑
+                    phones, word2ph, norm_text = clean_text_inf(current_text, lang, version)
+                    bert = get_bert_inf(tokenizer, bert_model, device, phones, word2ph, norm_text, lang, dtype)
+            else:
+                # 非中文语言使用原有处理逻辑
+                phones, word2ph, norm_text = clean_text_inf(current_text, lang, version)
+                bert = get_bert_inf(tokenizer, bert_model, device, phones, word2ph, norm_text, lang, dtype)
+                
             phones_list.append(phones)
             norm_text_list.append(norm_text)
             bert_list.append(bert)
