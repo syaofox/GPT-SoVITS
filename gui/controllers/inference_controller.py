@@ -4,7 +4,6 @@
 处理语音合成推理和历史记录管理
 """
 
-import atexit
 from typing import Dict, List, Callable
 from PySide6.QtCore import Slot, Signal
 
@@ -25,17 +24,6 @@ class InferenceController(BaseController):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.inference_model = InferenceModel()
-        
-        # 注册程序退出时保存历史记录
-        atexit.register(self.inference_model.save_history)
-    
-    def __del__(self):
-        """析构函数"""
-        # 取消注册退出保存函数
-        try:
-            atexit.unregister(self.inference_model.save_history)
-        except:
-            pass
     
     @Slot()
     def stop_inference(self):

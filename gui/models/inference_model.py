@@ -5,7 +5,6 @@
 """
 
 import os
-import json
 import uuid
 import gc
 import torch
@@ -43,15 +42,12 @@ class InferenceModel:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        # 历史记录文件路径
-        self.history_file = self.output_dir / "history.json"
-        
         # 推理引擎实例
         self.single_engine = SingleRoleInferenceEngine(str(self.output_dir))
         self.multi_engine = MultiRoleInferenceEngine(str(self.output_dir))
         
-        # 历史记录列表
-        self._history = self._load_history()
+        # 历史记录列表 - 仅在内存中保存
+        self._history = []
         
         # 工作线程相关
         self.worker = None
@@ -61,26 +57,12 @@ class InferenceModel:
         self.text_parser = RoleTextParser()
     
     def _load_history(self) -> List[Dict]:
-        """加载历史记录"""
-        if not self.history_file.exists():
-            return []
-            
-        try:
-            with open(self.history_file, "r", encoding="utf-8") as f:
-                history = json.load(f)
-                # 兼容性检查和过滤非法记录
-                return [item for item in history if isinstance(item, dict)]
-        except Exception as e:
-            print(f"加载历史记录失败: {e}")
-            return []
+        """加载历史记录 - 已废弃，仅返回空列表"""
+        return []
     
     def save_history(self):
-        """保存历史记录到文件"""
-        try:
-            with open(self.history_file, "w", encoding="utf-8") as f:
-                json.dump(self._history, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"保存历史记录失败: {e}")
+        """保存历史记录 - 已废弃，不执行任何操作"""
+        pass
     
     def stop_inference(self) -> bool:
         """
@@ -156,7 +138,7 @@ class InferenceModel:
     def _on_worker_finished(self, success: bool, result: str):
         """工作线程完成回调"""
         if success:
-            # 添加到历史记录
+            # 添加到内存中的历史记录
             self._add_to_history(result)
         
         # 调用外部回调
@@ -202,7 +184,7 @@ class InferenceModel:
     
     def _add_to_history(self, audio_path: str):
         """
-        添加记录到历史
+        添加记录到内存中的历史记录
         
         参数:
             audio_path: 生成的音频文件路径
@@ -222,15 +204,12 @@ class InferenceModel:
             "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        # 添加到历史
+        # 添加到内存中的历史记录
         self._history.append(record)
         
         # 限制历史记录数量（保留最新的100条）
         if len(self._history) > 100:
             self._history = self._history[-100:]
-            
-        # 保存历史
-        self.save_history()
     
     @Slot(result=list)
     def get_history(self) -> List[Dict]:

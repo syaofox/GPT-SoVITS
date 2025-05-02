@@ -367,6 +367,5 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """窗口关闭事件处理"""
-        # InferenceController已经通过atexit注册了程序退出时的保存函数，不需要重复调用
         # 直接继续正常关闭
         event.accept() 
