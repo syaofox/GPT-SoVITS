@@ -26,13 +26,16 @@ class InferenceController(BaseController):
         super().__init__(parent)
         self.inference_model = InferenceModel()
         
-        # 不再需要注册程序退出时保存历史记录
-        # atexit.register(self.save_history)
+        # 注册程序退出时保存历史记录
+        atexit.register(self.inference_model.save_history)
     
     def __del__(self):
         """析构函数"""
-        # 不再需要取消注册退出保存函数
-        pass
+        # 取消注册退出保存函数
+        try:
+            atexit.unregister(self.inference_model.save_history)
+        except:
+            pass
     
     @Slot()
     def stop_inference(self):
@@ -79,10 +82,6 @@ class InferenceController(BaseController):
                 else:
                     # 否则触发失败信号
                     self.inference_failed.emit(result)
-                    
-                    # 如果错误信息提示可能是卡死问题，但不主动清理资源
-                    if "卡死" in result or "卡住" in result or "无响应" in result:
-                        pass
         
         # 启动异步推理
         success = self.inference_model.generate_speech_async(

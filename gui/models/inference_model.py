@@ -15,11 +15,19 @@ from typing import Dict, List, Tuple, Optional, Any, Union, Callable
 from datetime import datetime
 
 # 导入多线程支持
-from PySide6.QtCore import QThread
+from PySide6.QtCore import QThread, Slot, Signal
 
 # 导入推理模块
 from gpt_sovits_inference import GPTSoVITSInference
 from gui.models.inference_worker import InferenceWorker
+
+# 导入推理引擎
+from gui.models.inference_engines import (
+    BaseInferenceEngine, 
+    SingleRoleInferenceEngine, 
+    MultiRoleInferenceEngine, 
+    RoleTextParser
+)
 
 
 class InferenceModel:
@@ -35,28 +43,44 @@ class InferenceModel:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        self.inference_engine: Optional[GPTSoVITSInference] = None
-        self.current_gpt_path: str = ""
-        self.current_sovits_path: str = ""
+        # 历史记录文件路径
+        self.history_file = self.output_dir / "history.json"
+        
+        # 推理引擎实例
+        self.single_engine = SingleRoleInferenceEngine(str(self.output_dir))
+        self.multi_engine = MultiRoleInferenceEngine(str(self.output_dir))
+        
+        # 历史记录列表
+        self._history = self._load_history()
         
         # 工作线程相关
         self.worker = None
         self.thread = None
+        
+        # 文本解析器
+        self.text_parser = RoleTextParser()
     
-    def reset_engine(self):
-        """重置推理引擎"""
-        if self.inference_engine is not None:
-            del self.inference_engine
-            self.inference_engine = None
-            self.current_gpt_path = ""
-            self.current_sovits_path = ""
-            # 强制垃圾回收以释放GPU内存
-            gc.collect()
-            try:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-            except:
-                pass
+    def _load_history(self) -> List[Dict]:
+        """加载历史记录"""
+        if not self.history_file.exists():
+            return []
+            
+        try:
+            with open(self.history_file, "r", encoding="utf-8") as f:
+                history = json.load(f)
+                # 兼容性检查和过滤非法记录
+                return [item for item in history if isinstance(item, dict)]
+        except Exception as e:
+            print(f"加载历史记录失败: {e}")
+            return []
+    
+    def save_history(self):
+        """保存历史记录到文件"""
+        try:
+            with open(self.history_file, "w", encoding="utf-8") as f:
+                json.dump(self._history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存历史记录失败: {e}")
     
     def stop_inference(self) -> bool:
         """
@@ -95,19 +119,23 @@ class InferenceModel:
             self.thread.quit()
             self.thread.wait()
         
-        # 检查模型路径是否变化
-        if (self.inference_engine is not None and 
-            (gpt_path != self.current_gpt_path or sovits_path != self.current_sovits_path)):
-            # 如果模型路径变化，重置引擎
-            self.reset_engine()
-        
         # 创建新的工作线程
         self.thread = QThread()
         self.worker = InferenceWorker()
         self.worker.moveToThread(self.thread)
         
-        # 设置推理配置和引擎（如果需要重新初始化，则引擎为None）
-        self.worker.set_config(config, self.inference_engine, str(self.output_dir))
+        # 设置推理配置和引擎
+        text = config.get("text", "")
+        
+        # 检查是否是多角色文本
+        role_segments = self.text_parser.parse_multi_role_text(text)
+        is_multi_role = len(role_segments) > 1 or (len(role_segments) == 1 and role_segments[0]["role"] is not None)
+        
+        # 设置使用的引擎类型
+        engine_type = "multi" if is_multi_role else "single"
+        
+        # 设置工作线程配置
+        self.worker.set_config(config, engine_type, str(self.output_dir))
         
         # 连接信号
         self.thread.started.connect(self.worker.run)
@@ -128,11 +156,8 @@ class InferenceModel:
     def _on_worker_finished(self, success: bool, result: str):
         """工作线程完成回调"""
         if success:
-            # 如果生成成功，更新当前引擎引用（如果模型是在工作线程中初始化的）
-            if self.worker.engine and not self.inference_engine:
-                self.inference_engine = self.worker.engine
-                self.current_gpt_path = self.worker.gpt_path
-                self.current_sovits_path = self.worker.sovits_path
+            # 添加到历史记录
+            self._add_to_history(result)
         
         # 调用外部回调
         if self._on_finished_callback:
@@ -149,54 +174,65 @@ class InferenceModel:
     
     def generate_speech(self, config: Dict) -> Tuple[bool, str]:
         """
-        同步生成语音（保留以兼容现有代码）
+        同步生成语音（为兼容现有代码保留）
         
         参数:
             config: 推理配置
             
         返回:
-            (是否成功, 输出文件路径)
+            (成功标志，结果路径或错误信息)
         """
-        # 为保持一致性，同步方法也改为使用异步实现
-        future_result = {"success": False, "result": "未完成"}
+        text = config.get("text", "")
         
-        def on_finished(success, result):
-            future_result["success"] = success
-            future_result["result"] = result
+        # 解析文本，检测是否为多角色文本
+        role_segments = self.text_parser.parse_multi_role_text(text)
+        is_multi_role = len(role_segments) > 1 or (len(role_segments) == 1 and role_segments[0]["role"] is not None)
+        
+        # 选择合适的引擎
+        engine = self.multi_engine if is_multi_role else self.single_engine
+        
+        # 生成语音
+        success, result = engine.generate(config)
+        
+        # 如果成功，添加到历史记录
+        if success:
+            self._add_to_history(result)
             
-        # 启动异步任务
-        started = self.generate_speech_async(config, on_finished)
-        if not started:
-            return False, "启动任务失败"
-            
-        # 等待异步任务完成（这会阻塞UI，但由于这是同步方法，这是预期行为）
-        while self.thread and self.thread.isRunning():
-            QThread.msleep(100)  # 等待100毫秒
-            QThread.yieldCurrentThread()  # 让出当前线程以处理事件
-            
-        # 返回结果
-        return future_result["success"], future_result["result"]
+        return success, result
     
+    def _add_to_history(self, audio_path: str):
+        """
+        添加记录到历史
+        
+        参数:
+            audio_path: 生成的音频文件路径
+        """
+        if not audio_path:
+            return
+            
+        # 提取文件名
+        filename = os.path.basename(audio_path)
+        
+        # 创建历史记录
+        record = {
+            "id": str(uuid.uuid4()),
+            "path": audio_path,
+            "filename": filename,
+            "timestamp": datetime.now().isoformat(),
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        # 添加到历史
+        self._history.append(record)
+        
+        # 限制历史记录数量（保留最新的100条）
+        if len(self._history) > 100:
+            self._history = self._history[-100:]
+            
+        # 保存历史
+        self.save_history()
+    
+    @Slot(result=list)
     def get_history(self) -> List[Dict]:
-        """获取历史记录（直接从输出目录读取音频文件）"""
-        history_list = []
-        
-        try:
-            # 遍历输出目录中的所有文件
-            for file_path in sorted(self.output_dir.glob("*.wav"), key=os.path.getctime, reverse=True):
-                if file_path.is_file() and file_path.suffix.lower() in ['.wav', '.mp3', '.ogg']:
-                    # 获取文件创建时间作为时间戳
-                    timestamp = datetime.fromtimestamp(os.path.getctime(file_path)).strftime("%Y%m%d_%H%M%S")
-                    
-                    # 创建历史记录条目
-                    entry = {
-                        "timestamp": timestamp,
-                        "path": str(file_path),
-                        "text": ""  # 没有文本信息
-                    }
-                    
-                    history_list.append(entry)
-        except Exception as e:
-            print(f"读取输出目录失败: {str(e)}")
-        
-        return history_list 
+        """获取历史记录"""
+        return self._history 
