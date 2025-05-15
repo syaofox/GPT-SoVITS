@@ -198,3 +198,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+# webui
+webui/prompts/
+SoVITS_weights_v4
+GPT_weights_v4
