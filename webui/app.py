@@ -3,10 +3,13 @@ import sys
 import argparse
 import logging
 
-if not os.path.exists("/home/syaofox/nltk_data"):
-    print("nltk_data 不存在，开始下载")
+# 使用os.path.expanduser('~')获取用户主目录，避免硬编码用户名
+nltk_data_path = os.path.join(os.path.expanduser('~'), 'nltk_data')
+if not os.path.exists(nltk_data_path):
+    print(f"nltk_data 不存在，开始下载到 {nltk_data_path}")
     import nltk
-
+    # 设置NLTK数据目录
+    nltk.data.path.append(nltk_data_path)
     nltk.download("averaged_perceptron_tagger_eng")
 
 # 添加项目根目录到Python路径
