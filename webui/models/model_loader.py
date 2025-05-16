@@ -70,7 +70,7 @@ class ModelLoader:
         """
         # 检查是否已经加载了BERT和SSL模型
         if self.bert_model is not None and self.ssl_model is not None:
-            info("已加载BERT和SSL模型，跳过模块加载")
+            debug("已加载BERT和SSL模型，跳过模块加载")
             return
 
         # 导入模块

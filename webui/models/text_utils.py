@@ -36,6 +36,9 @@ def _split_text_by_speaker_and_lines(
     # 清除文本开头的空行
     text = re.sub(r"^[\n\r]+", "", text)
 
+    # 清除中英文引号
+    text = re.sub(r"[‘’“”\"\']", "", text)
+
     segments = []
     lines = text.split("\n")
 
