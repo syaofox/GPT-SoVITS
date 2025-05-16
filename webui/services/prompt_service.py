@@ -1,14 +1,4 @@
 import os
-import sys
-
-# 添加项目根目录到Python路径
-WEBUI_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-PROJECT_ROOT = os.path.abspath(os.path.join(WEBUI_ROOT, ".."))
-sys.path.insert(0, PROJECT_ROOT)  # 添加项目根目录
-sys.path.insert(0, WEBUI_ROOT)  # 添加webui目录
-
-print(PROJECT_ROOT)
-print(WEBUI_ROOT)
 
 from typing import List, Dict, Optional
 from models.logger import debug
@@ -151,22 +141,3 @@ class PromptService:
             角色名列表
         """
         return list(self.prompt_datas.keys())
-
-
-if __name__ == "__main__":
-    prompt_service = PromptService()
-    # 打印所有角色
-    print("所有角色:", prompt_service.get_all_characters())
-
-    # 如果有角色，打印第一个角色的所有情绪
-    characters = prompt_service.get_all_characters()
-    if characters:
-        character = characters[0]
-        emotions = prompt_service.get_character_emotions(character)
-        print(f"{character}的所有情绪:", emotions)
-
-        # 如果有情绪，打印第一个情绪的详细信息
-        if emotions:
-            emotion = emotions[0]
-            prompt = prompt_service.get_prompt(character, emotion)
-            print(f"{character}的{emotion}情绪配置:", prompt)

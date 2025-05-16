@@ -62,7 +62,7 @@ class GPTSoVITSServer:
             and self.model_loader.vq_model is not None
             and self.model_loader.t2s_model is not None
         ):
-            info("使用缓存的模型，跳过加载过程")
+            debug("使用缓存的模型，跳过加载过程")
             return
 
         # 记录模型路径
@@ -233,12 +233,12 @@ class GPTSoVITSServer:
         # 处理目标文本
 
         # 替换文本
-        info("处理文本替换")
+        debug("处理文本替换")
         count, text = self.text_processor._apply_replace_rules(text)
         info(f"文本替换完成，共替换 {count} 处")
 
         text = text.strip("\n")
-        info(f"实际输入的目标文本: {text}")
+        debug(f"实际输入的目标文本: {text}")
 
         # 空行替换成静音标记<BR>
         text = self.text_processor.replace_empty_lines_with_br(text)
@@ -279,7 +279,7 @@ class GPTSoVITSServer:
         text = self.text_processor.cut_text(text, how_to_cut)
         while "\n\n" in text:
             text = text.replace("\n\n", "\n")
-        info(f"实际输入的目标文本(切句后): {text}")
+        debug(f"实际输入的目标文本(切句后): {text}")
 
         texts = text.split("\n")
         texts = self.text_processor.process_text(texts)

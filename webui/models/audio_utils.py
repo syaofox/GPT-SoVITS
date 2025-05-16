@@ -3,6 +3,9 @@ import numpy as np
 import librosa
 from scipy import signal
 from typing import List, Dict, Any
+import os
+import time
+from models.constand import OUTPUT_DIR
 
 
 def normalize_audio(
@@ -142,8 +145,47 @@ def merge_audio(audio_data: List[Dict[str, Any]], target_sr=None):
     return np.concatenate(processed_audios), target_sr
 
 
-def save_audio(sr, audio_data, filename):
-    """
-    保存音频数据
-    """
+def generate_output_filename(speaker_name, text):
+    try:
+        # 清理文本内容（取前50个字符）
+        text_sample = text.strip().replace("\n", "").replace("\r", "").replace(" ", "")
+        # 替换Windows文件名中的非法字符
+        for char in '\\/:"*?<>|':
+            text_sample = text_sample.replace(char, "_")
+        text_sample = text_sample[:50]  # 限制长度
+
+        # 添加时间戳
+        timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
+        output_filename = f"[{speaker_name}][{timestamp}]{text_sample}"
+        output_path = os.path.join(OUTPUT_DIR, f"{output_filename}.wav")
+
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        return output_path
+
+    except Exception:
+        # 返回一个默认的输出路径
+        timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
+        return os.path.join(OUTPUT_DIR, f"audio_{timestamp}.wav")
+
+
+def save_audio(sr, audio_data, segments):
+    speakers = list(
+        set([f"{segment['speaker']}_{segment['emotion']}" for segment in segments])
+    )
+
+    speaker_str = speakers[0] if len(speakers) == 1 else f"{speakers[0]}等多角色"
+
+    filename = generate_output_filename(speaker_str, segments[0]["text"])
+
     sf.write(filename, audio_data, sr)
+
+    return filename
+
+
+# def save_audio(sr, audio_data, filename):
+#     """
+#     保存音频数据
+#     """
+#     sf.write(filename, audio_data, sr)

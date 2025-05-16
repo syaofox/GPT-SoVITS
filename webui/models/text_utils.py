@@ -1,10 +1,6 @@
 import re
 from typing import List, Dict, Any
 from models.constand import BR_TAG
-import os
-import time
-
-from models.constand import OUTPUT_DIR
 
 
 def _split_text_by_speaker_and_lines(
@@ -116,28 +112,3 @@ def _split_text_by_speaker_and_lines(
                 )
 
     return segments
-
-
-def generate_output_filename(speaker_name, text):
-    try:
-        # 清理文本内容（取前50个字符）
-        text_sample = text.strip().replace("\n", "").replace("\r", "").replace(" ", "")
-        # 替换Windows文件名中的非法字符
-        for char in '\\/:"*?<>|':
-            text_sample = text_sample.replace(char, "_")
-        text_sample = text_sample[:50]  # 限制长度
-
-        # 添加时间戳
-        timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
-        output_filename = f"[{speaker_name}][{timestamp}]{text_sample}"
-        output_path = os.path.join(OUTPUT_DIR, f"{output_filename}.wav")
-
-        # 确保输出目录存在
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        return output_path
-
-    except Exception:
-        # 返回一个默认的输出路径
-        timestamp = time.strftime("%Y%m%d%H%M%S", time.localtime())
-        return os.path.join(OUTPUT_DIR, f"audio_{timestamp}.wav")

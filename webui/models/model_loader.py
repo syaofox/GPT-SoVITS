@@ -3,7 +3,7 @@ import sys
 import torch
 from typing import Dict, Any
 
-from models.logger import error, info
+from models.logger import error, info, debug
 from models.cache_manager import CacheManager
 
 # 默认路径配置
@@ -130,7 +130,7 @@ class ModelLoader:
         )
 
         if CacheManager.get_model(bert_cache_key):
-            info("从缓存加载BERT模型")
+            debug("从缓存加载BERT模型")
             cache_data = CacheManager.get_model(bert_cache_key)
             self.tokenizer = cache_data["tokenizer"]
             self.bert_model = cache_data["model"]
@@ -139,7 +139,7 @@ class ModelLoader:
         # 加载BERT模型
         from transformers import AutoModelForMaskedLM, AutoTokenizer
 
-        info(f"加载BERT模型: {bert_path}")
+        debug(f"加载BERT模型: {bert_path}")
         self.tokenizer = AutoTokenizer.from_pretrained(bert_path)
         self.bert_model = AutoModelForMaskedLM.from_pretrained(bert_path)
 
@@ -168,12 +168,12 @@ class ModelLoader:
         )
 
         if CacheManager.get_model(ssl_cache_key):
-            info("从缓存加载SSL模型")
+            debug("从缓存加载SSL模型")
             self.ssl_model = CacheManager.get_model(ssl_cache_key)
             return
 
         # 加载SSL模型
-        info(f"加载SSL模型: {cnhubert_base_path}")
+        debug(f"加载SSL模型: {cnhubert_base_path}")
         self.cnhubert.cnhubert_base_path = cnhubert_base_path
         self.ssl_model = self.cnhubert.get_model()
 
@@ -219,13 +219,13 @@ class ModelLoader:
 
             return
 
-        info(f"正在加载SoVITS模型: {sovits_path}")
+        debug(f"正在加载SoVITS模型: {sovits_path}")
 
         # 获取模型版本信息
         self.version, self.model_version, self.if_lora_v3 = (
             self.get_sovits_version_from_path_fast(sovits_path)
         )
-        info(
+        debug(
             f"模型信息: version={self.version}, model_version={self.model_version}, if_lora_v3={self.if_lora_v3}"
         )
 
@@ -279,7 +279,7 @@ class ModelLoader:
 
         # 加载权重
         if not self.if_lora_v3:
-            info(f"读取 sovits_{self.model_version}")
+            debug(f"读取 sovits_{self.model_version}")
             self.vq_model.load_state_dict(dict_s2["weight"], strict=False)
         else:
             # LoRA模型加载
@@ -288,7 +288,7 @@ class ModelLoader:
                 if self.model_version == "v3"
                 else DEFAULT_PATHS["sovits_v4_path"]
             )
-            info(f"读取 sovits_{self.model_version}pretrained_G")
+            debug(f"读取 sovits_{self.model_version}pretrained_G")
             self.vq_model.load_state_dict(
                 self.load_sovits_new(path_sovits)["weight"], strict=False
             )
@@ -302,7 +302,7 @@ class ModelLoader:
             )
 
             self.vq_model.cfm = self.get_peft_model(self.vq_model.cfm, lora_config)
-            info(f"读取 sovits_{self.model_version}_lora{lora_rank}")
+            debug(f"读取 sovits_{self.model_version}_lora{lora_rank}")
             self.vq_model.load_state_dict(dict_s2["weight"], strict=False)
             self.vq_model.cfm = self.vq_model.cfm.merge_and_unload()
             self.vq_model.eval()
@@ -319,7 +319,7 @@ class ModelLoader:
             },
         )
 
-        info("SoVITS模型加载完成")
+        debug("SoVITS模型加载完成")
 
     def load_gpt_model(self, gpt_path: str) -> None:
         """
@@ -342,7 +342,7 @@ class ModelLoader:
             self.hz = cache_data["hz"]
             return
 
-        info(f"正在加载GPT模型: {gpt_path}")
+        debug(f"正在加载GPT模型: {gpt_path}")
 
         self.hz = 50
         dict_s1 = torch.load(gpt_path, map_location="cpu")
@@ -371,7 +371,7 @@ class ModelLoader:
             },
         )
 
-        info("GPT模型加载完成")
+        debug("GPT模型加载完成")
 
     def init_bigvgan(self) -> None:
         """
@@ -383,15 +383,15 @@ class ModelLoader:
         )
 
         if CacheManager.get_model(bigvgan_cache_key) and self.bigvgan_model is None:
-            info("从缓存加载BigVGAN声码器")
+            debug("从缓存加载BigVGAN声码器")
             self.bigvgan_model = CacheManager.get_model(bigvgan_cache_key)
             return
 
         if self.bigvgan_model is not None:
-            info("BigVGAN声码器已加载，跳过初始化")
+            debug("BigVGAN声码器已加载，跳过初始化")
             return
 
-        info("正在加载BigVGAN声码器...")
+        debug("正在加载BigVGAN声码器...")
 
         from BigVGAN import bigvgan
 

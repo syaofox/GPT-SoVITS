@@ -659,7 +659,7 @@ class TextProcessor:
         file_mtime = os.path.getmtime(self.TEXT_REPLACE_RULES_FILE)
 
         if file_mtime <= self.last_mtime:
-            info("文本替换规则文件未修改，跳过加载")
+            debug("文本替换规则文件未修改，跳过加载")
             return self.replace_rules
 
         self.last_mtime = file_mtime

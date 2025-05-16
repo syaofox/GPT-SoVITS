@@ -3,7 +3,7 @@ import torchaudio
 import librosa
 from typing import Any
 
-from models.logger import info
+from models.logger import debug
 from models.cache_manager import CacheManager
 
 
@@ -81,10 +81,10 @@ class AudioProcessor:
         )
 
         if cache_key and CacheManager.get_audio_feature(cache_key) is not None:
-            info(f"从缓存获取音频特征: {filename}")
+            debug(f"从缓存获取音频特征: {filename}")
             return CacheManager.get_audio_feature(cache_key)
 
-        info(f"提取音频特征: {filename}")
+        debug(f"提取音频特征: {filename}")
         audio, sampling_rate = librosa.load(
             filename, sr=int(self.hps.data.sampling_rate)
         )

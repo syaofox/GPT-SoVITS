@@ -19,7 +19,7 @@ os.environ["GRADIO_SERVER_NAME"] = "0.0.0.0"
 os.environ["GRADIO_SERVER_PORT"] = "7860"
 
 
-from models.logger import set_level, info, error
+from models.logger import set_level, info, error, debug
 from services.prompt_service import PromptService
 from services.gptsovits_server import GPTSoVITSServer
 from ui.main_ui import MainUI
@@ -57,22 +57,22 @@ def main():
     try:
         info("gptsovits WebUI 启动中...")
 
-        info("初始化提示词服务...")
+        debug("初始化提示词服务...")
         prompt_service = PromptService()
 
-        info("初始化 TTS 服务...")
+        debug("初始化 TTS 服务...")
         tts_service = GPTSoVITSServer()
 
-        info("创建必要目录...")
+        debug("创建必要目录...")
         os.makedirs(PROMPT_DIR, exist_ok=True)
         os.makedirs(TEMP_DIR, exist_ok=True)
         os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-        info("构建用户界面...")
+        debug("构建用户界面...")
         main_ui = MainUI()
         event_handlers = EventHandlers(tts_service, prompt_service)
 
-        info("启动 Gradio 界面...")
+        debug("启动 Gradio 界面...")
         demo = main_ui.build(event_handlers)
         demo.queue(20)
 

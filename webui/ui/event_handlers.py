@@ -2,7 +2,7 @@ import gradio as gr
 
 from models.logger import info, error
 from services.prompt_service import PromptService
-from models.text_utils import _split_text_by_speaker_and_lines, generate_output_filename
+from models.text_utils import _split_text_by_speaker_and_lines
 from models.audio_utils import normalize_audio, merge_audio, save_audio
 
 
@@ -29,7 +29,6 @@ class EventHandlers:
             if prompt:
                 default_ref_wav_path = prompt.ref_wav_path
                 default_prompt_text = prompt.prompt_text
-                info(f"已加载 {selected_character} 角色的 {default_emotion} 情绪配置")
 
         # 返回更新
         return [
@@ -86,8 +85,6 @@ class EventHandlers:
         if not prompt:
             info(f"未找到 {selected_character} 角色的 {selected_emotion} 情绪配置")
             return gr.update(), gr.update()
-
-        info(f"已加载 {selected_character} 角色的 {selected_emotion} 情绪配置")
 
         # 返回参考音频路径和提示文本
         return [
@@ -186,33 +183,14 @@ class EventHandlers:
                 return None, gr.update(value="生成语音", interactive=True)
 
             # 使用改进的归一化方法，传入音频段落字典列表
-
             normalized_segments = normalize_audio(audio_segments)
-
             # 合并所有段落，处理不同采样率
-
             combined_audio, final_sr = merge_audio(normalized_segments)
             info(f"合并后的音频采样率: {final_sr}")
 
             # 保存合并后的音频，使用合并后确定的采样率
-
-            speakers = list(
-                set(
-                    [
-                        f"{segment['speaker']}_{segment['emotion']}"
-                        for segment in segments
-                    ]
-                )
-            )
-
-            speaker_str = (
-                speakers[0] if len(speakers) == 1 else f"{speakers[0]}等多角色"
-            )
-
-            filename = generate_output_filename(speaker_str, input_text_single)
-            save_audio(final_sr, combined_audio, filename)
-
-            info("语音生成完成")
+            filename = save_audio(final_sr, combined_audio, segments)
+            info(f"语音生成 -> {filename}")
 
             # 返回音频数据和重置按钮状态
             return (final_sr, combined_audio), gr.update(
