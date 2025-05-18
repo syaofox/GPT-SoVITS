@@ -23,6 +23,7 @@ class Prompt:
     inp_refs: Optional[List[str]] = None  # 多个参考音频路径列表 (仅v1,v2支持)
     gpt_path: Optional[str] = None  # GPT模型路径，如果提供会覆盖初始化时设置的路径
     sovits_path: Optional[str] = None  # SoVITS模型路径
+    seed: int = 42  # 随机种子
 
 
 class PromptService:

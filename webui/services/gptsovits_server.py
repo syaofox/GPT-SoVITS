@@ -127,6 +127,7 @@ class GPTSoVITSServer:
         process_callback: callable = None,  # 处理回调函数
         process_current_segment: int = 0,  # 处理段落
         process_total_segment: int = 0,  # 处理总段落
+        seed: int = 42,  # 随机种子
     ) -> Tuple[int, np.ndarray]:  # 返回值: 采样率和音频数据
         """
         生成语音
@@ -152,10 +153,11 @@ class GPTSoVITSServer:
             process_callback: 处理回调函数
             process_current_segment: 处理段落
             process_total_segment: 处理总段落
-
+            seed: 随机种子
         Returns:
             采样率和音频数据
         """
+        
         debug(
             f"\n>> 生成语音参数: \n"
             f">> text: {text}\n"
@@ -175,7 +177,14 @@ class GPTSoVITSServer:
             f">> inp_refs: {inp_refs}\n"
             f">> gpt_path: {gpt_path}\n"
             f">> sovits_path: {sovits_path}\n"
+            f">> seed: {seed}\n"
         )
+
+        # 设置随机种子
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
 
         # 检查并加载模型
         if gpt_path is not None or sovits_path is not None:
