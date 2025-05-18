@@ -155,13 +155,12 @@ class EventHandlers:
                 # 将Prompt对象转换为字典
                 prompt_dict = current_prompt.__dict__
 
-                # 设置默认的文本语言为中文
-                text_language = "中文"
+ 
+  
 
                 # 调用服务生成语音
                 sr, audio_data = self.tts.generate_speech(
-                    text=segment["text"],
-                    text_language=text_language,
+                    text=segment["text"],                    
                     **prompt_dict,
                     process_callback=self._set_progress,
                     process_current_segment=i,

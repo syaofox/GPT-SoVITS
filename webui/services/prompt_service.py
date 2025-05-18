@@ -11,6 +11,7 @@ class Prompt:
     ref_wav_path: str  # 参考音频路径
     prompt_text: str  # 参考文本
     prompt_language: str = "中文"  # 参考文本语言
+    text_language: str = "中文"  # 文本语言
     how_to_cut: str = "按中文句号。切"  # 文本切分方式
     top_k: int = 15  # GPT采样参数top_k
     top_p: float = 1  # GPT采样参数top_p
@@ -87,21 +88,9 @@ class PromptService:
                                         character_path, ref_path
                                     )
 
-                        # 将配置转换为Prompt对象
-                        try:
-                            # 处理prompt_lang到prompt_language的映射
-                            if "prompt_lang" in emotion_config:
-                                emotion_config["prompt_language"] = emotion_config.pop(
-                                    "prompt_lang"
-                                )
-
-                            prompt = Prompt(**emotion_config)
-                            self.prompt_datas[character][emotion_name] = prompt
-                            debug(f"已加载{character}角色的{emotion_name}情绪配置")
-                        except Exception as e:
-                            debug(
-                                f"创建{character}角色的{emotion_name}情绪Prompt对象失败: {str(e)}"
-                            )
+                        self.prompt_datas[character][emotion_name] = Prompt(**emotion_config)
+                        debug(f"已加载{character}角色的{emotion_name}情绪配置")
+                        
             except Exception as e:
                 debug(f"加载{character}角色配置文件失败: {str(e)}")
 
