@@ -15,8 +15,10 @@ if not os.path.exists(nltk_data_path):
 # 添加项目根目录到Python路径
 WEBUI_ROOT = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(WEBUI_ROOT, ".."))
+gpt_sovits_path = os.path.abspath(os.path.join(PROJECT_ROOT, "GPT_SoVITS"))
 sys.path.insert(0, PROJECT_ROOT)  # 添加项目根目录
 sys.path.insert(0, WEBUI_ROOT)  # 添加webui目录
+sys.path.insert(0, gpt_sovits_path)  # 添加gpt_sovits目录
 
 os.environ["GRADIO_SERVER_NAME"] = "0.0.0.0"
 os.environ["GRADIO_SERVER_PORT"] = "7860"
